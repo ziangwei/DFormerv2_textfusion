@@ -517,9 +517,12 @@ class BasicLayer(nn.Module):
         gamma, beta = params.view(-1, 2 * self.embed_dim, 1, 1).chunk(2, dim=1)
         for blk in self.blocks:
             if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not)
+                x = checkpoint.checkpoint(
+                    blk, x=x, x_e=x_e, gamma=gamma, beta=beta,
+                    split_or_not=self.split_or_not
+                )
             else:
-                x = blk(x, x_e, gamma, beta,split_or_not=self.split_or_not)
+                x = blk(x, x_e, gamma, beta, split_or_not=self.split_or_not)
         if self.downsample is not None:
             x_down = self.downsample(x)
             return x, x_down

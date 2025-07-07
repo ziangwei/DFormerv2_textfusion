@@ -23,21 +23,37 @@ def sample_prompt(scene_label: str) -> str:
 
 # 全局加载一次 CLIP 模型并冻结参数
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-_CLIP_MODEL, _CLIP_PREPROCESS = clip.load("ViT-B/32", device=_DEVICE)
-_CLIP_MODEL.eval()
-for p in _CLIP_MODEL.parameters():
-    p.requires_grad = False
+_CLIP_MODEL = None
+
+
+def _get_clip_model():
+    """Lazy-load CLIP on first use to avoid unnecessary GPU memory usage."""
+    global _CLIP_MODEL
+    if _CLIP_MODEL is None:
+        _CLIP_MODEL, _ = clip.load("ViT-B/32", device=_DEVICE)
+        _CLIP_MODEL.eval()
+        for p in _CLIP_MODEL.parameters():
+            p.requires_grad = False
+    return _CLIP_MODEL
+
+
+def unload_clip_model():
+    """Free the globally loaded CLIP model and release GPU memory."""
+    global _CLIP_MODEL
+    if _CLIP_MODEL is not None:
+        del _CLIP_MODEL
+        _CLIP_MODEL = None
+        torch.cuda.empty_cache()
 
 def encode_prompts(prompts: List[str]) -> torch.Tensor:
     """
     批量将文本列表编码为 CLIP 文本特征向量。
     返回 shape = (len(prompts), feature_dim)，已在 DEVICE 上。
     """
-    # 1) tokenize
-    tokens = clip.tokenize(prompts, truncate=True).to(_DEVICE)         # (N, token_len)
-    # 2) forward through CLIP text encoder
+    model = _get_clip_model()
+    tokens = clip.tokenize(prompts, truncate=True).to(_DEVICE)  # (N, token_len)
     with torch.no_grad():
-        text_feats = _CLIP_MODEL.encode_text(tokens)                   # (N, D)
+        text_feats = model.encode_text(tokens)  # (N, D)
         text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)  # L2 归一化（可选）
     return text_feats
 

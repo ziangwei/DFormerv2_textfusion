@@ -5,8 +5,14 @@ import pprint
 import random
 import time
 from importlib import import_module
-from prompt_utils import load_scene_list, encode_prompts, sample_prompt, set_prompt_embeds
-import clip
+from prompt_utils import (
+    load_scene_list,
+    encode_prompts,
+    sample_prompt,
+    set_prompt_embeds,
+    unload_clip_model,
+)
+import tempfile
 import numpy as np
 import torch
 import torch.nn as nn
@@ -58,15 +64,10 @@ scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")  # len N
 # 2) 针对每个 scene 只做一次 prompt
 all_prompts = [ sample_prompt(s) for s in scene_list ]            # ["this is a kitchen", ...]
 
-# 3) CLIP 载入＋编码到 CPU（一劳永逸）
-device = torch.device("cuda")
-clip_model, _ = clip.load("ViT-B/32", device=device)
-clip_model.eval()
-for p in clip_model.parameters(): p.requires_grad = False
-
-with torch.no_grad():
-    tokens = clip.tokenize(all_prompts).to(device)                 # (N, L)
-    prompt_embeds = clip_model.encode_text(tokens).cpu()           # (N, 512), 放 CPU 上
+# 3) 利用 prompt_utils 的接口编码文本，并在完成后释放 CLIP 模型显存
+prompt_embeds = encode_prompts(all_prompts).cpu()  # (N, 512)
+set_prompt_embeds(prompt_embeds)
+unload_clip_model()
 
 
 def is_eval(epoch, config):
@@ -171,7 +172,7 @@ with Engine(custom_parser=parser) as engine:
         else:
             val_dl_factor = 1.5
 
-        val_dl_factor = 1  # TODO: remove this line
+        val_dl_factor = 1
         val_loader, val_sampler = get_val_loader(
             engine,
             RGBXDataset,
@@ -183,8 +184,16 @@ with Engine(custom_parser=parser) as engine:
         if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
             tb_dir = config.tb_dir + "/{}".format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
             generate_tb_dir = config.tb_dir + "/tb"
-            tb = SummaryWriter(log_dir=tb_dir)
-            engine.link_tb(tb_dir, generate_tb_dir)
+            try:
+                tb = SummaryWriter(log_dir=tb_dir)
+                engine.link_tb(tb_dir, generate_tb_dir)
+            except OSError as e:
+                logger.warning(
+                    f"Could not create TensorBoard directory {tb_dir}: {e}. "
+                    "Using a temporary location instead."
+                )
+                tmp_dir = tempfile.mkdtemp(prefix="tb-")
+                tb = SummaryWriter(log_dir=tmp_dir)
             pp = pprint.PrettyPrinter(indent=4)
             logger.info("config: \n" + pp.pformat(config))
 
@@ -409,7 +418,6 @@ with Engine(custom_parser=parser) as engine:
                 torch.cuda.empty_cache()
                 # if args.compile and args.mst and (not args.sliding):
                 #     model = uncompiled_model
-                # TODO: FIX this
                 if engine.distributed:
                     with torch.no_grad():
                         model.eval()
