@@ -2,9 +2,11 @@ import os
 import cv2
 import torch
 import numpy as np
-
+import re
 import torch.utils.data as data
 
+from models.builder import logger
+from utils.prompt_utils import load_scene_list, sample_prompt, PROMPT_EMBEDS
 
 def get_path(
     dataset_name,
@@ -112,6 +114,7 @@ def get_path(
 class RGBXDataset(data.Dataset):
     def __init__(self, setting, split_name, preprocess=None, file_length=None):
         super(RGBXDataset, self).__init__()
+        self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
         self._split_name = split_name
         self._rgb_path = setting["rgb_root"]
         self._rgb_format = setting["rgb_format"]
@@ -130,6 +133,8 @@ class RGBXDataset(data.Dataset):
         self.dataset_name = setting["dataset_name"]
         self.x_modal = setting.get("x_modal", ["d"])
         self.backbone = setting["backbone"]
+        self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
+        self.sample_prompt = sample_prompt
 
     def __len__(self):
         if self._file_length is not None:
@@ -137,6 +142,7 @@ class RGBXDataset(data.Dataset):
         return len(self._file_names)
 
     def __getitem__(self, index):
+        logger.info(f"[Dataset] __getitem__ called with index={index}")
         if self._file_length is not None:
             item_name = self._construct_new_file_names(self._file_length)[index]
         else:
@@ -205,8 +211,12 @@ class RGBXDataset(data.Dataset):
         #     gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
         #     x = torch.from_numpy(np.ascontiguousarray(x)).float()
 
+        rgb_path = path_dict["rgb_path"]
+        fname = os.path.basename(rgb_path)  # '13.jpg'
+        num_str = os.path.splitext(fname)[0]  # '13'
+        scene_idx = int(num_str)  # 13
         output_dict = dict(data=rgb, label=gt, modal_x=x, fn=str(path_dict["rgb_path"]), n=len(self._file_names))
-
+        output_dict["scene_idx"] = scene_idx
         return output_dict
 
     def _get_file_names(self, split_name):

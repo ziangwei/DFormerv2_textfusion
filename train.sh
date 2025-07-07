@@ -24,7 +24,7 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --no-amp \
     --val_amp \
     --pad_SUNRGBD \
-    --no-use_seed
+    --no-use_seed \
 
 # config for DFormers on NYUDepthv2
 # local_configs.NYUDepthv2.DFormer_Large

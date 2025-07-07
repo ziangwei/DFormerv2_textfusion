@@ -1,13 +1,13 @@
 # CUDA_VISIBLE_DEVICES=0,1
 # config -> which model config
 # continue_fpath -> the trained pth path
-GPUS=8
+GPUS=2 #8
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
 PORT=${PORT:-29158}
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
-export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export CUDA_VISIBLE_DEVICES="0,1"   #export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export TORCHDYNAMO_VERBOSE=1
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
@@ -27,7 +27,8 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --compile_mode="reduce-overhead" \
     --amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/trained/DFormerv2_Small_NYU.pth"
+    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_20250603-192438/epoch-354_miou_55.6.pth"
+
 
 # choose the dataset and DFormer for evaluating
 

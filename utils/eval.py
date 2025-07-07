@@ -16,7 +16,6 @@ from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.engine.engine import Engine
 from utils.engine.logger import get_logger
 
-# from eval import evaluate_mid
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True

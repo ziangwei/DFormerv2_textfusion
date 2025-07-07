@@ -23,7 +23,6 @@ import sys
 import os
 from collections import OrderedDict
 
-
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -377,6 +376,24 @@ class FeedForwardNetwork(nn.Module):
         x = self.dropout_module(x)
         return x
 
+# 目前对于 Text-if 的尝试
+class FeatureWiseAffine(nn.Module):
+    def __init__(self, in_channels, out_channels, use_affine_level=True):
+        super(FeatureWiseAffine, self).__init__()
+        self.use_affine_level = use_affine_level
+        self.MLP = nn.Sequential(
+            nn.Linear(in_channels, in_channels * 2),
+            nn.LeakyReLU(),
+            nn.Linear(in_channels * 2, out_channels * (1 + self.use_affine_level))
+        )
+
+    def forward(self, x, text_embed):
+        text_embed = text_embed.unsqueeze(1)
+        batch = x.shape[0]
+        if self.use_affine_level:
+            gamma, beta = self.MLP(text_embed).view(batch, -1, 1, 1).chunk(2, dim=1)
+            x = (1 + gamma) * x + beta
+        return x
 
 class RGBD_Block(nn.Module):
     def __init__(
@@ -407,21 +424,38 @@ class RGBD_Block(nn.Module):
         # the function to generate the geometry prior for the current block
         self.Geo = GeoPriorGen(embed_dim, num_heads, init_value, heads_range)
 
+        # clip 预改动2
+        self.prompt_guidance = FeatureWiseAffine(
+            in_channels=512,  # CLIP 文本向量维度
+            out_channels=embed_dim,  # 本 Block 特征通道数
+            use_affine_level=True
+        )
+
+
         if layerscale:
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
             self.gamma_2 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
 
-    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False):
+    def forward(self, x: torch.Tensor, x_e: torch.Tensor, gamma, beta, split_or_not=False):
         x = x + self.cnn_pos_encode(x)
         b, h, w, d = x.size()
 
         geo_prior = self.Geo((h, w), x_e, split_or_not=split_or_not)
         if self.layerscale:
             x = x + self.drop_path(self.gamma_1 * self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
-            x = x + self.drop_path(self.gamma_2 * self.ffn(self.layer_norm2(x)))
         else:
             x = x + self.drop_path(self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
+
+        # 对于 x 的文本引导
+        x = x.permute(0, 3, 1, 2)  # → (B, C, H, W)
+        x = (1 + gamma) * x + beta
+        x = x.permute(0, 2, 3, 1)  # → (B, H, W, C)
+
+        if self.layerscale:
+            x = x + self.drop_path(self.gamma_2 * self.ffn(self.layer_norm2(x)))
+        else:
             x = x + self.drop_path(self.ffn(self.layer_norm2(x)))
+
         return x
 
 
@@ -477,13 +511,15 @@ class BasicLayer(nn.Module):
         else:
             self.downsample = None
 
-    def forward(self, x, x_e):
-        b, h, w, d = x.size()
+    def forward(self, x, x_e, text_embed):
+        t = text_embed.unsqueeze(1)
+        params = self.blocks[0].prompt_guidance.MLP(t)  # (B, 2*embed_dim)
+        gamma, beta = params.view(-1, 2 * self.embed_dim, 1, 1).chunk(2, dim=1)
         for blk in self.blocks:
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not)
             else:
-                x = blk(x, x_e, split_or_not=self.split_or_not)
+                x = blk(x, x_e, gamma, beta,split_or_not=self.split_or_not)
         if self.downsample is not None:
             x_down = self.downsample(x)
             return x, x_down
@@ -617,7 +653,7 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e):
+    def forward(self, x, x_e, text_embed: torch.Tensor):
         # rgb input
         x = self.patch_embed(x)
         # depth input
@@ -626,8 +662,7 @@ class dformerv2(nn.Module):
         outs = []
 
         for i in range(self.num_layers):
-            layer = self.layers[i]
-            x_out, x = layer(x, x_e)
+            x_out, x = self.layers[i](x, x_e, text_embed)
             if i in self.out_indices:
                 if i != 0:
                     x_out = self.extra_norms[i - 1](x_out)

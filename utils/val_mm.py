@@ -27,6 +27,16 @@ from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import cv2
 
+import clip
+
+# 全局初始化 CLIP 文本编码器
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+clip_model, _ = clip.load("ViT-B/32", device=device)
+clip_model.eval()
+for p in clip_model.parameters():
+    p.requires_grad = False
+
+
 # from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
 
 
@@ -99,12 +109,18 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         if len(labels.shape) == 2:
             labels = labels.unsqueeze(0)
         # print(images.shape,labels.shape)
+
+        prompts = minibatch["prompt"]  # List[str]
+        tokens = clip.tokenize(prompts).to(device)  # (B, L)
+        text_embed = clip_model.encode_text(tokens)  # (B, 512)
+
+
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
         if sliding:
-            preds = slide_inference(model, images, modal_xs, config).softmax(dim=1)
+            preds = slide_inference(model, images, modal_xs, text_embed, config).softmax(dim=1)
         else:
-            preds = model(images[0], images[1]).softmax(dim=1)
+            preds = model(images[0], images[1], text_embed).softmax(dim=1)
         # print(preds.shape,labels.shape)
         B, H, W = labels.shape
         metrics.update(preds, labels)
@@ -179,7 +195,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     return all_metrics
 
 
-def slide_inference(model, imgs, modal_xs, config):
+def slide_inference(model, imgs, modal_xs, text_embed=None, config=None):
     """Inference by sliding-window with overlap.
 
     If h_crop > h_img or w_crop > w_img, the small patch will be used to
@@ -229,7 +245,7 @@ def slide_inference(model, imgs, modal_xs, config):
             crop_modal_xs = modal_xs[:, :, y1:y2, x1:x2]
             # the output of encode_decode is seg logits tensor map
             # with shape [N, C, H, W]
-            crop_seg_logit = model(crop_img, crop_modal_xs)
+            crop_seg_logit = model(crop_img, crop_modal_xs, text_embed=text_embed)
             preds += F.pad(
                 crop_seg_logit,
                 (int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)),
@@ -283,10 +299,16 @@ def evaluate_msf(
                 F.interpolate(img, size=(new_H, new_W), mode="bilinear", align_corners=True) for img in images
             ]
             scaled_images = [scaled_img.to(device) for scaled_img in scaled_images]
+
+            prompts = minibatch["prompt"]
+            tokens = clip.tokenize(prompts).to(device)
+            text_embed = clip_model.encode_text(tokens)
+
+
             if sliding:
-                logits = slide_inference(model, scaled_images[0], scaled_images[1], config)
+                logits = slide_inference(model, scaled_images[0], scaled_images[1], text_embed, config)
             else:
-                logits = model(scaled_images[0], scaled_images[1])
+                logits = model(scaled_images[0], scaled_images[1], text_embed)
             logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
             scaled_logits += logits.softmax(dim=1)
 
