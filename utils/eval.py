@@ -46,16 +46,15 @@ import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 # torch._dynamo.config.automatic_dynamic_shapes = False
 
+scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
+all_prompts = [sample_prompt(s) for s in scene_list]
+prompt_embeds = encode_prompts(all_prompts).cpu()
+set_prompt_embeds(prompt_embeds)
+unload_clip_model()
+
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
     config = getattr(import_module(args.config), "C")
-
-    scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
-    all_prompts = [sample_prompt(s) for s in scene_list]
-    prompt_embeds = encode_prompts(all_prompts).cpu()
-    set_prompt_embeds(prompt_embeds)
-    unload_clip_model()
-
 
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
     # check if pad_SUNRGBD is used correctly
@@ -132,6 +131,7 @@ with Engine(custom_parser=parser) as engine:
     if engine.distributed:
         logger.info(".............distributed training.............")
         if torch.cuda.is_available():
+            device = torch.device("cuda")
             model.cuda()
             model = DistributedDataParallel(
                 model,
@@ -148,6 +148,7 @@ with Engine(custom_parser=parser) as engine:
 
     torch.cuda.empty_cache()
     if args.amp:
+        logger.info(">>>> start eval loop")
         with torch.autocast(device_type="cuda", dtype=torch.float16):
             if engine.distributed:
                 with torch.no_grad():
@@ -187,7 +188,7 @@ with Engine(custom_parser=parser) as engine:
                     model.eval()
                     device = torch.device("cuda")
                     if args.mst:
-                        metric = evaluate_msf(
+                        all_metrics = evaluate_msf(
                             model,
                             val_loader,
                             config,
@@ -198,7 +199,7 @@ with Engine(custom_parser=parser) as engine:
                             sliding=args.sliding,
                         )
                     else:
-                        metric = evaluate(
+                        all_metrics = evaluate(
                             model,
                             val_loader,
                             config,
@@ -206,11 +207,15 @@ with Engine(custom_parser=parser) as engine:
                             engine,
                             sliding=args.sliding,
                         )
-                    ious, miou = metric.compute_iou()
-                    acc, macc = metric.compute_pixel_acc()
-                    f1, mf1 = metric.compute_f1()
-                    logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
-                    logger.info(f"ious:{ious}")
+                    if engine.local_rank == 0:
+                        metric = all_metrics[0]
+                        for other_metric in all_metrics[1:]:
+                            metric.update_hist(other_metric.hist)
+                        ious, miou = metric.compute_iou()
+                        acc, macc = metric.compute_pixel_acc()
+                        f1, mf1 = metric.compute_f1()
+                        logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
+                        logger.info(f"ious:{ious}")
     else:
         if engine.distributed:
             with torch.no_grad():
@@ -269,6 +274,7 @@ with Engine(custom_parser=parser) as engine:
                         engine,
                         sliding=args.sliding,
                     )
+
                 ious, miou = metric.compute_iou()
                 acc, macc = metric.compute_pixel_acc()
                 f1, mf1 = metric.compute_f1()

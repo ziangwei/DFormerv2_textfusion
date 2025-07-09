@@ -546,6 +546,7 @@ with Engine(custom_parser=parser) as engine:
             for i in range(engine.state.epoch + 1, config.nepochs + 1):
                 if is_eval(i, config):
                     eval_count += 1
+
             left_time = train_timer.mean_time * (config.nepochs - engine.state.epoch) + eval_timer.mean_time * eval_count
             eta = (datetime.datetime.now() + datetime.timedelta(seconds=left_time)).strftime("%Y-%m-%d %H:%M:%S")
             logger.info(
