@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import re
 import torch.utils.data as data
-
+import json
 from models.builder import logger
 from utils.prompt_utils import load_scene_list, sample_prompt, PROMPT_EMBEDS
 
@@ -112,7 +112,7 @@ def get_path(
 
 
 class RGBXDataset(data.Dataset):
-    def __init__(self, setting, split_name, preprocess=None, file_length=None):
+    def __init__(self, setting, split_name, preprocess=None, file_length=None, prompt_json=None):
         super(RGBXDataset, self).__init__()
         self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
         self._split_name = split_name
@@ -133,8 +133,13 @@ class RGBXDataset(data.Dataset):
         self.dataset_name = setting["dataset_name"]
         self.x_modal = setting.get("x_modal", ["d"])
         self.backbone = setting["backbone"]
-        self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
+        # self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
         self.sample_prompt = sample_prompt
+        if prompt_json:
+            with open(prompt_json, 'r') as f:
+                self.prompt_dict = json.load(f)  # { "1135.jpg": "a bed …", … }
+        else:
+            self.prompt_dict = {}
 
     def __len__(self):
         if self._file_length is not None:
@@ -214,11 +219,8 @@ class RGBXDataset(data.Dataset):
 
         rgb_path = path_dict["rgb_path"]
         fname = os.path.basename(rgb_path)  # '13.jpg'
-        num_str = os.path.splitext(fname)[0]  # '13'
-        scene_idx = int(num_str)  # 13
-        prompt = self.sample_prompt(self.scene_list[scene_idx])
+        prompt = self.prompt_dict.get(fname)
         output_dict = dict(data=rgb, label=gt, modal_x=x, prompt=prompt, fn=str(path_dict["rgb_path"]), n=len(self._file_names))
-        output_dict["scene_idx"] = scene_idx
         return output_dict
 
     def _get_file_names(self, split_name):

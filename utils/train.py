@@ -13,13 +13,14 @@ from prompt_utils import (
     unload_clip_model,
 )
 import tempfile
+import json
 import numpy as np
 import torch
 import torch.nn as nn
 from tensorboardX import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from val_mm import evaluate, evaluate_msf
-
+from pathlib import Path
 from models.builder import EncoderDecoder as segmodel
 from utils.dataloader.dataloader import get_train_loader, get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
@@ -58,10 +59,29 @@ import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 # torch._dynamo.config.automatic_dynamic_shapes = False
 
-# 1) 读入场景列表
-scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")  # len N
-# 2) 针对每个 scene 只做一次 prompt
-all_prompts = [sample_prompt(s) for s in scene_list ]            # ["this is a kitchen", ...]
+# # 1) 读入场景列表
+# scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")  # len N
+# # 2) 针对每个 scene 只做一次 prompt
+# all_prompts = [sample_prompt(s) for s in scene_list ]            # ["this is a kitchen", ...]
+
+
+
+# ———— 新版：从 train.txt & JSON 读取 prompt ————
+# 0) 配置里给出 train_source (train.txt) 和 prompt_json (你的 blip_prompts.json)
+train_list = Path(config.train_source).read_text().splitlines()
+# train_list 样例： ["RGB/1135.jpg Label/1135.png", "RGB/1302.jpg Label/1302.png", …]
+
+# 1) 提取纯文件名顺序，与 Dataset 一致
+fnames = [ Path(l.split()[0]).name for l in train_list ]
+#    → ['1135.jpg', '1302.jpg', …]
+
+# 2) 载入你用 BLIP 自动生成的 JSON
+prompt_dict = json.loads(Path(config.prompt_json).read_text())
+#    形式如 { "1135.jpg": "a bed with a blanket on it", … }
+
+# 3) 按顺序取出 prompt；如果某张没写，就用空串（或某个默认模板）
+all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
+
 # 3) 利用 prompt_utils 的接口编码文本，并在完成后释放 CLIP 模型显存
 prompt_embeds = encode_prompts(all_prompts).cpu()  # (N, 512)
 set_prompt_embeds(prompt_embeds)
