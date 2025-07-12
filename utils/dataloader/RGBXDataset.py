@@ -4,9 +4,8 @@ import torch
 import numpy as np
 import re
 import torch.utils.data as data
-import json
 from models.builder import logger
-from utils.prompt_utils import load_scene_list, sample_prompt, PROMPT_EMBEDS
+# from utils.prompt_utils import load_scene_list, sample_prompt, PROMPT_EMBEDS
 
 def get_path(
     dataset_name,
@@ -112,9 +111,9 @@ def get_path(
 
 
 class RGBXDataset(data.Dataset):
-    def __init__(self, setting, split_name, preprocess=None, file_length=None, prompt_json=None):
+    def __init__(self, setting, split_name, preprocess=None, file_length=None):
         super(RGBXDataset, self).__init__()
-        self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
+        # self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
         self._split_name = split_name
         self._rgb_path = setting["rgb_root"]
         self._rgb_format = setting["rgb_format"]
@@ -133,13 +132,7 @@ class RGBXDataset(data.Dataset):
         self.dataset_name = setting["dataset_name"]
         self.x_modal = setting.get("x_modal", ["d"])
         self.backbone = setting["backbone"]
-        # self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
-        self.sample_prompt = sample_prompt
-        if prompt_json:
-            with open(prompt_json, 'r') as f:
-                self.prompt_dict = json.load(f)  # { "1135.jpg": "a bed …", … }
-        else:
-            self.prompt_dict = {}
+
 
     def __len__(self):
         if self._file_length is not None:
@@ -149,8 +142,10 @@ class RGBXDataset(data.Dataset):
     def __getitem__(self, index):
         if self._file_length is not None:
             item_name = self._construct_new_file_names(self._file_length)[index]
+            prompt_idx = index % len(self._file_names)
         else:
             item_name = self._file_names[index]
+            prompt_idx = index
 
         path_dict = get_path(
             self.dataset_name,
@@ -218,9 +213,16 @@ class RGBXDataset(data.Dataset):
         #     x = torch.from_numpy(np.ascontiguousarray(x)).float()
 
         rgb_path = path_dict["rgb_path"]
-        fname = os.path.basename(rgb_path)  # '13.jpg'
-        prompt = self.prompt_dict.get(fname)
-        output_dict = dict(data=rgb, label=gt, modal_x=x, prompt=prompt, fn=str(path_dict["rgb_path"]), n=len(self._file_names))
+
+        output_dict = dict(
+            data=rgb,
+            label=gt,
+            modal_x=x,
+            prompt_idx=prompt_idx,
+            fn=str(rgb_path),
+            n=len(self._file_names),
+        )
+
         return output_dict
 
     def _get_file_names(self, split_name):

@@ -4,6 +4,7 @@ import pathlib
 import matplotlib as mpl
 import torch
 import argparse
+import json
 import yaml
 import math
 import os
@@ -100,8 +101,8 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         logger.info(f"[evaluate] Batch {idx}/{len(dataloader)}, keys={list(minibatch.keys())}")
         for h in logger.handlers: h.flush()
 
-        scene_idxs = minibatch["scene_idx"].long()
-        text_embed = prompt_embeds[scene_idxs].to(device)
+        prompt_idxs = minibatch["prompt_idx"].long()
+        text_embed = prompt_embeds[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -296,8 +297,8 @@ def evaluate_msf(
 
     for idx, minibatch in enumerate(dataloader):
 
-        scene_idxs = minibatch["scene_idx"].long()
-        text_embed = prompt_embeds[scene_idxs].to(device)
+        prompt_idxs = minibatch["prompt_idx"].long()
+        text_embed = prompt_embeds[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -421,11 +422,14 @@ def evaluate_msf(
 
 def main(cfg):
 
-    # —— 1) 读入场景列表，并构造 prompt 文本
-    from prompt_utils import load_scene_list, sample_prompt, encode_prompts, set_prompt_embeds, unload_clip_model
-    scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
-    all_prompts = [sample_prompt(s) for s in scene_list]
-    # —— 2) 批量编码一次，缓存到 PROMPT_EMBEDS
+    # —— 从 JSON 文件读取图像描述并编码 ——
+    from prompt_utils import encode_prompts, set_prompt_embeds, unload_clip_model
+    train_list = Path(cfg["DATASET"]["TRAIN_SOURCE"]).read_text().splitlines()
+    fnames = [Path(l.split()[0]).name for l in train_list]
+    with open(cfg["DATASET"]["PROMPT_JSON"], "r") as f:
+        prompt_dict = json.load(f)
+    all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
+
     prompt_embeds = encode_prompts(all_prompts).cpu()
     set_prompt_embeds(prompt_embeds)
     unload_clip_model()

@@ -66,27 +66,6 @@ torch._dynamo.config.suppress_errors = True
 
 
 
-# ———— 新版：从 train.txt & JSON 读取 prompt ————
-# 0) 配置里给出 train_source (train.txt) 和 prompt_json (你的 blip_prompts.json)
-train_list = Path(config.train_source).read_text().splitlines()
-# train_list 样例： ["RGB/1135.jpg Label/1135.png", "RGB/1302.jpg Label/1302.png", …]
-
-# 1) 提取纯文件名顺序，与 Dataset 一致
-fnames = [ Path(l.split()[0]).name for l in train_list ]
-#    → ['1135.jpg', '1302.jpg', …]
-
-# 2) 载入你用 BLIP 自动生成的 JSON
-prompt_dict = json.loads(Path(config.prompt_json).read_text())
-#    形式如 { "1135.jpg": "a bed with a blanket on it", … }
-
-# 3) 按顺序取出 prompt；如果某张没写，就用空串（或某个默认模板）
-all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-
-# 3) 利用 prompt_utils 的接口编码文本，并在完成后释放 CLIP 模型显存
-prompt_embeds = encode_prompts(all_prompts).cpu()  # (N, 512)
-set_prompt_embeds(prompt_embeds)
-unload_clip_model()
-
 def is_eval(epoch, config):
     return epoch > int(config.checkpoint_start_epoch) or epoch == 1 or epoch % 10 == 0
 
@@ -164,6 +143,17 @@ with Engine(custom_parser=parser) as engine:
         # assert not (args.compile and args.syncbn), "syncbn is not supported in compile mode"
         if not args.compile and args.compile_mode != "default":
             logger.warning("compile_mode is only valid when compile is enabled, ignoring compile_mode")
+
+
+        # ---- load text prompts from JSON and precompute embeddings ----
+        train_list = Path(config.train_source).read_text().splitlines()
+        fnames = [Path(l.split()[0]).name for l in train_list]
+        prompt_dict = json.loads(Path(config.prompt_json).read_text())
+        all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
+        prompt_embeds = encode_prompts(all_prompts).cpu()
+        set_prompt_embeds(prompt_embeds)
+        unload_clip_model()
+
 
         train_loader, train_sampler = get_train_loader(engine, RGBXDataset, config)
 
@@ -339,8 +329,8 @@ with Engine(custom_parser=parser) as engine:
                 imgs = minibatch["data"]
                 gts = minibatch["label"]
                 modal_xs = minibatch["modal_x"]
-                scene_idxs = minibatch["scene_idx"]
-                text_embed = prompt_embeds[scene_idxs].to(device, non_blocking=True)  # (B,512)
+                prompt_idxs = minibatch["prompt_idx"]
+                text_embed = prompt_embeds[prompt_idxs].to(device, non_blocking=True)  # (B,512)
 
                 imgs = imgs.cuda(non_blocking=True)
                 gts = gts.cuda(non_blocking=True)

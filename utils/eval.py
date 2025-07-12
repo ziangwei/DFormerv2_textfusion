@@ -3,6 +3,8 @@ import pprint
 import time
 from importlib import import_module
 from prompt_utils import load_scene_list, sample_prompt, encode_prompts, set_prompt_embeds, unload_clip_model
+import json
+from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
@@ -46,11 +48,6 @@ import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 # torch._dynamo.config.automatic_dynamic_shapes = False
 
-scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
-all_prompts = [sample_prompt(s) for s in scene_list]
-prompt_embeds = encode_prompts(all_prompts).cpu()
-set_prompt_embeds(prompt_embeds)
-unload_clip_model()
 
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
@@ -66,6 +63,15 @@ with Engine(custom_parser=parser) as engine:
     if (not args.pad_SUNRGBD) and config.backbone.startswith("DFormerv2") and config.dataset_name == "SUNRGBD":
         raise ValueError("DFormerv2 is not recommended without pad_SUNRGBD")
     config.pad = args.pad_SUNRGBD
+
+    # ---- load prompts from JSON and precompute embeddings ----
+    train_list = Path(config.train_source).read_text().splitlines()
+    fnames = [Path(l.split()[0]).name for l in train_list]
+    prompt_dict = json.loads(Path(config.prompt_json).read_text())
+    all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
+    prompt_embeds = encode_prompts(all_prompts).cpu()
+    set_prompt_embeds(prompt_embeds)
+    unload_clip_model()
 
     cudnn.benchmark = True
     if config.dataset_name != "SUNRGBD":

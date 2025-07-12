@@ -153,7 +153,6 @@ def get_train_loader(engine, dataset, config):
         "eval_source": config.eval_source,
         "dataset_name": config.dataset_name,
         "backbone": config.backbone,
-        "prompt_json": config.prompt_json
     }
     train_preprocess = TrainPre(config.norm_mean, config.norm_std, config.x_is_single_channel, config)
 
@@ -203,7 +202,6 @@ def get_val_loader(engine, dataset, config, val_batch_size=1):
         "eval_source": config.eval_source,
         "dataset_name": config.dataset_name,
         "backbone": config.backbone,
-        "prompt_json": config.prompt_json
     }
     val_preprocess = ValPre(config.norm_mean, config.norm_std, config.x_is_single_channel, config)
 
