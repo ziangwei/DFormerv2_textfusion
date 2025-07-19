@@ -424,19 +424,19 @@ class RGBD_Block(nn.Module):
         # the function to generate the geometry prior for the current block
         self.Geo = GeoPriorGen(embed_dim, num_heads, init_value, heads_range)
 
-        # clip 预改动2
-        self.prompt_guidance = FeatureWiseAffine(
-            in_channels=512,  # CLIP 文本向量维度
-            out_channels=embed_dim,  # 本 Block 特征通道数
-            use_affine_level=True
-        )
+        # # clip 预改动2
+        # self.prompt_guidance = FeatureWiseAffine(
+        #     in_channels=512,  # CLIP 文本向量维度
+        #     out_channels=embed_dim,  # 本 Block 特征通道数
+        #     use_affine_level=True
+        # )
 
 
         if layerscale:
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
             self.gamma_2 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
 
-    def forward(self, x: torch.Tensor, x_e: torch.Tensor, gamma=None, beta=None, split_or_not=False):
+    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False):
         x = x + self.cnn_pos_encode(x)
         b, h, w, d = x.size()
 
@@ -446,11 +446,11 @@ class RGBD_Block(nn.Module):
         else:
             x = x + self.drop_path(self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
 
-        # 对于 x 的文本引导
-        x = x.permute(0, 3, 1, 2)  # → (B, C, H, W)
-        if gamma is not None and beta is not None:
-            x = (1 + gamma) * x + beta
-        x = x.permute(0, 2, 3, 1)  # → (B, H, W, C)
+        # # 对于 x 的文本引导
+        # x = x.permute(0, 3, 1, 2)  # → (B, C, H, W)
+        # if gamma is not None and beta is not None:
+        #     x = (1 + gamma) * x + beta
+        # x = x.permute(0, 2, 3, 1)  # → (B, H, W, C)
 
         if self.layerscale:
             x = x + self.drop_path(self.gamma_2 * self.ffn(self.layer_norm2(x)))
@@ -512,28 +512,27 @@ class BasicLayer(nn.Module):
         else:
             self.downsample = None
 
-    def forward(self, x, x_e, text_embed=None):
-        if text_embed is not None:
-            dtype = self.blocks[0].prompt_guidance.MLP[0].weight.dtype
-            t = text_embed.to(dtype).unsqueeze(1)
-        else:
-            t = None
+    def forward(self, x, x_e):
+        # if text_embed is not None:
+        #     dtype = self.blocks[0].prompt_guidance.MLP[0].weight.dtype
+        #     t = text_embed.to(dtype).unsqueeze(1)
+        # else:
+        #     t = None
 
         for blk in self.blocks:
 
-            if t is not None:
-                params = blk.prompt_guidance.MLP(t)  # (B, 2*embed_dim)
-                gamma, beta = params.view(-1, 2 * self.embed_dim, 1, 1).chunk(2, dim=1)
-            else:
-                gamma = beta = None
+            # if t is not None:
+            #     params = blk.prompt_guidance.MLP(t)  # (B, 2*embed_dim)
+            #     gamma, beta = params.view(-1, 2 * self.embed_dim, 1, 1).chunk(2, dim=1)
+            # else:
+            #     gamma = beta = None
 
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(
-                    blk, x=x, x_e=x_e, gamma=gamma, beta=beta,
-                    split_or_not=self.split_or_not
+                    blk, x=x, x_e=x_e, split_or_not=self.split_or_not
                 )
             else:
-                x = blk(x, x_e, gamma, beta, split_or_not=self.split_or_not)
+                x = blk(x, x_e, split_or_not=self.split_or_not)
         if self.downsample is not None:
             x_down = self.downsample(x)
             return x, x_down
@@ -583,14 +582,21 @@ class dformerv2(nn.Module):
         # build layers
         self.layers = nn.ModuleList()
 
-        C = self.embed_dim  # backbone 输出通道
+        # C = self.embed_dim  # backbone 输出通道
+
+        # text driven modulation at the end of the encoder
         D = text_dim
-        M = modulation_dim or C
-        self.mlp_gamma = nn.Sequential(
-            nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
-        )
-        self.mlp_beta = nn.Sequential(
-            nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
+
+        # M = modulation_dim or C
+        # self.mlp_gamma = nn.Sequential(
+        #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
+        # )
+        # self.mlp_beta = nn.Sequential(
+        #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
+        # )
+
+        self.final_guidance = nn.ModuleDict(
+            {str(i): FeatureWiseAffine(D, embed_dims[i]) for i in out_indices}
         )
 
         for i_layer in range(self.num_layers):
@@ -683,13 +689,13 @@ class dformerv2(nn.Module):
         # rgb input
         x = self.patch_embed(x)
 
-        if text_embed is not None:
-            text_embed = text_embed.to(x.dtype)
-            gamma = self.mlp_gamma(text_embed).view(-1, self.embed_dim, 1, 1)
-            beta = self.mlp_beta(text_embed).view(-1, self.embed_dim, 1, 1)
-            x = x.permute(0, 3, 1, 2)
-            x = (1 + gamma) * x + beta
-            x = x.permute(0, 2, 3, 1)
+        # if text_embed is not None:
+        #     text_embed = text_embed.to(x.dtype)
+        #     gamma = self.mlp_gamma(text_embed).view(-1, self.embed_dim, 1, 1)
+        #     beta = self.mlp_beta(text_embed).view(-1, self.embed_dim, 1, 1)
+        #     x = x.permute(0, 3, 1, 2)
+        #     x = (1 + gamma) * x + beta
+        #     x = x.permute(0, 2, 3, 1)
 
         # depth input
         x_e = x_e[:, 0, :, :].unsqueeze(1)
@@ -697,11 +703,13 @@ class dformerv2(nn.Module):
         outs = []
 
         for i in range(self.num_layers):
-            x_out, x = self.layers[i](x, x_e, text_embed)
+            x_out, x = self.layers[i](x, x_e)
             if i in self.out_indices:
                 if i != 0:
                     x_out = self.extra_norms[i - 1](x_out)
                 out = x_out.permute(0, 3, 1, 2).contiguous()
+                if text_embed is not None and str(i) in self.final_guidance:
+                    out = self.final_guidance[str(i)](out, text_embed)
                 outs.append(out)
 
         return tuple(outs)
