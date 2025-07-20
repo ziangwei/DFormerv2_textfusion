@@ -88,7 +88,8 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         h.flush()
 
     prompt_embeds = prompt_utils.PROMPT_EMBEDS
-    assert prompt_embeds is not None, "PROMPT_EMBEDS not set—run set_prompt_embeds() first"
+    prompt_tokens = prompt_utils.PROMPT_TOKENS
+    assert prompt_embeds is not None and prompt_tokens is not None, "PROMPT_EMBEDS not set—run set_prompt_embeds() first"
 
     print("Evaluating...")
     model.eval()
@@ -103,6 +104,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
 
         prompt_idxs = minibatch["prompt_idx"].long()
         text_embed = prompt_embeds[prompt_idxs].to(device)
+        text_tokens = prompt_tokens[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -129,10 +131,11 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
                 images[0],
                 images[1],
                 text_embed,
+                text_tokens,
                 config,
             ).softmax(dim=1)
         else:
-            preds = model(images[0], images[1], text_embed=text_embed).softmax(dim=1)
+            preds = model(images[0], images[1], text_embed=text_embed, text_tokens=text_tokens).softmax(dim=1)
         # print(preds.shape,labels.shape)
         B, H, W = labels.shape
         metrics.update(preds, labels)
@@ -207,7 +210,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     return all_metrics
 
 
-def slide_inference(model, imgs, modal_xs, text_embed=None, config=None):
+def slide_inference(model, imgs, modal_xs, text_embed=None, text_tokens=None, config=None):
     """Inference by sliding-window with overlap.
 
     If h_crop > h_img or w_crop > w_img, the small patch will be used to
@@ -262,7 +265,7 @@ def slide_inference(model, imgs, modal_xs, text_embed=None, config=None):
             crop_modal_xs = modal_xs[:, :, y1:y2, x1:x2]
             # the output of encode_decode is seg logits tensor map
             # with shape [N, C, H, W]
-            crop_seg_logit = model(crop_img, crop_modal_xs, text_embed=text_embed)
+            crop_seg_logit = model(crop_img, crop_modal_xs, text_embed=text_embed, text_tokens=text_tokens)
             preds += F.pad(
                 crop_seg_logit,
                 (int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)),
@@ -289,7 +292,8 @@ def evaluate_msf(
 ):
 
     prompt_embeds = prompt_utils.PROMPT_EMBEDS
-    assert prompt_embeds is not None
+    prompt_tokens = prompt_utils.PROMPT_TOKENS
+    assert prompt_embeds is not None and prompt_tokens is not None
     model.eval()
 
     n_classes = config.num_classes
@@ -299,6 +303,7 @@ def evaluate_msf(
 
         prompt_idxs = minibatch["prompt_idx"].long()
         text_embed = prompt_embeds[prompt_idxs].to(device)
+        text_tokens = prompt_tokens[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -326,9 +331,9 @@ def evaluate_msf(
             scaled_images = [scaled_img.to(device) for scaled_img in scaled_images]
 
             if sliding:
-                logits = slide_inference(model, scaled_images[0], scaled_images[1], text_embed, config)
+                logits = slide_inference(model, scaled_images[0], scaled_images[1], text_embed, text_tokens, config)
             else:
-                logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
+                logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed, text_tokens=text_tokens)
 
             logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
             scaled_logits += logits.softmax(dim=1)
@@ -341,10 +346,11 @@ def evaluate_msf(
                         scaled_images[0],
                         scaled_images[1],
                         text_embed,
+                        text_tokens,
                         config,
                     )
                 else:
-                    logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
+                    logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed, text_tokens=text_tokens)
                 logits = torch.flip(logits, dims=(3,))
                 logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
                 scaled_logits += logits.softmax(dim=1)
@@ -430,8 +436,10 @@ def main(cfg):
         prompt_dict = json.load(f)
     all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
 
-    prompt_embeds = encode_prompts(all_prompts).cpu()
-    set_prompt_embeds(prompt_embeds)
+    prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
+    prompt_embeds = prompt_embeds.cpu()
+    prompt_tokens = prompt_tokens.cpu()
+    set_prompt_embeds(prompt_embeds, prompt_tokens)
     unload_clip_model()
 
     device = torch.device(cfg["DEVICE"])

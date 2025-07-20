@@ -69,8 +69,10 @@ with Engine(custom_parser=parser) as engine:
     fnames = [Path(l.split()[0]).name for l in train_list]
     prompt_dict = json.loads(Path(config.prompt_json).read_text())
     all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-    prompt_embeds = encode_prompts(all_prompts).cpu()
-    set_prompt_embeds(prompt_embeds)
+    prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
+    prompt_embeds = prompt_embeds.cpu()
+    prompt_tokens = prompt_tokens.cpu()
+    set_prompt_embeds(prompt_embeds, prompt_tokens)
     unload_clip_model()
 
     cudnn.benchmark = True

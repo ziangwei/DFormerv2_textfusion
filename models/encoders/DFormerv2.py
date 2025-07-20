@@ -22,6 +22,7 @@ from typing import Tuple
 import sys
 import os
 from collections import OrderedDict
+from ..net_utils import TextCrossAttention
 
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
@@ -595,8 +596,26 @@ class dformerv2(nn.Module):
         #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
         # )
 
-        self.final_guidance = nn.ModuleDict(
-            {str(i): FeatureWiseAffine(D, embed_dims[i]) for i in out_indices}
+        used_indices = set(out_indices)
+        self.final_guidance = nn.ModuleDict({
+            str(i): FeatureWiseAffine(D, embed_dims[i]) for i in used_indices
+        })
+        ca_indices = used_indices.intersection({2, 3})
+        self.cross_attn = nn.ModuleDict(
+            {
+                str(i): TextCrossAttention(embed_dims[i], text_dim, num_heads=8)
+                for i in ca_indices
+            }
+        )
+        self.fuse = nn.ModuleDict(
+            {
+                str(i): nn.Sequential(
+                    nn.Conv2d(embed_dims[i] * 2, embed_dims[i], kernel_size=1),
+                    nn.BatchNorm2d(embed_dims[i]),
+                    nn.ReLU(inplace=True),
+                )
+                for i in ca_indices
+            }
         )
 
         for i_layer in range(self.num_layers):
@@ -685,7 +704,7 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e, text_embed=None):
+    def forward(self, x, x_e, text_embed=None, text_tokens=None):
         # rgb input
         x = self.patch_embed(x)
 
@@ -710,6 +729,9 @@ class dformerv2(nn.Module):
                 out = x_out.permute(0, 3, 1, 2).contiguous()
                 if text_embed is not None and str(i) in self.final_guidance:
                     out = self.final_guidance[str(i)](out, text_embed)
+                if text_tokens is not None and str(i) in self.cross_attn:
+                    ca = self.cross_attn[str(i)](out, text_tokens)
+                    out = self.fuse[str(i)](torch.cat([out, ca], dim=1))
                 outs.append(out)
 
         return tuple(outs)

@@ -193,7 +193,6 @@ class EncoderDecoder(nn.Module):
             self.decode_head = FCNHead(
                 in_channels=self.channels[-1], kernel_size=3, num_classes=cfg.num_classes, norm_layer=norm_layer
             )
-        self.text_guide = FeatureWiseAffine(512, self.channels[-1])
 
         self.criterion = criterion
         if self.criterion:
@@ -224,21 +223,18 @@ class EncoderDecoder(nn.Module):
                 nonlinearity="relu",
             )
 
-    def encode_decode(self, rgb, modal_x, text_embed=None):
+    def encode_decode(self, rgb, modal_x, text_embed=None, text_tokens=None):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         orisize = rgb.shape
         # print('builder',rgb.shape,modal_x.shape)
-        x = self.backbone(rgb, modal_x, text_embed)
+        x = self.backbone(rgb, modal_x, text_embed, text_tokens=None)
         if len(x) == 2:  # if output is (rgb,depth) only use rgb
             x = x[0]
 
         if isinstance(x, (list, tuple)):
             feats = list(x)
-            feats[-1] = self.text_guide(feats[-1], text_embed)
             x = tuple(feats)
-        else:
-            x = self.text_guide(x, text_embed)
 
         out = self.decode_head.forward(x)
         out = F.interpolate(out, size=orisize[-2:], mode="bilinear", align_corners=False)
@@ -250,17 +246,21 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, modal_x=None,  label=None, text_embed=None):
+    def forward(self, rgb, modal_x=None,  label=None, text_embed=None, text_tokens=None):
         # print('builder',rgb.shape,modal_x.shape)
         if text_embed is None:
             B, C, H, W = rgb.shape
             device = rgb.device
             text_embed = torch.zeros(B, 512, device=device)
 
+        if text_tokens is None:
+            B = rgb.shape[0]
+            text_tokens = torch.zeros(B, 1, 512, device=rgb.device)
+
         if self.aux_head:
-            out, aux_fm = self.encode_decode(rgb, modal_x, text_embed)
+            out, aux_fm = self.encode_decode(rgb, modal_x, text_embed, text_tokens)
         else:
-            out = self.encode_decode(rgb, modal_x, text_embed)
+            out = self.encode_decode(rgb, modal_x, text_embed, text_tokens)
 
         if label is not None:
             loss = self.criterion(out, label.long())[label.long() != self.cfg.background].mean()

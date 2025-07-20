@@ -150,8 +150,10 @@ with Engine(custom_parser=parser) as engine:
         fnames = [Path(l.split()[0]).name for l in train_list]
         prompt_dict = json.loads(Path(config.prompt_json).read_text())
         all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-        prompt_embeds = encode_prompts(all_prompts).cpu()
-        set_prompt_embeds(prompt_embeds)
+        prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
+        prompt_embeds = prompt_embeds.cpu()
+        prompt_tokens = prompt_tokens.cpu()
+        set_prompt_embeds(prompt_embeds, prompt_tokens)
         unload_clip_model()
 
 
@@ -331,6 +333,7 @@ with Engine(custom_parser=parser) as engine:
                 modal_xs = minibatch["modal_x"]
                 prompt_idxs = minibatch["prompt_idx"]
                 text_embed = prompt_embeds[prompt_idxs].to(device, non_blocking=True)  # (B,512)
+                text_tokens = prompt_tokens[prompt_idxs].to(device, non_blocking=True)
 
                 imgs = imgs.cuda(non_blocking=True)
                 gts = gts.cuda(non_blocking=True)
@@ -338,9 +341,9 @@ with Engine(custom_parser=parser) as engine:
 
                 if args.amp:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        loss = model(imgs, modal_xs, text_embed=text_embed, label=gts)
+                        loss = model(imgs, modal_xs, text_embed=text_embed, text_tokens=text_tokens, label=gts)
                 else:
-                    loss = model(imgs, modal_xs, text_embed=text_embed, label=gts)
+                    loss = model(imgs, modal_xs, text_embed=text_embed, text_tokens=text_tokens, label=gts)
 
                 # reduce the whole loss over multi-gpu
                 if engine.distributed:

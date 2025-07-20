@@ -5,7 +5,7 @@ from typing import List
 # 最简单的模板：只保留场景信息，其它 filler
 BASE_TEMPLATE = "this is a {} image"
 PROMPT_EMBEDS = None
-
+PROMPT_TOKENS = None
 def load_scene_list(path):
     """
     读取 sceneTypes.txt，每行一个场景，返回一个 Python list。
@@ -45,10 +45,10 @@ def unload_clip_model():
         _CLIP_MODEL = None
         torch.cuda.empty_cache()
 
-def encode_prompts(prompts: List[str]) -> torch.Tensor:
+def encode_prompts(prompts: List[str]):
     """
-    批量将文本列表编码为 CLIP 文本特征向量。
-    返回 shape = (len(prompts), feature_dim)，已在 DEVICE 上。
+    批量将文本列表编码为 CLIP 文本特征向量并返回 token 级表示。
+    返回 (text_feats, token_feats)
     """
     model = _get_clip_model()
     tokens = clip.tokenize(prompts, truncate=True).to(_DEVICE)  # (N, token_len)
@@ -57,18 +57,26 @@ def encode_prompts(prompts: List[str]) -> torch.Tensor:
     with torch.no_grad():
         text_feats = model.encode_text(tokens)  # (N, D)
         text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
-    return text_feats
+        tok = model.token_embedding(tokens).type(text_feats.dtype)
+        tok = tok + model.positional_embedding.type(text_feats.dtype)
+        tok = model.transformer(tok.permute(1, 0, 2))
+        tok = tok.permute(1, 0, 2)
+        token_feats = model.ln_final(tok).type(text_feats.dtype)
 
-def encode_prompt(prompt: str) -> torch.Tensor:
+    return text_feats, token_feats
+
+def encode_prompt(prompt: str):
     """
     单条编码，返回 shape = (feature_dim,)。
     内部调用 encode_prompts，仅做语法糖。
     """
-    return encode_prompts([prompt])[0]
+    feats, tokens = encode_prompts([prompt])
+    return feats[0], tokens[0]
 
-def set_prompt_embeds(text_embeds: torch.Tensor):
+def set_prompt_embeds(text_embeds: torch.Tensor, text_tokens: torch.Tensor):
     """
     在 train.py 中调用，将 encode_prompts 返回的特征存入全局变量。
     """
-    global PROMPT_EMBEDS
+    global PROMPT_EMBEDS, PROMPT_TOKENS
     PROMPT_EMBEDS = text_embeds
+    PROMPT_TOKENS = text_tokens
