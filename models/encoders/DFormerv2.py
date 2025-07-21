@@ -596,27 +596,18 @@ class dformerv2(nn.Module):
         #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
         # )
 
-        used_indices = set(out_indices)
-        self.final_guidance = nn.ModuleDict({
-            str(i): FeatureWiseAffine(D, embed_dims[i]) for i in used_indices
+        self.final_guidance = nn.ModuleDict({str(i): FeatureWiseAffine(D, embed_dims[i]) for i in out_indices})
+        self.cross_attn = nn.ModuleDict({
+            str(i): TextCrossAttention(embed_dims[i], text_dim, num_heads=8) for i in [2, 3] if i in out_indices
         })
-        ca_indices = used_indices.intersection({2, 3})
-        self.cross_attn = nn.ModuleDict(
-            {
-                str(i): TextCrossAttention(embed_dims[i], text_dim, num_heads=8)
-                for i in ca_indices
-            }
-        )
-        self.fuse = nn.ModuleDict(
-            {
-                str(i): nn.Sequential(
-                    nn.Conv2d(embed_dims[i] * 2, embed_dims[i], kernel_size=1),
-                    nn.BatchNorm2d(embed_dims[i]),
-                    nn.ReLU(inplace=True),
-                )
-                for i in ca_indices
-            }
-        )
+        self.fuse = nn.ModuleDict({
+            str(i): nn.Sequential(
+                nn.Conv2d(embed_dims[i] * 2, embed_dims[i], kernel_size=1),
+                nn.BatchNorm2d(embed_dims[i]),
+                nn.ReLU(inplace=True),
+            )
+            for i in [2, 3] if i in out_indices
+        })
 
         for i_layer in range(self.num_layers):
             layer = BasicLayer(

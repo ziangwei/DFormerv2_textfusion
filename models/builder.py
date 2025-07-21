@@ -228,7 +228,7 @@ class EncoderDecoder(nn.Module):
         map of the same size as input."""
         orisize = rgb.shape
         # print('builder',rgb.shape,modal_x.shape)
-        x = self.backbone(rgb, modal_x, text_embed, text_tokens=None)
+        x = self.backbone(rgb, modal_x, text_embed, text_tokens)
         if len(x) == 2:  # if output is (rgb,depth) only use rgb
             x = x[0]
 
