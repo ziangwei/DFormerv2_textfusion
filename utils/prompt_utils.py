@@ -1,6 +1,6 @@
 import clip
 import torch
-from typing import List
+from typing import List, Union
 
 # 最简单的模板：只保留场景信息，其它 filler
 BASE_TEMPLATE = "this is a {} image"
@@ -45,17 +45,29 @@ def unload_clip_model():
         _CLIP_MODEL = None
         torch.cuda.empty_cache()
 
-def encode_prompts(prompts: List[str]):
+def encode_prompts(prompts: List[Union[str, List[str]]]):
     """
-    批量将文本列表编码为 CLIP 文本特征向量并返回 token 级表示。
-    返回 (text_feats, token_feats)
+    支持列表中的元素为字符串或字符串列表。如果为列表，将对其中
+    每个字符串分别编码并对特征取平均。返回 (text_feats, token_feats)
     """
+
+    # ---- flatten prompts and record lengths ----
+    flat_prompts: List[str] = []
+    lens: List[int] = []
+    for p in prompts:
+        if isinstance(p, list):
+            flat_prompts.extend(p)
+            lens.append(len(p))
+        else:
+            flat_prompts.append(p)
+            lens.append(1)
+
     model = _get_clip_model()
-    tokens = clip.tokenize(prompts, truncate=True).to(_DEVICE)  # (N, token_len)
+    tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
 
     # 2) forward through CLIP text encoder
     with torch.no_grad():
-        text_feats = model.encode_text(tokens)  # (N, D)
+        text_feats = model.encode_text(tokens)  # (M, D)
         text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
         tok = model.token_embedding(tokens).type(text_feats.dtype)
         tok = tok + model.positional_embedding.type(text_feats.dtype)
@@ -63,7 +75,15 @@ def encode_prompts(prompts: List[str]):
         tok = tok.permute(1, 0, 2)
         token_feats = model.ln_final(tok).type(text_feats.dtype)
 
-    return text_feats, token_feats
+    out_text_feats = []
+    out_token_feats = []
+    idx = 0
+    for ln in lens:
+        out_text_feats.append(text_feats[idx: idx + ln].mean(dim=0))
+        out_token_feats.append(token_feats[idx: idx + ln].mean(dim=0))
+        idx += ln
+
+    return torch.stack(out_text_feats), torch.stack(out_token_feats)
 
 def encode_prompt(prompt: str):
     """

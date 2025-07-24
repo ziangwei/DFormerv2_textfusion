@@ -8,7 +8,6 @@ from functools import partial
 
 from utils.engine.logger import get_logger
 import warnings
-from .encoders.DFormerv2 import FeatureWiseAffine
 
 # from mmcv.cnn import MODELS as MMCV_MODELS
 # from mmcv.cnn.bricks.registry import ATTENTION as MMCV_ATTENTION
@@ -228,7 +227,7 @@ class EncoderDecoder(nn.Module):
         map of the same size as input."""
         orisize = rgb.shape
         # print('builder',rgb.shape,modal_x.shape)
-        x = self.backbone(rgb, modal_x, text_embed, text_tokens)
+        x = self.backbone(rgb, modal_x, text_embed)
         if len(x) == 2:  # if output is (rgb,depth) only use rgb
             x = x[0]
 
@@ -252,10 +251,6 @@ class EncoderDecoder(nn.Module):
             B, C, H, W = rgb.shape
             device = rgb.device
             text_embed = torch.zeros(B, 512, device=device)
-
-        if text_tokens is None:
-            B = rgb.shape[0]
-            text_tokens = torch.zeros(B, 1, 512, device=rgb.device)
 
         if self.aux_head:
             out, aux_fm = self.encode_decode(rgb, modal_x, text_embed, text_tokens)

@@ -378,23 +378,59 @@ class FeedForwardNetwork(nn.Module):
         return x
 
 # 目前对于 Text-if 的尝试
-class FeatureWiseAffine(nn.Module):
-    def __init__(self, in_channels, out_channels, use_affine_level=True):
-        super(FeatureWiseAffine, self).__init__()
-        self.use_affine_level = use_affine_level
-        self.MLP = nn.Sequential(
-            nn.Linear(in_channels, in_channels * 2),
-            nn.LeakyReLU(),
-            nn.Linear(in_channels * 2, out_channels * (1 + self.use_affine_level))
-        )
+# class FeatureWiseAffine(nn.Module):
+#     def __init__(self, in_channels, out_channels, use_affine_level=True):
+#         super(FeatureWiseAffine, self).__init__()
+#         self.use_affine_level = use_affine_level
+#         self.MLP = nn.Sequential(
+#             nn.Linear(in_channels, in_channels * 2),
+#             nn.LeakyReLU(),
+#             nn.Linear(in_channels * 2, out_channels * (1 + self.use_affine_level))
+#         )
+#
+#     def forward(self, x, text_embed):
+#         text_embed = text_embed.to(self.MLP[0].weight.dtype).unsqueeze(1)
+#         batch = x.shape[0]
+#         if self.use_affine_level:
+#             gamma, beta = self.MLP(text_embed).view(batch, -1, 1, 1).chunk(2, dim=1)
+#             x = (1 + gamma) * x + beta
+#         return x
 
-    def forward(self, x, text_embed):
-        text_embed = text_embed.to(self.MLP[0].weight.dtype).unsqueeze(1)
-        batch = x.shape[0]
-        if self.use_affine_level:
-            gamma, beta = self.MLP(text_embed).view(batch, -1, 1, 1).chunk(2, dim=1)
-            x = (1 + gamma) * x + beta
-        return x
+class SemanticSelfAttention(nn.Module):
+    """Simple self-attention between features and a text embedding."""
+
+    def __init__(self, img_dim: int, text_dim: int, num_heads: int = 8):
+        super().__init__()
+        assert img_dim % num_heads == 0, "img_dim should be divisible by num_heads"
+        self.num_heads = num_heads
+        self.head_dim = img_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q_proj = nn.Linear(img_dim, img_dim)
+        self.k_proj = nn.Linear(text_dim, img_dim)
+        self.v_proj = nn.Linear(text_dim, img_dim)
+        self.out_proj = nn.Linear(img_dim, img_dim)
+
+    def forward(self, x: torch.Tensor, text_embed: torch.Tensor):
+        """x: (B, H, W, C); text_embed: (B, D)"""
+        B, H, W, C = x.shape
+        text_embed = text_embed.to(x.dtype)
+
+        q = self.q_proj(x).reshape(B, H * W, self.num_heads, self.head_dim)
+        q = q.permute(0, 2, 1, 3)
+
+        k = self.k_proj(text_embed).reshape(B, self.num_heads, self.head_dim)
+        v = self.v_proj(text_embed).reshape(B, self.num_heads, self.head_dim)
+        k = k.unsqueeze(2)
+        v = v.unsqueeze(2)
+
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-2)
+        out = torch.matmul(attn, v)
+        out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)
+        out = self.out_proj(out)
+        out = out + x
+        return out
 
 class RGBD_Block(nn.Module):
     def __init__(
@@ -408,10 +444,13 @@ class RGBD_Block(nn.Module):
         layer_init_values=1e-5,
         init_value=2,
         heads_range=4,
+        use_semantic: bool = False,
+        text_dim: int = 512,
     ):
         super().__init__()
         self.layerscale = layerscale
         self.embed_dim = embed_dim
+        self.use_semantic = use_semantic
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=1e-6)
         self.layer_norm2 = nn.LayerNorm(self.embed_dim, eps=1e-6)
         if split_or_not:
@@ -425,27 +464,25 @@ class RGBD_Block(nn.Module):
         # the function to generate the geometry prior for the current block
         self.Geo = GeoPriorGen(embed_dim, num_heads, init_value, heads_range)
 
-        # # clip 预改动2
-        # self.prompt_guidance = FeatureWiseAffine(
-        #     in_channels=512,  # CLIP 文本向量维度
-        #     out_channels=embed_dim,  # 本 Block 特征通道数
-        #     use_affine_level=True
-        # )
-
+        if self.use_semantic:
+            self.semantic_attn = SemanticSelfAttention(embed_dim, text_dim, num_heads)
 
         if layerscale:
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
             self.gamma_2 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
 
-    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False):
+    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False, text_embed: torch.Tensor = None):
         x = x + self.cnn_pos_encode(x)
         b, h, w, d = x.size()
 
         geo_prior = self.Geo((h, w), x_e, split_or_not=split_or_not)
+        out = self.Attention(self.layer_norm1(x), geo_prior, split_or_not)
+        if self.use_semantic and text_embed is not None:
+            out = self.semantic_attn(out, text_embed)
         if self.layerscale:
-            x = x + self.drop_path(self.gamma_1 * self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
+            x = x + self.drop_path(self.gamma_1 * out)
         else:
-            x = x + self.drop_path(self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
+            x = x + self.drop_path(out)
 
         # # 对于 x 的文本引导
         # x = x.permute(0, 3, 1, 2)  # → (B, C, H, W)
@@ -482,13 +519,15 @@ class BasicLayer(nn.Module):
         use_checkpoint=False,
         layerscale=False,
         layer_init_values=1e-5,
+        use_semantic: bool = False,
+        text_dim: int = 512,
     ):
         super().__init__()
         self.embed_dim = embed_dim
         self.depth = depth
         self.use_checkpoint = use_checkpoint
         self.split_or_not = split_or_not
-
+        self.use_semantic = use_semantic
         # build blocks
         self.blocks = nn.ModuleList(
             [
@@ -502,6 +541,8 @@ class BasicLayer(nn.Module):
                     layer_init_values,
                     init_value=init_value,
                     heads_range=heads_range,
+                    use_semantic=use_semantic,
+                    text_dim=text_dim,
                 )
                 for i in range(depth)
             ]
@@ -513,7 +554,7 @@ class BasicLayer(nn.Module):
         else:
             self.downsample = None
 
-    def forward(self, x, x_e):
+    def forward(self, x, x_e, text_embed=None):
         # if text_embed is not None:
         #     dtype = self.blocks[0].prompt_guidance.MLP[0].weight.dtype
         #     t = text_embed.to(dtype).unsqueeze(1)
@@ -530,10 +571,10 @@ class BasicLayer(nn.Module):
 
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(
-                    blk, x=x, x_e=x_e, split_or_not=self.split_or_not
+                    blk, x=x, x_e=x_e, split_or_not=self.split_or_not, text_embed=text_embed if self.use_semantic else None
                 )
             else:
-                x = blk(x, x_e, split_or_not=self.split_or_not)
+                x = blk(x, x_e, split_or_not=self.split_or_not, text_embed=text_embed if self.use_semantic else None)
         if self.downsample is not None:
             x_down = self.downsample(x)
             return x, x_down
@@ -596,18 +637,7 @@ class dformerv2(nn.Module):
         #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
         # )
 
-        self.final_guidance = nn.ModuleDict({str(i): FeatureWiseAffine(D, embed_dims[i]) for i in out_indices})
-        self.cross_attn = nn.ModuleDict({
-            str(i): TextCrossAttention(embed_dims[i], text_dim, num_heads=8) for i in [2, 3] if i in out_indices
-        })
-        self.fuse = nn.ModuleDict({
-            str(i): nn.Sequential(
-                nn.Conv2d(embed_dims[i] * 2, embed_dims[i], kernel_size=1),
-                nn.BatchNorm2d(embed_dims[i]),
-                nn.ReLU(inplace=True),
-            )
-            for i in [2, 3] if i in out_indices
-        })
+        # self.final_guidance = nn.ModuleDict({str(i): FeatureWiseAffine(D, embed_dims[i]) for i in out_indices})
 
         for i_layer in range(self.num_layers):
             layer = BasicLayer(
@@ -625,6 +655,8 @@ class dformerv2(nn.Module):
                 use_checkpoint=use_checkpoint,
                 layerscale=layerscales[i_layer],
                 layer_init_values=layer_init_values,
+                use_semantic=(i_layer in [1, 2]),
+                text_dim=text_dim,
             )
             self.layers.append(layer)
 
@@ -695,7 +727,7 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e, text_embed=None, text_tokens=None):
+    def forward(self, x, x_e, text_embed=None):
         # rgb input
         x = self.patch_embed(x)
 
@@ -713,16 +745,12 @@ class dformerv2(nn.Module):
         outs = []
 
         for i in range(self.num_layers):
-            x_out, x = self.layers[i](x, x_e)
+            te = text_embed if i in [1, 2] else None
+            x_out, x = self.layers[i](x, x_e, text_embed=te)
             if i in self.out_indices:
                 if i != 0:
                     x_out = self.extra_norms[i - 1](x_out)
                 out = x_out.permute(0, 3, 1, 2).contiguous()
-                if text_embed is not None and str(i) in self.final_guidance:
-                    out = self.final_guidance[str(i)](out, text_embed)
-                if text_tokens is not None and str(i) in self.cross_attn:
-                    ca = self.cross_attn[str(i)](out, text_tokens)
-                    out = self.fuse[str(i)](torch.cat([out, ca], dim=1))
                 outs.append(out)
 
         return tuple(outs)

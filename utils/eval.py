@@ -263,7 +263,7 @@ with Engine(custom_parser=parser) as engine:
                 model.eval()
                 device = torch.device("cuda")
                 if args.mst:
-                    metric = evaluate_msf(
+                    all_metrics = evaluate_msf(
                         model,
                         val_loader,
                         config,
@@ -274,7 +274,7 @@ with Engine(custom_parser=parser) as engine:
                         sliding=args.sliding,
                     )
                 else:
-                    metric = evaluate(
+                    all_metrics = evaluate(
                         model,
                         val_loader,
                         config,
@@ -282,10 +282,13 @@ with Engine(custom_parser=parser) as engine:
                         engine,
                         sliding=args.sliding,
                     )
-
-                ious, miou = metric.compute_iou()
-                acc, macc = metric.compute_pixel_acc()
-                f1, mf1 = metric.compute_f1()
-                logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
-                logger.info(f"ious:{ious}")
+                if engine.local_rank == 0:
+                    metric = all_metrics[0]
+                    for other_metric in all_metrics[1:]:
+                        metric.update_hist(other_metric.hist)
+                    ious, miou = metric.compute_iou()
+                    acc, macc = metric.compute_pixel_acc()
+                    f1, mf1 = metric.compute_f1()
+                    logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
+                    logger.info(f"ious:{ious}")
     logger.info("end testing")

@@ -1,6 +1,6 @@
 from .._base_.datasets.NYUDepthv2 import *
 # 新增：BLIP 生成的文本描述
-C.prompt_json = 'datasets/NYUDepthv2/nyu_blip_captions.json'
+C.prompt_json = 'datasets/NYUDepthv2/nyu_clip_patch8_top5_labels.json'
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = "DFormerv2_S"  # Remember change the path below.
@@ -15,7 +15,7 @@ C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
 C.batch_size = 16
-C.nepochs = 500
+C.nepochs = 800
 C.niters_per_epoch = C.num_train_imgs // C.batch_size + 1
 C.num_workers = 0
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
