@@ -24,7 +24,6 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --no-amp \
     --val_amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_20250722-225401/epoch-490_miou_55.83.pth" \
     --no-use_seed \
 
 # config for DFormers on NYUDepthv2
