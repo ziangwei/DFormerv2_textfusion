@@ -265,7 +265,7 @@ def slide_inference(model, imgs, modal_xs, text_embed=None, text_tokens=None, co
             crop_modal_xs = modal_xs[:, :, y1:y2, x1:x2]
             # the output of encode_decode is seg logits tensor map
             # with shape [N, C, H, W]
-            crop_seg_logit = model(crop_img, crop_modal_xs, text_embed=text_embed, text_tokens=text_tokens)
+            crop_seg_logit = model(crop_img, crop_modal_xs, text_embed=text_embed)
             preds += F.pad(
                 crop_seg_logit,
                 (int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)),
@@ -303,7 +303,6 @@ def evaluate_msf(
 
         prompt_idxs = minibatch["prompt_idx"].long()
         text_embed = prompt_embeds[prompt_idxs].to(device)
-        text_tokens = prompt_tokens[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -331,9 +330,9 @@ def evaluate_msf(
             scaled_images = [scaled_img.to(device) for scaled_img in scaled_images]
 
             if sliding:
-                logits = slide_inference(model, scaled_images[0], scaled_images[1], text_embed, text_tokens, config)
+                logits = slide_inference(model, scaled_images[0], scaled_images[1], text_embed, config)
             else:
-                logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed, text_tokens=text_tokens)
+                logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
 
             logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
             scaled_logits += logits.softmax(dim=1)
@@ -346,11 +345,10 @@ def evaluate_msf(
                         scaled_images[0],
                         scaled_images[1],
                         text_embed,
-                        text_tokens,
                         config,
                     )
                 else:
-                    logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed, text_tokens=text_tokens)
+                    logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
                 logits = torch.flip(logits, dims=(3,))
                 logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
                 scaled_logits += logits.softmax(dim=1)
@@ -422,16 +420,15 @@ def evaluate_msf(
         # 每个进程把自己的 metrics 发送/接收到 all_metrics 列表中
         torch.distributed.all_gather_object(all_metrics, metrics)
     else:
-        # 单卡也返回列表，保持接口一致
-        all_metrics = [metrics]
+        all_metrics = metrics
     return all_metrics
 
 def main(cfg):
 
     # —— 从 JSON 文件读取图像描述并编码 ——
     from prompt_utils import encode_prompts, set_prompt_embeds, unload_clip_model
-    train_list = Path(cfg["DATASET"]["TRAIN_SOURCE"]).read_text().splitlines()
-    fnames = [Path(l.split()[0]).name for l in train_list]
+    eval_list = Path(cfg["DATASET"]["EVAL_SOURCE"]).read_text().splitlines()
+    fnames = [Path(l.split()[0]).name for l in eval_list]
     with open(cfg["DATASET"]["PROMPT_JSON"], "r") as f:
         prompt_dict = json.load(f)
     all_prompts = [prompt_dict.get(fn, "") for fn in fnames]

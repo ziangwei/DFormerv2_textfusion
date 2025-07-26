@@ -147,13 +147,26 @@ with Engine(custom_parser=parser) as engine:
 
         # ---- load text prompts from JSON and precompute embeddings ----
         train_list = Path(config.train_source).read_text().splitlines()
-        fnames = [Path(l.split()[0]).name for l in train_list]
+        train_fnames = [Path(l.split()[0]).name for l in train_list]
+
+        eval_list = Path(config.eval_source).read_text().splitlines()
+        eval_fnames = [Path(l.split()[0]).name for l in eval_list]
+
         prompt_dict = json.loads(Path(config.prompt_json).read_text())
-        all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-        prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
-        prompt_embeds = prompt_embeds.cpu()
-        prompt_tokens = prompt_tokens.cpu()
-        set_prompt_embeds(prompt_embeds, prompt_tokens)
+
+        train_prompts = [prompt_dict.get(fn, "") for fn in train_fnames]
+        eval_prompts = [prompt_dict.get(fn, "") for fn in eval_fnames]
+
+        train_prompt_embeds, train_prompt_tokens = encode_prompts(train_prompts)
+        eval_prompt_embeds, eval_prompt_tokens = encode_prompts(eval_prompts)
+
+        train_prompt_embeds = train_prompt_embeds.cpu()
+        train_prompt_tokens = train_prompt_tokens.cpu()
+        eval_prompt_embeds = eval_prompt_embeds.cpu()
+        eval_prompt_tokens = eval_prompt_tokens.cpu()
+
+        # start training with train prompts loaded
+        set_prompt_embeds(train_prompt_embeds, train_prompt_tokens)
         unload_clip_model()
 
 
@@ -332,8 +345,7 @@ with Engine(custom_parser=parser) as engine:
                 gts = minibatch["label"]
                 modal_xs = minibatch["modal_x"]
                 prompt_idxs = minibatch["prompt_idx"]
-                text_embed = prompt_embeds[prompt_idxs].to(device, non_blocking=True)  # (B,512)
-                text_tokens = prompt_tokens[prompt_idxs].to(device, non_blocking=True)
+                text_embed = train_prompt_embeds[prompt_idxs].to(device, non_blocking=True)
 
                 imgs = imgs.cuda(non_blocking=True)
                 gts = gts.cuda(non_blocking=True)
@@ -341,9 +353,9 @@ with Engine(custom_parser=parser) as engine:
 
                 if args.amp:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        loss = model(imgs, modal_xs, text_embed=text_embed, text_tokens=text_tokens, label=gts)
+                        loss = model(imgs, modal_xs, text_embed=text_embed, label=gts)
                 else:
-                    loss = model(imgs, modal_xs, text_embed=text_embed, text_tokens=text_tokens, label=gts)
+                    loss = model(imgs, modal_xs, text_embed=text_embed, label=gts)
 
                 # reduce the whole loss over multi-gpu
                 if engine.distributed:
@@ -417,6 +429,11 @@ with Engine(custom_parser=parser) as engine:
 
                 eval_timer.start()
                 torch.cuda.empty_cache()
+
+                # switch prompts to validation set during evaluation
+                set_prompt_embeds(eval_prompt_embeds, eval_prompt_tokens)
+
+
                 # if args.compile and args.mst and (not args.sliding):
                 #     model = uncompiled_model
                 try:
@@ -549,6 +566,11 @@ with Engine(custom_parser=parser) as engine:
                         print("miou", miou, "best", best_miou)
                 except Exception as e:
                     logger.exception("Exception during evaluation!")
+
+                finally:
+                    # restore training prompts after validation
+                    set_prompt_embeds(train_prompt_embeds, train_prompt_tokens)
+
                 for h in logger.handlers:
                     h.flush()
 

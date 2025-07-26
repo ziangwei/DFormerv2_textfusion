@@ -22,7 +22,6 @@ from typing import Tuple
 import sys
 import os
 from collections import OrderedDict
-from ..net_utils import TextCrossAttention
 
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
