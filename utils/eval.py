@@ -2,7 +2,7 @@ import argparse
 import pprint
 import time
 from importlib import import_module
-from prompt_utils import load_scene_list, sample_prompt, encode_prompts, unload_clip_model
+from prompt_utils import load_scene_list, sample_prompt, encode_prompts, set_prompt_embeds, unload_clip_model
 import json
 from pathlib import Path
 import torch
@@ -38,6 +38,7 @@ parser.add_argument("--compile_mode", default="default")
 parser.add_argument("--syncbn", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--mst", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction)
+parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
 # parser.add_argument('--save_path', '-p', default=None)
 
@@ -64,14 +65,15 @@ with Engine(custom_parser=parser) as engine:
         raise ValueError("DFormerv2 is not recommended without pad_SUNRGBD")
     config.pad = args.pad_SUNRGBD
 
-    # use evaluation list so that text prompts align with validation images
-    val_list = Path(config.eval_source).read_text().splitlines()
-    val_fnames = [Path(l.split()[0]).name for l in val_list]
+    # ---- load prompts from JSON and precompute embeddings ----
+    eval_list = Path(config.train_source).read_text().splitlines()
+    fnames = [Path(l.split()[0]).name for l in eval_list]
     prompt_dict = json.loads(Path(config.prompt_json).read_text())
-    all_prompts = [prompt_dict.get(fn, "") for fn in val_fnames]
+    all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
     prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
     prompt_embeds = prompt_embeds.cpu()
     prompt_tokens = prompt_tokens.cpu()
+    set_prompt_embeds(prompt_embeds, prompt_tokens)
     unload_clip_model()
 
     cudnn.benchmark = True
@@ -158,7 +160,7 @@ with Engine(custom_parser=parser) as engine:
         with torch.no_grad():
             model.eval()
             device = torch.device("cuda")
-            if args.amp:
+            if args.val_amp:
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     if args.mst:
                         all_metrics = evaluate_msf(
@@ -215,7 +217,7 @@ with Engine(custom_parser=parser) as engine:
         with torch.no_grad():
             model.eval()
             device = torch.device("cuda")
-            if args.amp:
+            if args.val_amp:
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     if args.mst:
                         metric = evaluate_msf(

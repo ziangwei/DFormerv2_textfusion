@@ -205,3 +205,45 @@ class FeatureFusionModule(nn.Module):
         merge = self.channel_emb(merge, H, W)
 
         return merge
+
+class TextCrossAttention(nn.Module):
+    """Cross-attention between image features and text token embeddings."""
+
+    def __init__(self, img_dim, text_dim, num_heads=8):
+        super().__init__()
+        assert img_dim % num_heads == 0, "img_dim must be divisible by num_heads"
+        self.num_heads = num_heads
+        self.head_dim = img_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q_proj = nn.Conv2d(img_dim, img_dim, kernel_size=1)
+        self.k_proj = nn.Linear(text_dim, img_dim)
+        self.v_proj = nn.Linear(text_dim, img_dim)
+        self.out_proj = nn.Conv2d(img_dim, img_dim, kernel_size=1)
+        self.norm = nn.BatchNorm2d(img_dim)
+
+    def forward(self, x, text_tokens):
+        """Apply cross attention between pixel features and text tokens.
+
+        Args:
+            x (Tensor): shape ``(B, C, H, W)``.
+            text_tokens (Tensor): shape ``(B, L, D)``.
+        """
+        text_tokens = text_tokens.to(x.dtype)
+        B, C, H, W = x.shape
+        q = self.q_proj(x).reshape(B, self.num_heads, self.head_dim, H * W)
+        q = q.permute(0, 1, 3, 2)
+
+        k = self.k_proj(text_tokens).reshape(B, -1, self.num_heads, self.head_dim)
+        k = k.permute(0, 2, 1, 3)
+        v = self.v_proj(text_tokens).reshape(B, -1, self.num_heads, self.head_dim)
+        v = v.permute(0, 2, 1, 3)
+
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        out = torch.matmul(attn, v)
+        out = out.permute(0, 1, 3, 2).reshape(B, C, H, W)
+        out = self.out_proj(out)
+        out = out + x
+        out = self.norm(out)
+        return out
