@@ -6,6 +6,9 @@ from typing import List, Union
 BASE_TEMPLATE = "this is a {} image"
 PROMPT_EMBEDS = None
 PROMPT_TOKENS = None
+PROMPT_CACHE = {}
+ACTIVE_PROMPT_SET = "train"
+
 def load_scene_list(path):
     """
     读取 sceneTypes.txt，每行一个场景，返回一个 Python list。
@@ -100,3 +103,28 @@ def set_prompt_embeds(text_embeds: torch.Tensor, text_tokens: torch.Tensor):
     global PROMPT_EMBEDS, PROMPT_TOKENS
     PROMPT_EMBEDS = text_embeds
     PROMPT_TOKENS = text_tokens
+
+def register_prompt_embeds(set_name: str, text_embeds: torch.Tensor, text_tokens: torch.Tensor):
+    global PROMPT_CACHE
+    PROMPT_CACHE[set_name] = (text_embeds, text_tokens)
+
+
+def switch_prompt_set(set_name: str):
+    global PROMPT_EMBEDS, PROMPT_TOKENS, PROMPT_CACHE, ACTIVE_PROMPT_SET
+    assert set_name in PROMPT_CACHE, f"Prompt set {set_name} not registered!"
+    PROMPT_EMBEDS, PROMPT_TOKENS = PROMPT_CACHE[set_name]
+    ACTIVE_PROMPT_SET = set_name
+
+def prepare_eval_prompts(eval_txt_path, prompt_json_path):
+    from pathlib import Path
+    import json
+    eval_list = Path(eval_txt_path).read_text().splitlines()
+    fnames = [Path(l.split()[0]).name for l in eval_list]
+    prompt_dict = json.loads(Path(prompt_json_path).read_text())
+    all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
+    prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
+    prompt_embeds = prompt_embeds.cpu()
+    prompt_tokens = prompt_tokens.cpu()
+    register_prompt_embeds("eval", prompt_embeds, prompt_tokens)
+    switch_prompt_set("eval")
+    unload_clip_model()

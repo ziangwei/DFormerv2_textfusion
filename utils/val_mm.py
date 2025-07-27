@@ -80,6 +80,8 @@ import cv2
 #     return total_predictions.unsqueeze(0)
 
 
+
+
 @torch.no_grad()
 def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False):
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
@@ -87,6 +89,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     for h in logger.handlers:
         h.flush()
 
+    prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
     prompt_embeds = prompt_utils.PROMPT_EMBEDS
     prompt_tokens = prompt_utils.PROMPT_TOKENS
     assert prompt_embeds is not None and prompt_tokens is not None, "PROMPT_EMBEDS not set—run set_prompt_embeds() first"
@@ -290,7 +293,7 @@ def evaluate_msf(
     save_dir=None,
     sliding=False,
 ):
-
+    prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
     prompt_embeds = prompt_utils.PROMPT_EMBEDS
     prompt_tokens = prompt_utils.PROMPT_TOKENS
     assert prompt_embeds is not None and prompt_tokens is not None
@@ -427,21 +430,7 @@ def evaluate_msf(
     return all_metrics
 
 def main(cfg):
-
-    # —— 从 JSON 文件读取图像描述并编码 ——
-    from prompt_utils import encode_prompts, set_prompt_embeds, unload_clip_model
-    train_list = Path(cfg["DATASET"]["TRAIN_SOURCE"]).read_text().splitlines()
-    fnames = [Path(l.split()[0]).name for l in train_list]
-    with open(cfg["DATASET"]["PROMPT_JSON"], "r") as f:
-        prompt_dict = json.load(f)
-    all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-
-    prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
-    prompt_embeds = prompt_embeds.cpu()
-    prompt_tokens = prompt_tokens.cpu()
-    set_prompt_embeds(prompt_embeds, prompt_tokens)
-    unload_clip_model()
-
+    prompt_utils.prepare_eval_prompts(cfg.eval_source, cfg.prompt_json)
     device = torch.device(cfg["DEVICE"])
 
     eval_cfg = cfg["EVAL"]

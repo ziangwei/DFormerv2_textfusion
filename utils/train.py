@@ -11,6 +11,8 @@ from prompt_utils import (
     sample_prompt,
     set_prompt_embeds,
     unload_clip_model,
+    register_prompt_embeds,
+    switch_prompt_set
 )
 import tempfile
 import json
@@ -153,7 +155,8 @@ with Engine(custom_parser=parser) as engine:
         prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
         prompt_embeds = prompt_embeds.cpu()
         prompt_tokens = prompt_tokens.cpu()
-        set_prompt_embeds(prompt_embeds, prompt_tokens)
+        register_prompt_embeds("train", prompt_embeds, prompt_tokens)
+        switch_prompt_set("train")
         unload_clip_model()
 
 
@@ -303,6 +306,7 @@ with Engine(custom_parser=parser) as engine:
         if args.amp:
             scaler = torch.cuda.amp.GradScaler()
         for epoch in range(engine.state.epoch, config.nepochs + 1):
+            switch_prompt_set("train")
             model = compiled_model
             model.train()
             if engine.distributed:

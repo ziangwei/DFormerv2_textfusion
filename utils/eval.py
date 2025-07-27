@@ -2,7 +2,7 @@ import argparse
 import pprint
 import time
 from importlib import import_module
-from prompt_utils import load_scene_list, sample_prompt, encode_prompts, set_prompt_embeds, unload_clip_model
+from prompt_utils import prepare_eval_prompts
 import json
 from pathlib import Path
 import torch
@@ -12,7 +12,6 @@ from models.builder import EncoderDecoder as segmodel
 from tensorboardX import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from val_mm import evaluate, evaluate_msf
-
 from utils.dataloader.dataloader import get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.engine.engine import Engine
@@ -66,15 +65,7 @@ with Engine(custom_parser=parser) as engine:
     config.pad = args.pad_SUNRGBD
 
     # ---- load prompts from JSON and precompute embeddings ----
-    eval_list = Path(config.train_source).read_text().splitlines()
-    fnames = [Path(l.split()[0]).name for l in eval_list]
-    prompt_dict = json.loads(Path(config.prompt_json).read_text())
-    all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-    prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
-    prompt_embeds = prompt_embeds.cpu()
-    prompt_tokens = prompt_tokens.cpu()
-    set_prompt_embeds(prompt_embeds, prompt_tokens)
-    unload_clip_model()
+    prepare_eval_prompts(config.eval_source, config.prompt_json)
 
     cudnn.benchmark = True
     if config.dataset_name != "SUNRGBD":
