@@ -28,7 +28,6 @@ import numpy as np
 from torch.utils.data import DistributedSampler, RandomSampler
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-import cv2
 
 # from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
 
@@ -81,7 +80,6 @@ import cv2
 
 
 
-
 @torch.no_grad()
 def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False):
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
@@ -89,6 +87,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     for h in logger.handlers:
         h.flush()
 
+    prev_set = prompt_utils.ACTIVE_PROMPT_SET
     prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
     prompt_embeds = prompt_utils.PROMPT_EMBEDS
     prompt_tokens = prompt_utils.PROMPT_TOKENS
@@ -210,6 +209,8 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         torch.distributed.all_gather_object(all_metrics, metrics)  # list of lists
     else:
         all_metrics = metrics
+
+    prompt_utils.switch_prompt_set(prev_set)
     return all_metrics
 
 
@@ -293,6 +294,8 @@ def evaluate_msf(
     save_dir=None,
     sliding=False,
 ):
+
+    prev_set = prompt_utils.ACTIVE_PROMPT_SET
     prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
     prompt_embeds = prompt_utils.PROMPT_EMBEDS
     prompt_tokens = prompt_utils.PROMPT_TOKENS
@@ -425,8 +428,9 @@ def evaluate_msf(
         # 每个进程把自己的 metrics 发送/接收到 all_metrics 列表中
         torch.distributed.all_gather_object(all_metrics, metrics)
     else:
-        # 单卡也返回列表，保持接口一致
-        all_metrics = [metrics]
+        all_metrics = metrics
+
+    prompt_utils.switch_prompt_set(prev_set)
     return all_metrics
 
 def main(cfg):
