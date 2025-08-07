@@ -5,7 +5,6 @@ from typing import List, Union
 # 最简单的模板：只保留场景信息，其它 filler
 BASE_TEMPLATE = "this is a {} image"
 PROMPT_EMBEDS = None
-PROMPT_TOKENS = None
 PROMPT_CACHE = {}
 ACTIVE_PROMPT_SET = "train"
 
@@ -51,7 +50,7 @@ def unload_clip_model():
 def encode_prompts(prompts: List[Union[str, List[str]]]):
     """
     支持列表中的元素为字符串或字符串列表。如果为列表，将对其中
-    每个字符串分别编码并对特征取平均。返回 (text_feats, token_feats)
+    每个字符串分别编码并对特征取平均。返回 text_feats
     """
 
     # ---- flatten prompts and record lengths ----
@@ -72,47 +71,39 @@ def encode_prompts(prompts: List[Union[str, List[str]]]):
     with torch.no_grad():
         text_feats = model.encode_text(tokens)  # (M, D)
         text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
-        tok = model.token_embedding(tokens).type(text_feats.dtype)
-        tok = tok + model.positional_embedding.type(text_feats.dtype)
-        tok = model.transformer(tok.permute(1, 0, 2))
-        tok = tok.permute(1, 0, 2)
-        token_feats = model.ln_final(tok).type(text_feats.dtype)
 
     out_text_feats = []
-    out_token_feats = []
     idx = 0
     for ln in lens:
         out_text_feats.append(text_feats[idx: idx + ln].mean(dim=0))
-        out_token_feats.append(token_feats[idx: idx + ln].mean(dim=0))
         idx += ln
 
-    return torch.stack(out_text_feats), torch.stack(out_token_feats)
+    return torch.stack(out_text_feats)
 
 def encode_prompt(prompt: str):
     """
     单条编码，返回 shape = (feature_dim,)。
     内部调用 encode_prompts，仅做语法糖。
     """
-    feats, tokens = encode_prompts([prompt])
-    return feats[0], tokens[0]
+    feats = encode_prompts([prompt])
+    return feats[0]
 
-def set_prompt_embeds(text_embeds: torch.Tensor, text_tokens: torch.Tensor):
+def set_prompt_embeds(text_embeds: torch.Tensor):
     """
     在 train.py 中调用，将 encode_prompts 返回的特征存入全局变量。
     """
-    global PROMPT_EMBEDS, PROMPT_TOKENS
+    global PROMPT_EMBEDS
     PROMPT_EMBEDS = text_embeds
-    PROMPT_TOKENS = text_tokens
 
-def register_prompt_embeds(set_name: str, text_embeds: torch.Tensor, text_tokens: torch.Tensor):
+def register_prompt_embeds(set_name: str, text_embeds: torch.Tensor):
     global PROMPT_CACHE
-    PROMPT_CACHE[set_name] = (text_embeds, text_tokens)
+    PROMPT_CACHE[set_name] = text_embeds
 
 
 def switch_prompt_set(set_name: str):
-    global PROMPT_EMBEDS, PROMPT_TOKENS, PROMPT_CACHE, ACTIVE_PROMPT_SET
+    global PROMPT_EMBEDS, PROMPT_CACHE, ACTIVE_PROMPT_SET
     assert set_name in PROMPT_CACHE, f"Prompt set {set_name} not registered!"
-    PROMPT_EMBEDS, PROMPT_TOKENS = PROMPT_CACHE[set_name]
+    PROMPT_EMBEDS = PROMPT_CACHE[set_name]
     ACTIVE_PROMPT_SET = set_name
 
 def prepare_eval_prompts(eval_txt_path, prompt_json_path):
@@ -122,9 +113,8 @@ def prepare_eval_prompts(eval_txt_path, prompt_json_path):
     fnames = [Path(l.split()[0]).name for l in eval_list]
     prompt_dict = json.loads(Path(prompt_json_path).read_text())
     all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-    prompt_embeds, prompt_tokens = encode_prompts(all_prompts)
+    prompt_embeds = encode_prompts(all_prompts)
     prompt_embeds = prompt_embeds.cpu()
-    prompt_tokens = prompt_tokens.cpu()
-    register_prompt_embeds("eval", prompt_embeds, prompt_tokens)
+    register_prompt_embeds("eval", prompt_embeds)
     switch_prompt_set("eval")
     unload_clip_model()
