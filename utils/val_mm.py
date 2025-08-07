@@ -309,6 +309,7 @@ def evaluate_msf(
 
         prompt_idxs = minibatch["prompt_idx"].long()
         text_embed = prompt_embeds[prompt_idxs].to(device)
+        # text_embed = torch.zeros_like(prompt_embeds[prompt_idxs]).to(device)
         text_tokens = prompt_tokens[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (

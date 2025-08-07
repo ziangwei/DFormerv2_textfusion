@@ -27,7 +27,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --compile_mode="reduce-overhead" \
     --amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_CA_2.3._LABEL_56.81_alltraintext/epoch-474_miou_56.81.pth"
+    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_CA2.3._LABELswitch_0.8gate/epoch-662_miou_56.92.pth"
 
 
 # choose the dataset and DFormer for evaluating

@@ -410,6 +410,10 @@ class SemanticSelfAttention(nn.Module):
         self.k_proj = nn.Linear(text_dim, img_dim)
         self.v_proj = nn.Linear(text_dim, img_dim)
         self.out_proj = nn.Linear(img_dim, img_dim)
+        # 定义一个可学习的缩放因子，并初始化为0
+        # self.fusion_gamma = nn.Parameter(torch.zeros(1)) # 结果56.65
+        # self.fusion_gamma = nn.Parameter(torch.ones(1))
+        self.fusion_gamma = nn.Parameter(torch.tensor([0.8]))
 
     def forward(self, x: torch.Tensor, text_embed: torch.Tensor):
         """x: (B, H, W, C); text_embed: (B, D)"""
@@ -429,7 +433,18 @@ class SemanticSelfAttention(nn.Module):
         out = torch.matmul(attn, v)
         out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)
         out = self.out_proj(out)
-        out = out + x
+
+        # # ---------------------------
+        # # 测试二者维度
+        # print(f"Image feature norm: {torch.linalg.norm(x).item():.4f}, Text feature norm: {torch.linalg.norm(out).item():.4f}")
+        # print(f"Image feature mean abs: {x.abs().mean().item():.4f}, Text feature mean abs: {out.abs().mean().item():.4f}")
+        # # ---------------------------
+        # # to do: 寻找更好的融合方式 实验是否有进步
+
+        # out = out + x
+        # 改为可学习的参数来确定引导比例
+        out = x + self.fusion_gamma * out
+
         return out
 
 class RGBD_Block(nn.Module):
