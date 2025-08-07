@@ -161,6 +161,7 @@ cython_debug/
 
 core.*
 checkpoints
+datasets/NYU*
 datasets/SUN*
 output*
 *_old*
@@ -174,19 +175,3 @@ infer*.sh
 
 # temp ignore:
 **/*_temp*
-
-datasets/NYUDepthv2/Depth/**
-datasets/NYUDepthv2/Label/**
-datasets/NYUDepthv2/RGB/**
-
-
-!datasets/NYUDepthv2/Depth/
-!datasets/NYUDepthv2/Label/
-!datasets/NYUDepthv2/RGB/
-!datasets/NYUDepthv2/Depth/.gitkeep
-!datasets/NYUDepthv2/Label/.gitkeep
-!datasets/NYUDepthv2/RGB/.gitkeep
-
-!datasets/NYUDepthv2/test
-!datasets/NYUDepthv2/top5_labels_per_image
-!datasets/NYUDepthv2/train
