@@ -179,6 +179,10 @@ datasets/NYUDepthv2/Depth/**
 datasets/NYUDepthv2/Label/**
 datasets/NYUDepthv2/RGB/**
 
+
+!datasets/NYUDepthv2/Depth/
+!datasets/NYUDepthv2/Label/
+!datasets/NYUDepthv2/RGB/
 !datasets/NYUDepthv2/Depth/.gitkeep
 !datasets/NYUDepthv2/Label/.gitkeep
 !datasets/NYUDepthv2/RGB/.gitkeep
@@ -186,7 +190,3 @@ datasets/NYUDepthv2/RGB/**
 !datasets/NYUDepthv2/test
 !datasets/NYUDepthv2/top5_labels_per_image
 !datasets/NYUDepthv2/train
-
-datasets/NYUDepthv2/nyu_blip_captions
-datasets/NYUDepthv2/nyu_clip_patch8_top5_labels
-datasets/NYUDepthv2/sceneTypes
