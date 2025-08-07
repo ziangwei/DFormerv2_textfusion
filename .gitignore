@@ -162,6 +162,7 @@ cython_debug/
 core.*
 checkpoints
 datasets/SUN*
+datasets/NYUDepthv2/nyu*
 output*
 *_old*
 .history
