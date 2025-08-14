@@ -175,3 +175,19 @@ infer*.sh
 
 # temp ignore:
 **/*_temp*
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# data & outputs
+datasets/**
+outputs/**
+checkpoints/**
+logs/**
+
+# python
+*.pyc
+*.pyo
+*.pyd

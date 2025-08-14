@@ -430,8 +430,19 @@ class SemanticSelfAttention(nn.Module):
         attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-2)
         out = torch.matmul(attn, v)
-        out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)
-        out = self.out_proj(out)
+
+        # # 尝试 Efficient Attention
+        # # K 在长度轴做 softmax（L 轴）
+        # k = k.softmax(dim=-2)  # (B, h, L, d)
+        # # 先汇聚 KV
+        # ctx = k.transpose(-2, -1) @ v  # (B, h, d, d)
+        # # Q 在特征轴做 softmax（d 轴），注意包含缩放
+        # q = (q * self.scale).softmax(dim=-1)  # (B, h, N, d)
+        # # 线性化注意力：softmax(QK^T)V  ==  softmax(Q) @ (softmax(K)^T @ V)
+        # out = q @ ctx  # (B, h, N, d)
+        #
+        # out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)
+        # out = self.out_proj(out)
 
         # # ---------------------------
         # # 测试二者维度
@@ -670,6 +681,9 @@ class dformerv2(nn.Module):
                 layerscale=layerscales[i_layer],
                 layer_init_values=layer_init_values,
                 use_semantic=(i_layer in [1, 2]),
+                # use_semantic=True,
+                # use_semantic=(i_layer in [1, 2, 3]),
+                # use_semantic=(i_layer in [2]),
                 text_dim=text_dim,
             )
             self.layers.append(layer)
@@ -760,6 +774,10 @@ class dformerv2(nn.Module):
 
         for i in range(self.num_layers):
             te = text_embed if i in [1, 2] else None
+            # te = text_embed
+            # te = text_embed if i in [1, 2, 3] else None
+            # te = text_embed if i in [2] else None
+
             x_out, x = self.layers[i](x, x_e, text_embed=te)
             if i in self.out_indices:
                 if i != 0:
