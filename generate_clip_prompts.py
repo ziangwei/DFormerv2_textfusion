@@ -79,3 +79,4 @@ with open(output_json_path, "w") as f:
     json.dump(label_prompts, f, indent=2)
 
 print(f"所有图片的类别prompt已生成并保存至 {output_json_path}")
+

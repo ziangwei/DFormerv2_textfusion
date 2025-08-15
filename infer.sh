@@ -29,3 +29,4 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 # SUNRGBD DFormers
 # --config=local_configs.SUNRGBD.DFormer_Large/Base/Small/Tiny
 # --continue_fpath=checkpoints/trained/SUNRGBD_DFormer_Large/Base/Small/Tiny.pth
+

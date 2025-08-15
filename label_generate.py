@@ -58,8 +58,10 @@ for fn in os.listdir(label_folder):
         continue
     arr = np.array(Image.open(os.path.join(label_folder, fn)))
     u, c = np.unique(arr, return_counts=True)
+
     # 先过滤掉不需要的 id
     valid = [(i, cnt) for i, cnt in zip(u, c) if i not in ignore_ids]
+
     # 再按出现次数排前 5
     top5 = sorted(valid, key=lambda x: x[1], reverse=True)[:5]
     # 最终取名字

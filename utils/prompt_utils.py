@@ -53,48 +53,48 @@ def encode_prompts(prompts: List[Union[str, List[str]]]):
     每个字符串分别编码并对特征取平均。返回 text_feats
     """
 
-    # # ---- flatten prompts and record lengths ----
-    # flat_prompts: List[str] = []
-    # lens: List[int] = []
-    # for p in prompts:
-    #     if isinstance(p, list):
-    #         flat_prompts.extend(p)
-    #         lens.append(len(p))
-    #     else:
-    #         flat_prompts.append(p)
-    #         lens.append(1)
-    #
-    # model = _get_clip_model()
-    # tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
-    #
-    # # 2) forward through CLIP text encoder
-    # with torch.no_grad():
-    #     text_feats = model.encode_text(tokens)  # (M, D)
-    #     text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
-    #
-    # out_text_feats = []
-    # idx = 0
-    # for ln in lens:
-    #     out_text_feats.append(text_feats[idx: idx + ln].mean(dim=0))
-    #     idx += ln
-    #
-    # return torch.stack(out_text_feats)
-
-    processed_prompts: List[str] = []
+    # ---- flatten prompts and record lengths ----
+    flat_prompts: List[str] = []
+    lens: List[int] = []
     for p in prompts:
         if isinstance(p, list):
-            processed_prompts.append("a picture with " + ", ".join(p))
+            flat_prompts.extend(p)
+            lens.append(len(p))
         else:
-            processed_prompts.append(p)
+            flat_prompts.append(p)
+            lens.append(1)
 
     model = _get_clip_model()
-    tokens = clip.tokenize(processed_prompts, truncate=True).to(_DEVICE)
+    tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
 
+    # 2) forward through CLIP text encoder
     with torch.no_grad():
-        text_feats = model.encode_text(tokens)
+        text_feats = model.encode_text(tokens)  # (M, D)
         text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
 
-    return text_feats
+    out_text_feats = []
+    idx = 0
+    for ln in lens:
+        out_text_feats.append(text_feats[idx: idx + ln].mean(dim=0))
+        idx += ln
+
+    return torch.stack(out_text_feats)
+
+    # processed_prompts: List[str] = []
+    # for p in prompts:
+    #     if isinstance(p, list):
+    #         processed_prompts.append("a picture with " + ", ".join(p))
+    #     else:
+    #         processed_prompts.append(p)
+    #
+    # model = _get_clip_model()
+    # tokens = clip.tokenize(processed_prompts, truncate=True).to(_DEVICE)
+    #
+    # with torch.no_grad():
+    #     text_feats = model.encode_text(tokens)
+    #     text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
+    #
+    # return text_feats
 
 
 
