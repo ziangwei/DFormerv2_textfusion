@@ -1,6 +1,12 @@
 import clip
 import torch
+import open_clip
 from typing import List, Union
+
+from pathlib import Path
+import json
+import itertools
+import re
 
 # 最简单的模板：只保留场景信息，其它 filler
 BASE_TEMPLATE = "this is a {} image"
@@ -26,25 +32,33 @@ def sample_prompt(scene_label: str) -> str:
 # 全局加载一次 CLIP 模型并冻结参数
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 _CLIP_MODEL = None
-
+_TOKENIZER = None
 
 def _get_clip_model():
-    """Lazy-load CLIP on first use to avoid unnecessary GPU memory usage."""
-    global _CLIP_MODEL
+    global _CLIP_MODEL, _TOKENIZER
     if _CLIP_MODEL is None:
-        _CLIP_MODEL, _ = clip.load("ViT-B/32", device=_DEVICE)
+        # 标准 OpenAI CLIP
+        _CLIP_MODEL, _ = clip.load("ViT-B/32", device=_DEVICE)  # D=512
         _CLIP_MODEL.eval()
         for p in _CLIP_MODEL.parameters():
             p.requires_grad = False
+        # 统一一个与旧代码兼容的分词器接口
+        _TOKENIZER = lambda texts: clip.tokenize(texts, truncate=True)
     return _CLIP_MODEL
 
 
 def unload_clip_model():
-    """Free the globally loaded CLIP model and release GPU memory."""
-    global _CLIP_MODEL
+
+    # """Free the globally loaded CLIP model and release GPU memory."""
+    # global _CLIP_MODEL
+
+    """Free the globally loaded EVA-CLIP model and release GPU memory."""
+    global _CLIP_MODEL, _TOKENIZER
+
     if _CLIP_MODEL is not None:
         del _CLIP_MODEL
         _CLIP_MODEL = None
+        _TOKENIZER = None
         torch.cuda.empty_cache()
 
 def encode_prompts(prompts: List[Union[str, List[str]]]):
@@ -65,7 +79,8 @@ def encode_prompts(prompts: List[Union[str, List[str]]]):
             lens.append(1)
 
     model = _get_clip_model()
-    tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
+    # tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
+    tokens = _TOKENIZER(flat_prompts).to(_DEVICE)  # (M, token_len)
 
     # 2) forward through CLIP text encoder
     with torch.no_grad():
@@ -136,3 +151,234 @@ def prepare_eval_prompts(eval_txt_path, prompt_json_path):
     register_prompt_embeds("eval", prompt_embeds)
     switch_prompt_set("eval")
     unload_clip_model()
+
+
+# =========================
+# 多标签 → CLIP 风格短句 → (L, D) 特征 的工具集
+# =========================
+
+# 1) 一组“CLIP 式”轻模板（参考原论文风格，尽量通用室内分割）
+#    会从这些模板里为每个标签构造若干句子，最后对同一标签的句子做平均得到一个向量。
+PROMPT_TEMPLATES_CLIP = [
+    "a photo of a {}.",
+    "this is a photo of a {}.",
+    "an image of a {}.",
+]
+
+# 2) 常见拼写/同义词归一化（可按需扩充）
+#    目的：减少不必要的词形噪声，提升文本编码的稳定性。
+_LABEL_ALIAS = {
+    "refridgerator": "refrigerator",
+    "night stand": "nightstand",
+    "floor mat": "rug",
+    "television": "tv",
+    "picture": "picture",
+    "blinds": "window blinds",
+    "sofa": "couch",
+    "books": "book",
+    "clothes": "clothing",
+    "towel": "bath towel",
+    "sink": "washbasin",
+    "bathtub": "bath tub",
+    "toilet": "flush toilet",
+    "counter": "countertop",
+    "paper": "paper sheet",
+    "floor": "flooring",
+    "ceiling": "ceiling",
+    "lamp": "lamp",
+    "bag": "bag",
+    "box": "cardboard box",
+    "desk": "desk",
+    "chair": "chair",
+    "table": "table",
+    "window": "window",
+    "door": "door",
+    "mirror": "mirror",
+    "cabinet": "cabinet",
+    "bookshelf": "bookcase",
+    "whiteboard": "whiteboard",
+    "dresser": "dresser",
+    "curtain": "curtain",
+    "bed": "bed",
+    "pillow": "pillow",
+    "shelves": "shelf",
+    "picture frame": "frame",
+}
+
+def _normalize_label(label: str) -> str:
+    """
+    将数据集标签做最小限度的词形清洗/归一化，避免明显拼写问题。
+    """
+    s = label.strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    return _LABEL_ALIAS.get(s, s)
+
+def _pick_article(noun: str) -> str:
+    """
+    简单选择 a/an（不追求完美，足够好看就行）。
+    """
+    return "an" if noun[:1] in "aeiou" else "a"
+
+def build_prompt_variants_for_label(
+    label: str,
+    template_set: str = "clip",
+    max_templates_per_label: int = 4,
+) -> list[str]:
+    """
+    给单个标签构造若干条 CLIP 风格短句。
+    - label: 数据集里的原始标签（例如 "bookshelf"）
+    - template_set: 暂时只支持 "clip"，后续可扩展不同风格
+    - max_templates_per_label: 限制每个标签使用前 N 条模板（节省算力）
+
+    返回: 对应该标签的一组句子字符串列表（长度 <= max_templates_per_label）
+    """
+    lbl = _normalize_label(label)
+    if template_set == "clip":
+        # 将模板里 a/an 做个小修饰，让句子自然一点
+        variants = []
+        for t in PROMPT_TEMPLATES_CLIP[:max_templates_per_label]:
+            if "{}" in t:
+                # 把模板里的 "a {}" / "an {}" 替换得更自然
+                if "a {}" in t:
+                    variants.append(t.replace("a {}", f"{_pick_article(lbl)} {lbl}"))
+                elif "an {}" in t:
+                    variants.append(t.replace("an {}", f"{_pick_article(lbl)} {lbl}"))
+                else:
+                    variants.append(t.format(lbl))
+            else:
+                # 兜底：若模板没占位符，直接拼在后面
+                variants.append(f"{t} {lbl}")
+        return variants
+    else:
+        # 兜底：不用任何模板，直接用原词
+        return [lbl]
+
+def build_prompt_groups_from_labels(
+    labels: list[str],
+    L: int = 5,
+    template_set: str = "clip",
+    max_templates_per_label: int = 4,
+) -> list[list[str]]:
+    """
+    将“若干标签”转为“句子组”的列表（**列表的列表**）：
+    - 外层长度 = L（即要使用的标签数，超出会截断，不足会补齐）
+    - 内层每个元素 = 针对该标签的一组短句（会在 encode 时求平均）
+
+    之所以返回“列表的列表”，是为了对接你现有的 encode_prompts：
+    它会对**每个内层列表**做编码并**平均**，最终为每个标签产出一个 512 维向量。:contentReference[oaicite:1]{index=1}
+    """
+    # 1) 归一化 + 去重（保持顺序）
+    norm_labels = []
+    seen = set()
+    for lb in labels:
+        nlb = _normalize_label(lb)
+        if nlb and nlb not in seen:
+            norm_labels.append(nlb)
+            seen.add(nlb)
+
+    # 2) 截断/补齐到 L
+    PAD_TOKEN = "object"  # 补齐用一个中性占位词，避免空字符串扰动 tokenizer
+    if len(norm_labels) >= L:
+        norm_labels = norm_labels[:L]
+    else:
+        norm_labels = norm_labels + [PAD_TOKEN] * (L - len(norm_labels))
+
+    # 3) 为每个标签构造若干短句
+    prompt_groups = [
+        build_prompt_variants_for_label(lb, template_set, max_templates_per_label)
+        for lb in norm_labels
+    ]
+    return prompt_groups  # 形如 [[句1,句2,...], [句1,句2,...], ...], 长度 = L
+
+def encode_label_set_to_matrix(
+    labels: list[str],
+    L: int = 5,
+    template_set: str = "clip",
+    max_templates_per_label: int = 4,
+):
+    """
+    针对**一张图**的若干标签（通常 5 个），生成 (L, D) 的文本特征矩阵。
+    - 外层每个标签先扩写成 2~4 条短句
+    - 对同一标签的句子向量**做平均**得到一条 512-D（利用 encode_prompts 的分组平均）:contentReference[oaicite:2]{index=2}
+    - 将 L 个标签依次堆叠，得到 (L, D)
+
+    返回：
+      text_feats_LD: torch.Tensor, shape = (L, D=512)
+      used_labels:   list[str],     长度 L（归一化后的标签序列；含可能补齐的占位词）
+    """
+    groups = build_prompt_groups_from_labels(
+        labels, L=L, template_set=template_set, max_templates_per_label=max_templates_per_label
+    )
+    # 利用你已有的 encode_prompts：内层列表会被平均成“一条向量”
+    text_feats_LD = encode_prompts(groups)  # (L, D)，不会把 L 进一步平均！:contentReference[oaicite:3]{index=3}
+    return text_feats_LD, [_normalize_label(lb) for lb in labels[:L]]
+
+def load_topk_labels_dict(json_path: str) -> dict[str, list[str]]:
+    """
+    读取你已经给出的 top5 标签字典（文件名 → [label1..label5]）。
+    """
+    return json.loads(Path(json_path).read_text())
+
+def prepare_eval_prompts_multilabel(
+    eval_txt_path: str,
+    topk_json_path: str,
+    K: int = 5,
+    max_templates_per_label: int = 4,
+    template_set: str = "clip",
+    register_set_name: str = "eval-ml",
+):
+    """
+    给一份列表文件（可以是 train_source 或 eval_source）准备 (N,K,D) 文本特征。
+    """
+    from pathlib import Path
+    import json
+
+    eval_list = Path(eval_txt_path).read_text().splitlines()
+    fnames = [Path(l.split()[0]).name for l in eval_list]  # e.g. '228.jpg'
+
+    # 读取 topK 标签，并做“主干名”索引，自动兼容 .jpg/.png
+    raw_topk = json.loads(Path(topk_json_path).read_text())   # 键多为 '228.png'
+    topk_by_stem = {Path(k).stem: v for k, v in raw_topk.items()}
+
+    all_groups = []
+    per_image_group_counts = []
+    for fn in fnames:
+        stem = Path(fn).stem                                  # '228'
+        labels = raw_topk.get(fn) or raw_topk.get(f"{stem}.png") or raw_topk.get(f"{stem}.jpg") \
+                 or topk_by_stem.get(stem, [])
+        prompt_groups = build_prompt_groups_from_labels(
+            labels, L=K, template_set=template_set,
+            max_templates_per_label=max_templates_per_label
+        )
+        all_groups.extend(prompt_groups)
+        per_image_group_counts.append(len(prompt_groups))
+
+    text_feats_flat = encode_prompts(all_groups)              # (N*K, D)
+    D = text_feats_flat.shape[-1]
+    N = len(fnames)
+    assert sum(per_image_group_counts) == N * K, "unexpected group count; check K"
+
+    text_feats_NKD = text_feats_flat.view(N, K, D).cpu()
+    register_prompt_embeds(register_set_name, text_feats_NKD)
+    switch_prompt_set(register_set_name)
+    unload_clip_model()
+
+    return {"filenames": fnames, "embeds": text_feats_NKD, "K": K, "D": D, "set_name": register_set_name}
+
+
+def gather_multilabel_text_feats_for_batch(
+    all_filenames_in_eval_order: list[str],
+    batch_filenames: list[str],
+    prompt_set_name: str = "eval-ml",
+):
+    """
+    给定一小批 batch 文件名（与 eval 列表里同名），
+    从 PROMPT_CACHE[prompt_set_name] 里取出对应顺序的 (B, K, D) 文本特征。
+    - 这样你在训练/验证时就能**一次 forward**把 5 个标签一起送进 backbone 的 SemanticSelfAttention。
+    """
+    assert prompt_set_name in PROMPT_CACHE, f"Prompt set {prompt_set_name} not registered!"
+    text_bank_NKD = PROMPT_CACHE[prompt_set_name]  # (N, K, D)（我们在 prepare_eval_prompts_multilabel 里注册的）:contentReference[oaicite:10]{index=10}
+    name_to_idx = {fn: i for i, fn in enumerate(all_filenames_in_eval_order)}
+    idxs = [name_to_idx[Path(n).name] for n in batch_filenames]
+    # 取子集并保持顺序
+    return text_bank_NKD[idxs]  # (B, K, D)

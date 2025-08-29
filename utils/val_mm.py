@@ -1,83 +1,20 @@
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 import pathlib
-import matplotlib as mpl
 import torch
 import argparse
-import json
 import yaml
 import math
 import os
 import time
 from pathlib import Path
-from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
 import prompt_utils
 from utils.engine.logger import get_logger
-# from semseg.models import *
-# from semseg.datasets import *
-# from semseg.augmentations_mm import get_val_augmentation
 from utils.metrics_new import Metrics
-
-# from semseg.utils.utils import setup_cudnn
-from math import ceil
 import numpy as np
-from torch.utils.data import DistributedSampler, RandomSampler
-from torch import distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-
-# from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
-
-
-# def pad_image(img, target_size):
-#     rows_to_pad = max(target_size[0] - img.shape[2], 0)
-#     cols_to_pad = max(target_size[1] - img.shape[3], 0)
-#     padded_img = F.pad(img, (0, cols_to_pad, 0, rows_to_pad), "constant", 0)
-#     return padded_img
-
-
-# @torch.no_grad()
-# def sliding_predict(model, image, num_classes, flip=True):
-#     image_size = image[0].shape
-#     tile_size = (int(ceil(image_size[2] * 1)), int(ceil(image_size[3] * 1)))
-#     overlap = 1 / 3
-
-#     stride = ceil(tile_size[0] * (1 - overlap))
-
-#     num_rows = int(ceil((image_size[2] - tile_size[0]) / stride) + 1)
-#     num_cols = int(ceil((image_size[3] - tile_size[1]) / stride) + 1)
-#     total_predictions = torch.zeros(
-#         (num_classes, image_size[2], image_size[3]), device=torch.device("cuda")
-#     )
-#     count_predictions = torch.zeros(
-#         (image_size[2], image_size[3]), device=torch.device("cuda")
-#     )
-#     tile_counter = 0
-
-#     for row in range(num_rows):
-#         for col in range(num_cols):
-#             x_min, y_min = int(col * stride), int(row * stride)
-#             x_max = min(x_min + tile_size[1], image_size[3])
-#             y_max = min(y_min + tile_size[0], image_size[2])
-
-#             img = [modal[:, :, y_min:y_max, x_min:x_max] for modal in image]
-#             padded_img = [pad_image(modal, tile_size) for modal in img]
-#             tile_counter += 1
-#             # print(padded_img[0].shape,padded_img[1].shape)
-#             padded_prediction = model(padded_img[0], padded_img[1])
-#             if flip:
-#                 fliped_img = [padded_modal.flip(-1) for padded_modal in padded_img]
-#                 fliped_predictions = model(fliped_img[0], fliped_img[1])
-#                 padded_prediction += fliped_predictions.flip(-1)
-#             predictions = padded_prediction[:, :, : img[0].shape[2], : img[0].shape[3]]
-#             count_predictions[y_min:y_max, x_min:x_max] += 1
-#             total_predictions[:, y_min:y_max, x_min:x_max] += predictions.squeeze(0)
-
-#     return total_predictions.unsqueeze(0)
-
-
 
 @torch.no_grad()
 def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False):
@@ -87,9 +24,17 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         h.flush()
 
     prev_set = prompt_utils.ACTIVE_PROMPT_SET
-    prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
-    prompt_embeds = prompt_utils.PROMPT_EMBEDS
-    assert prompt_embeds is not None, "PROMPT_EMBEDS not set—run set_prompt_embeds() first"
+    if getattr(config, "topk_json", None):
+        prompt_utils.prepare_eval_prompts_multilabel(
+            config.eval_source, config.topk_json,
+            K=getattr(config, "topk_K", 5),
+            max_templates_per_label=getattr(config, "max_templates_per_label", 4),
+            register_set_name="eval-ml",
+        )
+        prompt_embeds = prompt_utils.PROMPT_CACHE["eval-ml"]  # (N,K,512)
+    else:
+        prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
+        prompt_embeds = prompt_utils.PROMPT_EMBEDS  # (N,512)
 
     print("Evaluating...")
     model.eval()
@@ -292,9 +237,18 @@ def evaluate_msf(
 ):
 
     prev_set = prompt_utils.ACTIVE_PROMPT_SET
-    prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
-    prompt_embeds = prompt_utils.PROMPT_EMBEDS
-    assert prompt_embeds is not None
+    if getattr(config, "topk_json", None):
+        prompt_utils.prepare_eval_prompts_multilabel(
+            config.eval_source, config.topk_json,
+            K=getattr(config, "topk_K", 5),
+            max_templates_per_label=getattr(config, "max_templates_per_label", 4),
+            register_set_name="eval-ml",
+        )
+        prompt_embeds = prompt_utils.PROMPT_CACHE["eval-ml"]  # (N,K,512)
+    else:
+        prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
+        prompt_embeds = prompt_utils.PROMPT_EMBEDS  # (N,512)
+
     model.eval()
 
     n_classes = config.num_classes
@@ -332,7 +286,10 @@ def evaluate_msf(
             scaled_images = [scaled_img.to(device) for scaled_img in scaled_images]
 
             if sliding:
-                logits = slide_inference(model, scaled_images[0], scaled_images[1], config)
+                logits = slide_inference(
+                    model, scaled_images[0], scaled_images[1],
+                    text_embed=text_embed, config=config
+                )
             else:
                 logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
 
@@ -501,6 +458,4 @@ if __name__ == "__main__":
         cfg = yaml.load(f, Loader=yaml.SafeLoader)
 
     setup_cudnn()
-    # gpu = setup_ddp()
-    # main(cfg, gpu)
     main(cfg)

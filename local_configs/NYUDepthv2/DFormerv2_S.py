@@ -1,6 +1,9 @@
 from .._base_.datasets.NYUDepthv2 import *
-# 新增：BLIP 生成的文本描述
+
 C.prompt_json = 'datasets/NYUDepthv2/top5_labels_per_image.json'
+C.topk_json = "datasets/NYUDepthv2/top5_labels_per_image.json"
+C.topk_K = 5
+C.max_templates_per_label = 3
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = "DFormerv2_S"  # Remember change the path below.

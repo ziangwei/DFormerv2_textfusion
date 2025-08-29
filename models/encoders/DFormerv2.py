@@ -415,44 +415,27 @@ class SemanticSelfAttention(nn.Module):
         self.fusion_gamma = nn.Parameter(torch.tensor([0.8]))
 
     def forward(self, x: torch.Tensor, text_embed: torch.Tensor):
-        """x: (B, H, W, C); text_embed: (B, D)"""
+        """x: (B, H, W, C)    text_embed: (B, D) 或 (B, L, D)"""
         B, H, W, C = x.shape
-        text_embed = text_embed.to(x.dtype)
+        t = text_embed.to(x.dtype)
 
-        q = self.q_proj(x).reshape(B, H * W, self.num_heads, self.head_dim)
-        q = q.permute(0, 2, 1, 3)
+        # Q: 图像 → (B, h, N, d)
+        q = self.q_proj(x).reshape(B, H * W, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
-        k = self.k_proj(text_embed).reshape(B, self.num_heads, self.head_dim)
-        v = self.v_proj(text_embed).reshape(B, self.num_heads, self.head_dim)
-        k = k.unsqueeze(2)
-        v = v.unsqueeze(2)
+        # K,V: 文本 → (B, h, L, d)
+        if t.dim() == 2:           # 兼容旧用法：单向量视为 L=1
+            t = t.unsqueeze(1)     # (B, 1, D)
+        # 先线性到 C，再分多头，再拆成 (h,d)
+        k = self.k_proj(t)  # (B, L, C)
+        v = self.v_proj(t)  # (B, L, C)
+        k = k.view(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B,h,L,d)
+        v = v.view(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B,h,L,d)
+        attn = (q @ k.transpose(-2, -1)) * self.scale      # (B,h,N,L)
+        attn = attn.softmax(dim=-1)                        # ← L 轴
+        out = attn @ v                                     # (B,h,N,d)
 
-        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-2)
-        out = torch.matmul(attn, v)
-
-        # # 尝试 Efficient Attention
-        # # K 在长度轴做 softmax（L 轴）
-        # k = k.softmax(dim=-2)  # (B, h, L, d)
-        # # 先汇聚 KV
-        # ctx = k.transpose(-2, -1) @ v  # (B, h, d, d)
-        # # Q 在特征轴做 softmax（d 轴），注意包含缩放
-        # q = (q * self.scale).softmax(dim=-1)  # (B, h, N, d)
-        # # 线性化注意力：softmax(QK^T)V  ==  softmax(Q) @ (softmax(K)^T @ V)
-        # out = q @ ctx  # (B, h, N, d)
-        #
-        # out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)
-        # out = self.out_proj(out)
-
-        # # ---------------------------
-        # # 测试二者维度
-        # print(f"Image feature norm: {torch.linalg.norm(x).item():.4f}, Text feature norm: {torch.linalg.norm(out).item():.4f}")
-        # print(f"Image feature mean abs: {x.abs().mean().item():.4f}, Text feature mean abs: {out.abs().mean().item():.4f}")
-        # # ---------------------------
-        # # to do: 寻找更好的融合方式 实验是否有进步
-
-        # out = out + x
-        # 改为可学习的参数来确定引导比例
+        out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)  # → (B,H,W,C)
+        out = self.out_proj(out)
         out = x + self.fusion_gamma * out
 
         return out

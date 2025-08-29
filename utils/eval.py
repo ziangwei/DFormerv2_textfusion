@@ -2,7 +2,7 @@ import argparse
 import pprint
 import time
 from importlib import import_module
-from prompt_utils import prepare_eval_prompts
+from prompt_utils import prepare_eval_prompts, prepare_eval_prompts_multilabel
 import json
 from pathlib import Path
 import torch
@@ -40,6 +40,10 @@ parser.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction
 parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
 # parser.add_argument('--save_path', '-p', default=None)
+parser.add_argument("--topk_json", default=None, type=str)
+parser.add_argument("--topk_K", default=5, type=int)
+parser.add_argument("--max_templates_per_label", default=3, type=int)
+
 
 # os.environ['MASTER_PORT'] = '169710'
 torch.set_float32_matmul_precision("high")
@@ -49,9 +53,15 @@ torch._dynamo.config.suppress_errors = True
 # torch._dynamo.config.automatic_dynamic_shapes = False
 
 
+
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
     config = getattr(import_module(args.config), "C")
+
+    if args.topk_json:
+        config.topk_json = args.topk_json
+        config.topk_K = args.topk_K
+        config.max_templates_per_label = args.max_templates_per_label
 
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
     # check if pad_SUNRGBD is used correctly
@@ -65,7 +75,15 @@ with Engine(custom_parser=parser) as engine:
     config.pad = args.pad_SUNRGBD
 
     # ---- load prompts from JSON and precompute embeddings ----
-    prepare_eval_prompts(config.eval_source, config.prompt_json)
+    if getattr(config, "topk_json", None):
+        prepare_eval_prompts_multilabel(
+            config.eval_source, config.topk_json,
+            K=getattr(config, "topk_K", 5),
+            max_templates_per_label=getattr(config, "max_templates_per_label", 3),
+            register_set_name="eval-ml",
+        )
+    else:
+        prepare_eval_prompts(config.eval_source, config.prompt_json)
 
     cudnn.benchmark = True
     if config.dataset_name != "SUNRGBD":
