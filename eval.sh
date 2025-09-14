@@ -27,11 +27,10 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --compile_mode="reduce-overhead" \
     --amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_20250823-091456/epoch-508_miou_60.5.pth"
+    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_CLIPsoftmax(2)_60.66/epoch-508_miou_60.5.pth"
 
 
 # choose the dataset and DFormer for evaluating
-
 
 # NYUv2 DFormers
 # --config=local_configs.NYUDepthv2.DFormer_Large/Base/Small/Tiny

@@ -4,6 +4,7 @@ C.prompt_json = 'datasets/NYUDepthv2/top5_labels_per_image.json'
 C.topk_json = "datasets/NYUDepthv2/top5_labels_per_image.json"
 C.topk_K = 5
 C.max_templates_per_label = 3
+C.classbank_labels_txt = "datasets/NYUDepthv2/nyu40_labels.txt"
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = "DFormerv2_S"  # Remember change the path below.
@@ -18,7 +19,7 @@ C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
 C.batch_size = 16
-C.nepochs = 800
+C.nepochs = 700
 C.niters_per_epoch = C.num_train_imgs // C.batch_size + 1
 C.num_workers = 0
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]

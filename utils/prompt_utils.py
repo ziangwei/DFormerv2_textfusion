@@ -2,7 +2,8 @@ import clip
 import torch
 import open_clip
 from typing import List, Union
-
+from transformers import AutoModel
+import os
 from pathlib import Path
 import json
 import itertools
@@ -33,17 +34,28 @@ def sample_prompt(scene_label: str) -> str:
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 _CLIP_MODEL = None
 _TOKENIZER = None
+_TRUNCATE_DIM = int(os.getenv("JINA_CLIP_DIM", "512"))  # 用 Jina 的 Matryoshka 截断维度，默认 512
 
 def _get_clip_model():
     global _CLIP_MODEL, _TOKENIZER
     if _CLIP_MODEL is None:
-        # 标准 OpenAI CLIP
-        _CLIP_MODEL, _ = clip.load("ViT-B/32", device=_DEVICE)  # D=512
+        # # 标准 OpenAI CLIP
+        # _CLIP_MODEL, _ = clip.load("ViT-B/32", device=_DEVICE)  # D=512
+        # _CLIP_MODEL.eval()
+        # for p in _CLIP_MODEL.parameters():
+        #     p.requires_grad = False
+        # # 统一一个与旧代码兼容的分词器接口
+        # _TOKENIZER = lambda texts: clip.tokenize(texts, truncate=True)
+        # Jina-CLIP v2（通过 transformers 加载）
+
+        _CLIP_MODEL = AutoModel.from_pretrained(
+            "jinaai/jina-clip-v2", trust_remote_code=True
+        ).to(_DEVICE)
         _CLIP_MODEL.eval()
         for p in _CLIP_MODEL.parameters():
             p.requires_grad = False
-        # 统一一个与旧代码兼容的分词器接口
-        _TOKENIZER = lambda texts: clip.tokenize(texts, truncate=True)
+        _TOKENIZER = None  # 不再需要手工 tokenizer
+
     return _CLIP_MODEL
 
 
@@ -78,14 +90,25 @@ def encode_prompts(prompts: List[Union[str, List[str]]]):
             flat_prompts.append(p)
             lens.append(1)
 
+    # model = _get_clip_model()
+    # # tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
+    # tokens = _TOKENIZER(flat_prompts).to(_DEVICE)  # (M, token_len)
+    #
+    # # 2) forward through CLIP text encoder
+    # with torch.no_grad():
+    #     text_feats = model.encode_text(tokens)  # (M, D)
+    #     text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
     model = _get_clip_model()
-    # tokens = clip.tokenize(flat_prompts, truncate=True).to(_DEVICE)  # (M, token_len)
-    tokens = _TOKENIZER(flat_prompts).to(_DEVICE)  # (M, token_len)
 
-    # 2) forward through CLIP text encoder
+    # 直接传字符串列表给 Jina-CLIP v2；用 Matryoshka 截断到 512 维，保持与你模型 text_dim 对齐
     with torch.no_grad():
-        text_feats = model.encode_text(tokens)  # (M, D)
+        text_feats = model.encode_text(flat_prompts, truncate_dim=_TRUNCATE_DIM)
+        # 兼容返回 numpy 的实现
+        if not isinstance(text_feats, torch.Tensor):
+            text_feats = torch.from_numpy(text_feats)
+        text_feats = text_feats.to(_DEVICE)
         text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
+
 
     out_text_feats = []
     idx = 0
@@ -382,3 +405,25 @@ def gather_multilabel_text_feats_for_batch(
     idxs = [name_to_idx[Path(n).name] for n in batch_filenames]
     # 取子集并保持顺序
     return text_bank_NKD[idxs]  # (B, K, D)
+
+def prepare_classbank_prompts(
+    labels_txt_path: str,
+    max_templates_per_label: int = 3,
+    template_set: str = "clip",
+    register_set_name: str = "classbank",
+):
+    """
+    读取全类列表（如 NYU40），为每个类用多模板造句→编码→同类内平均，
+    得到一份 (K,D) 的“类原型库”，注册到 PROMPT_CACHE[register_set_name]。
+    """
+    labels = [ln.strip() for ln in Path(labels_txt_path).read_text().splitlines() if ln.strip()]
+    K = len(labels)
+    # 利用你已有的“分组编码并在组内平均”的逻辑：
+    groups = build_prompt_groups_from_labels(
+        labels, L=K, template_set=template_set, max_templates_per_label=max_templates_per_label
+    )  # 长度=K；每个元素是该类的若干句子
+    text_feats_KD = encode_prompts(groups).cpu()  # (K,D)，每类已对多模板平均
+    register_prompt_embeds(register_set_name, text_feats_KD)  # 缓存 (K,D)
+    switch_prompt_set(register_set_name)
+    unload_clip_model()
+    return {"labels": labels, "embeds": text_feats_KD, "K": K, "D": text_feats_KD.shape[-1], "set_name": register_set_name}

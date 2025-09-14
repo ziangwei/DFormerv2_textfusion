@@ -2,7 +2,7 @@ import argparse
 import pprint
 import time
 from importlib import import_module
-from prompt_utils import prepare_eval_prompts, prepare_eval_prompts_multilabel
+from prompt_utils import prepare_eval_prompts, prepare_eval_prompts_multilabel, prepare_classbank_prompts
 import json
 from pathlib import Path
 import torch
@@ -74,16 +74,26 @@ with Engine(custom_parser=parser) as engine:
         raise ValueError("DFormerv2 is not recommended without pad_SUNRGBD")
     config.pad = args.pad_SUNRGBD
 
-    # ---- load prompts from JSON and precompute embeddings ----
-    if getattr(config, "topk_json", None):
+    # ---- 文本特征准备（优先：classbank → 其次：per-image 多标签 → 否则：旧单句） ----
+    if getattr(config, "classbank_labels_txt", None):
+        prep = prepare_classbank_prompts(
+            config.classbank_labels_txt,
+            max_templates_per_label = getattr(config, "max_templates_per_label", 3),
+            register_set_name = "classbank",
+        )
+        classbank_KD = prep["embeds"]  # (K,D)
+        prompt_mode = "classbank"
+    elif getattr(config, "topk_json", None):
         prepare_eval_prompts_multilabel(
             config.eval_source, config.topk_json,
             K=getattr(config, "topk_K", 5),
             max_templates_per_label=getattr(config, "max_templates_per_label", 3),
             register_set_name="eval-ml",
         )
+        prompt_mode = "multilabel"
     else:
         prepare_eval_prompts(config.eval_source, config.prompt_json)
+        prompt_mode = "single"
 
     cudnn.benchmark = True
     if config.dataset_name != "SUNRGBD":
@@ -181,6 +191,8 @@ with Engine(custom_parser=parser) as engine:
                             True,
                             engine,
                             sliding=args.sliding,
+                            classbank_KD=classbank_KD,
+                            prompt_mode = prompt_mode,
                         )
                     else:
                         all_metrics = evaluate(
@@ -190,6 +202,8 @@ with Engine(custom_parser=parser) as engine:
                             device,
                             engine,
                             sliding=args.sliding,
+                            classbank_KD=classbank_KD,
+                            prompt_mode=prompt_mode,
                         )
                     if engine.local_rank == 0:
                         metric = all_metrics[0]
@@ -216,6 +230,8 @@ with Engine(custom_parser=parser) as engine:
                             True,
                             engine,
                             sliding=args.sliding,
+                            classbank_KD=classbank_KD,
+                            prompt_mode=prompt_mode,
                         )
                     else:
                         metric = evaluate(
@@ -225,6 +241,8 @@ with Engine(custom_parser=parser) as engine:
                             device,
                             engine,
                             sliding=args.sliding,
+                            classbank_KD=classbank_KD,
+                            prompt_mode=prompt_mode,
                         )
                     ious, miou = metric.compute_iou()
                     acc, macc = metric.compute_pixel_acc()
@@ -246,6 +264,8 @@ with Engine(custom_parser=parser) as engine:
                         True,
                         engine,
                         sliding=args.sliding,
+                        classbank_KD=classbank_KD,
+                        prompt_mode=prompt_mode,
                     )
                 else:
                     all_metrics = evaluate(
@@ -255,6 +275,8 @@ with Engine(custom_parser=parser) as engine:
                         device,
                         engine,
                         sliding=args.sliding,
+                        classbank_KD=classbank_KD,
+                        prompt_mode=prompt_mode,
                     )
                 if engine.local_rank == 0:
                     metric = all_metrics[0]
@@ -281,6 +303,8 @@ with Engine(custom_parser=parser) as engine:
                         True,
                         engine,
                         sliding=args.sliding,
+                        classbank_KD=classbank_KD,
+                        prompt_mode=prompt_mode,
                     )
                 else:
                     metric = evaluate(
@@ -290,6 +314,8 @@ with Engine(custom_parser=parser) as engine:
                         device,
                         engine,
                         sliding=args.sliding,
+                        classbank_KD=classbank_KD,
+                        prompt_mode=prompt_mode,
                     )
                 ious, miou = metric.compute_iou()
                 acc, macc = metric.compute_pixel_acc()

@@ -414,7 +414,7 @@ class SemanticSelfAttention(nn.Module):
         # self.fusion_gamma = nn.Parameter(torch.ones(1))
         self.fusion_gamma = nn.Parameter(torch.tensor([0.8]))
 
-    def forward(self, x: torch.Tensor, text_embed: torch.Tensor):
+    def forward(self, x: torch.Tensor, text_embed: torch.Tensor, gate: torch.Tensor | None = None):
         """x: (B, H, W, C)    text_embed: (B, D) 或 (B, L, D)"""
         B, H, W, C = x.shape
         t = text_embed.to(x.dtype)
@@ -430,9 +430,35 @@ class SemanticSelfAttention(nn.Module):
         v = self.v_proj(t)  # (B, L, C)
         k = k.view(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B,h,L,d)
         v = v.view(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B,h,L,d)
-        attn = (q @ k.transpose(-2, -1)) * self.scale      # (B,h,N,L)
-        attn = attn.softmax(dim=-1)                        # ← L 轴
-        out = attn @ v                                     # (B,h,N,d)
+        logits = (q @ k.transpose(-2, -1)) * self.scale  # (B,h,N,L)
+
+        # ---------- 自条件门控：把按类的 gate 既当作 bias 也当作缩放 ----------
+        if gate is not None:
+            # gate: (B, L) in [0,1]，对 K/V 进行幅值门控 + 对 logits 加对数偏置
+            g = gate.clamp_min(1e-6)
+            # broadcast 到注意力维度 (B,h,N,L) / (B,h,L,1)
+            log_g = g.log().unsqueeze(1).unsqueeze(2)
+            logits = logits + log_g  # bias：提升高置信类的注意力 logit
+            scale_g = g.unsqueeze(1).unsqueeze(-1)
+            k = k * scale_g  # 缩小低置信类的键
+            v = v * scale_g  # 与之配对的值也缩小
+
+            # K-aware 温度（随“有效类数”降温，抗 40 类稀释）
+            eff_k = g.sum(-1, keepdim=True).clamp_min(1.0)  # (B,1)
+            tau = eff_k.sqrt() / math.sqrt(5.0)  # 参考 5 个类的标定
+            logits = logits / tau.unsqueeze(1).unsqueeze(2)
+        # --------------------------------------------------------------------
+
+        M = 8
+        if logits.size(-1) > M:
+            topv, topi = logits.topk(M, dim=-1)  # 选每个空间位置/头的 Top-M 类
+            mask = torch.full_like(logits, float('-inf'))
+            mask.scatter_(-1, topi, 0.0)  # 其余置 -inf
+            attn = (logits + mask).softmax(dim=-1)
+        else:
+            attn = logits.softmax(dim=-1)
+
+        out = attn @ v
 
         out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)  # → (B,H,W,C)
         out = self.out_proj(out)
@@ -474,6 +500,7 @@ class RGBD_Block(nn.Module):
 
         if self.use_semantic:
             self.semantic_attn = SemanticSelfAttention(embed_dim, text_dim, num_heads)
+            self.img2text = nn.Linear(self.embed_dim, text_dim)  # << 新增：图像→文本空间
 
         if layerscale:
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
@@ -485,8 +512,21 @@ class RGBD_Block(nn.Module):
 
         geo_prior = self.Geo((h, w), x_e, split_or_not=split_or_not)
         out = self.Attention(self.layer_norm1(x), geo_prior, split_or_not)
+
         if self.use_semantic and text_embed is not None:
-            out = self.semantic_attn(out, text_embed)
+            # ---- 自条件门控：根据“当前特征”算每类置信度 gate (B,L) ----
+            B, H, W, C = out.shape
+            img_vec = out.mean(dim=(1, 2))  # (B, C) 全局平均
+            img_vec = F.normalize(self.img2text(img_vec), dim=-1)  # (B, D) → 文本空间
+            t = text_embed
+            if t.dim() == 2:  # 兼容老的一维文本
+                t = t.unsqueeze(1)  # (B, 1, D)
+            t = F.normalize(t, dim=-1)  # (B, L, D)
+            gate = (img_vec.unsqueeze(1) * t).sum(-1)  # 余弦相似得分 (B, L)
+            gate = gate.softmax(dim=-1)  # 归一化为分布
+
+            out = self.semantic_attn(out, text_embed, gate=gate)
+
         if self.layerscale:
             x = x + self.drop_path(self.gamma_1 * out)
         else:

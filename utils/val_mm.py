@@ -17,14 +17,16 @@ from utils.metrics_new import Metrics
 import numpy as np
 
 @torch.no_grad()
-def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False):
+def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False, classbank_KD: torch.Tensor | None = None, prompt_mode: str = "single"):
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
     logger.info(f"[evaluate] Entered evaluate(), dataloader size={len(dataloader)}")
     for h in logger.handlers:
         h.flush()
 
     prev_set = prompt_utils.ACTIVE_PROMPT_SET
-    if getattr(config, "topk_json", None):
+    if prompt_mode == "classbank":
+        prompt_embeds = None  # 我们直接用 classbank_KD
+    elif getattr(config, "topk_json", None):
         prompt_utils.prepare_eval_prompts_multilabel(
             config.eval_source, config.topk_json,
             K=getattr(config, "topk_K", 5),
@@ -47,8 +49,14 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         logger.info(f"[evaluate] Batch {idx}/{len(dataloader)}, keys={list(minibatch.keys())}")
         for h in logger.handlers: h.flush()
 
-        prompt_idxs = minibatch["prompt_idx"].long()
-        text_embed = prompt_embeds[prompt_idxs].to(device)
+        if prompt_mode == "classbank":
+            B = minibatch["data"].size(0)
+            text_embed = classbank_KD.to(device).unsqueeze(0).expand(B, -1, -1).contiguous()  # (B,40,D)
+        else:
+            prompt_idxs = minibatch["prompt_idx"].long()
+            text_embed = prompt_embeds[prompt_idxs].to(device)  # (B,K,D) 或 (B,D)
+        # prompt_idxs = minibatch["prompt_idx"].long()
+        # text_embed = prompt_embeds[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -234,10 +242,14 @@ def evaluate_msf(
     engine,
     save_dir=None,
     sliding=False,
+    classbank_KD: torch.Tensor | None = None,
+    prompt_mode: str = "single",
 ):
 
     prev_set = prompt_utils.ACTIVE_PROMPT_SET
-    if getattr(config, "topk_json", None):
+    if prompt_mode == "classbank":
+        prompt_embeds = None
+    elif getattr(config, "topk_json", None):
         prompt_utils.prepare_eval_prompts_multilabel(
             config.eval_source, config.topk_json,
             K=getattr(config, "topk_K", 5),
@@ -256,8 +268,14 @@ def evaluate_msf(
 
     for idx, minibatch in enumerate(dataloader):
 
-        prompt_idxs = minibatch["prompt_idx"].long()
-        text_embed = prompt_embeds[prompt_idxs].to(device)
+        if prompt_mode == "classbank":
+            B = minibatch["data"].size(0)
+            text_embed = classbank_KD.to(device).unsqueeze(0).expand(B, -1, -1).contiguous()
+        else:
+            prompt_idxs = minibatch["prompt_idx"].long()
+            text_embed = prompt_embeds[prompt_idxs].to(device)
+        # prompt_idxs = minibatch["prompt_idx"].long()
+        # text_embed = prompt_embeds[prompt_idxs].to(device)
         # text_embed = torch.zeros_like(prompt_embeds[prompt_idxs]).to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
