@@ -11,7 +11,6 @@ from pathlib import Path
 from tabulate import tabulate
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
-import prompt_utils
 from utils.engine.logger import get_logger
 from utils.metrics_new import Metrics
 import numpy as np
@@ -23,21 +22,6 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     for h in logger.handlers:
         h.flush()
 
-    prev_set = prompt_utils.ACTIVE_PROMPT_SET
-    if prompt_mode == "classbank":
-        prompt_embeds = None  # 我们直接用 classbank_KD
-    elif getattr(config, "topk_json", None):
-        prompt_utils.prepare_eval_prompts_multilabel(
-            config.eval_source, config.topk_json,
-            K=getattr(config, "topk_K", 5),
-            max_templates_per_label=getattr(config, "max_templates_per_label", 4),
-            register_set_name="eval-ml",
-        )
-        prompt_embeds = prompt_utils.PROMPT_CACHE["eval-ml"]  # (N,K,512)
-    else:
-        prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
-        prompt_embeds = prompt_utils.PROMPT_EMBEDS  # (N,512)
-
     print("Evaluating...")
     model.eval()
     n_classes = config.num_classes
@@ -48,15 +32,6 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
 
         logger.info(f"[evaluate] Batch {idx}/{len(dataloader)}, keys={list(minibatch.keys())}")
         for h in logger.handlers: h.flush()
-
-        if prompt_mode == "classbank":
-            B = minibatch["data"].size(0)
-            text_embed = classbank_KD.to(device).unsqueeze(0).expand(B, -1, -1).contiguous()  # (B,40,D)
-        else:
-            prompt_idxs = minibatch["prompt_idx"].long()
-            text_embed = prompt_embeds[prompt_idxs].to(device)  # (B,K,D) 或 (B,D)
-        # prompt_idxs = minibatch["prompt_idx"].long()
-        # text_embed = prompt_embeds[prompt_idxs].to(device)
 
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -82,11 +57,10 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
                 model,
                 images[0],
                 images[1],
-                text_embed,
                 config,
             ).softmax(dim=1)
         else:
-            preds = model(images[0], images[1], text_embed=text_embed).softmax(dim=1)
+            preds = model(images[0], images[1]).softmax(dim=1)
         # print(preds.shape,labels.shape)
         B, H, W = labels.shape
         metrics.update(preds, labels)
@@ -158,12 +132,10 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         torch.distributed.all_gather_object(all_metrics, metrics)  # list of lists
     else:
         all_metrics = metrics
-
-    prompt_utils.switch_prompt_set(prev_set)
     return all_metrics
 
 
-def slide_inference(model, imgs, modal_xs, text_embed=None, config=None):
+def slide_inference(model, imgs, modal_xs, config=None):
     """Inference by sliding-window with overlap.
 
     If h_crop > h_img or w_crop > w_img, the small patch will be used to
@@ -218,7 +190,7 @@ def slide_inference(model, imgs, modal_xs, text_embed=None, config=None):
             crop_modal_xs = modal_xs[:, :, y1:y2, x1:x2]
             # the output of encode_decode is seg logits tensor map
             # with shape [N, C, H, W]
-            crop_seg_logit = model(crop_img, crop_modal_xs, text_embed=text_embed)
+            crop_seg_logit = model(crop_img, crop_modal_xs)
             preds += F.pad(
                 crop_seg_logit,
                 (int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)),
@@ -246,38 +218,12 @@ def evaluate_msf(
     prompt_mode: str = "single",
 ):
 
-    prev_set = prompt_utils.ACTIVE_PROMPT_SET
-    if prompt_mode == "classbank":
-        prompt_embeds = None
-    elif getattr(config, "topk_json", None):
-        prompt_utils.prepare_eval_prompts_multilabel(
-            config.eval_source, config.topk_json,
-            K=getattr(config, "topk_K", 5),
-            max_templates_per_label=getattr(config, "max_templates_per_label", 4),
-            register_set_name="eval-ml",
-        )
-        prompt_embeds = prompt_utils.PROMPT_CACHE["eval-ml"]  # (N,K,512)
-    else:
-        prompt_utils.prepare_eval_prompts(config.eval_source, config.prompt_json)
-        prompt_embeds = prompt_utils.PROMPT_EMBEDS  # (N,512)
-
     model.eval()
 
     n_classes = config.num_classes
     metrics = Metrics(n_classes, config.background, device)
 
     for idx, minibatch in enumerate(dataloader):
-
-        if prompt_mode == "classbank":
-            B = minibatch["data"].size(0)
-            text_embed = classbank_KD.to(device).unsqueeze(0).expand(B, -1, -1).contiguous()
-        else:
-            prompt_idxs = minibatch["prompt_idx"].long()
-            text_embed = prompt_embeds[prompt_idxs].to(device)
-        # prompt_idxs = minibatch["prompt_idx"].long()
-        # text_embed = prompt_embeds[prompt_idxs].to(device)
-        # text_embed = torch.zeros_like(prompt_embeds[prompt_idxs]).to(device)
-
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
         ):
@@ -305,11 +251,10 @@ def evaluate_msf(
 
             if sliding:
                 logits = slide_inference(
-                    model, scaled_images[0], scaled_images[1],
-                    text_embed=text_embed, config=config
+                    model, scaled_images[0], scaled_images[1], config=config
                 )
             else:
-                logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
+                logits = model(scaled_images[0], scaled_images[1])
 
             logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
             scaled_logits += logits.softmax(dim=1)
@@ -321,11 +266,10 @@ def evaluate_msf(
                         model,
                         scaled_images[0],
                         scaled_images[1],
-                        text_embed,
                         config,
                     )
                 else:
-                    logits = model(scaled_images[0], scaled_images[1], text_embed=text_embed)
+                    logits = model(scaled_images[0], scaled_images[1])
                 logits = torch.flip(logits, dims=(3,))
                 logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
                 scaled_logits += logits.softmax(dim=1)
@@ -398,12 +342,9 @@ def evaluate_msf(
         torch.distributed.all_gather_object(all_metrics, metrics)
     else:
         all_metrics = metrics
-
-    prompt_utils.switch_prompt_set(prev_set)
     return all_metrics
 
 def main(cfg):
-    prompt_utils.prepare_eval_prompts(cfg.eval_source, cfg.prompt_json)
     device = torch.device(cfg["DEVICE"])
 
     eval_cfg = cfg["EVAL"]

@@ -222,12 +222,12 @@ class EncoderDecoder(nn.Module):
                 nonlinearity="relu",
             )
 
-    def encode_decode(self, rgb, modal_x, text_embed=None):
+    def encode_decode(self, rgb, modal_x):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         orisize = rgb.shape
         # print('builder',rgb.shape,modal_x.shape)
-        x = self.backbone(rgb, modal_x, text_embed)
+        x = self.backbone(rgb, modal_x)
         if len(x) == 2:  # if output is (rgb,depth) only use rgb
             x = x[0]
 
@@ -245,17 +245,13 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, modal_x=None,  label=None, text_embed=None):
+    def forward(self, rgb, modal_x=None,  label=None):
         # print('builder',rgb.shape,modal_x.shape)
-        if text_embed is None:
-            B, C, H, W = rgb.shape
-            device = rgb.device
-            text_embed = torch.zeros(B, 512, device=device)
 
         if self.aux_head:
-            out, aux_fm = self.encode_decode(rgb, modal_x, text_embed)
+            out, aux_fm = self.encode_decode(rgb, modal_x)
         else:
-            out = self.encode_decode(rgb, modal_x, text_embed)
+            out = self.encode_decode(rgb, modal_x)
 
         if label is not None:
             loss = self.criterion(out, label.long())[label.long() != self.cfg.background].mean()

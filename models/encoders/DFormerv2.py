@@ -22,6 +22,7 @@ from typing import Tuple
 import sys
 import os
 from collections import OrderedDict
+from utils import prompt_utils
 
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
@@ -376,95 +377,6 @@ class FeedForwardNetwork(nn.Module):
         x = self.dropout_module(x)
         return x
 
-# 目前对于 Text-if 的尝试
-# class FeatureWiseAffine(nn.Module):
-#     def __init__(self, in_channels, out_channels, use_affine_level=True):
-#         super(FeatureWiseAffine, self).__init__()
-#         self.use_affine_level = use_affine_level
-#         self.MLP = nn.Sequential(
-#             nn.Linear(in_channels, in_channels * 2),
-#             nn.LeakyReLU(),
-#             nn.Linear(in_channels * 2, out_channels * (1 + self.use_affine_level))
-#         )
-#
-#     def forward(self, x, text_embed):
-#         text_embed = text_embed.to(self.MLP[0].weight.dtype).unsqueeze(1)
-#         batch = x.shape[0]
-#         if self.use_affine_level:
-#             gamma, beta = self.MLP(text_embed).view(batch, -1, 1, 1).chunk(2, dim=1)
-#             x = (1 + gamma) * x + beta
-#         return x
-
-class SemanticSelfAttention(nn.Module):
-    """Simple self-attention between features and a text embedding."""
-
-    def __init__(self, img_dim: int, text_dim: int, num_heads: int = 8):
-        super().__init__()
-        assert img_dim % num_heads == 0, "img_dim should be divisible by num_heads"
-        self.num_heads = num_heads
-        self.head_dim = img_dim // num_heads
-        self.scale = self.head_dim ** -0.5
-
-        self.q_proj = nn.Linear(img_dim, img_dim)
-        self.k_proj = nn.Linear(text_dim, img_dim)
-        self.v_proj = nn.Linear(text_dim, img_dim)
-        self.out_proj = nn.Linear(img_dim, img_dim)
-        # 定义一个可学习的缩放因子，并初始化为0
-        # self.fusion_gamma = nn.Parameter(torch.zeros(1)) # 结果56.65
-        # self.fusion_gamma = nn.Parameter(torch.ones(1))
-        self.fusion_gamma = nn.Parameter(torch.tensor([0.8]))
-
-    def forward(self, x: torch.Tensor, text_embed: torch.Tensor, gate: torch.Tensor | None = None):
-        """x: (B, H, W, C)    text_embed: (B, D) 或 (B, L, D)"""
-        B, H, W, C = x.shape
-        t = text_embed.to(x.dtype)
-
-        # Q: 图像 → (B, h, N, d)
-        q = self.q_proj(x).reshape(B, H * W, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-
-        # K,V: 文本 → (B, h, L, d)
-        if t.dim() == 2:           # 兼容旧用法：单向量视为 L=1
-            t = t.unsqueeze(1)     # (B, 1, D)
-        # 先线性到 C，再分多头，再拆成 (h,d)
-        k = self.k_proj(t)  # (B, L, C)
-        v = self.v_proj(t)  # (B, L, C)
-        k = k.view(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B,h,L,d)
-        v = v.view(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B,h,L,d)
-        logits = (q @ k.transpose(-2, -1)) * self.scale  # (B,h,N,L)
-
-        # ---------- 自条件门控：把按类的 gate 既当作 bias 也当作缩放 ----------
-        if gate is not None:
-            # gate: (B, L) in [0,1]，对 K/V 进行幅值门控 + 对 logits 加对数偏置
-            g = gate.clamp_min(1e-6)
-            # broadcast 到注意力维度 (B,h,N,L) / (B,h,L,1)
-            log_g = g.log().unsqueeze(1).unsqueeze(2)
-            logits = logits + log_g  # bias：提升高置信类的注意力 logit
-            scale_g = g.unsqueeze(1).unsqueeze(-1)
-            k = k * scale_g  # 缩小低置信类的键
-            v = v * scale_g  # 与之配对的值也缩小
-
-            # K-aware 温度（随“有效类数”降温，抗 40 类稀释）
-            eff_k = g.sum(-1, keepdim=True).clamp_min(1.0)  # (B,1)
-            tau = eff_k.sqrt() / math.sqrt(5.0)  # 参考 5 个类的标定
-            logits = logits / tau.unsqueeze(1).unsqueeze(2)
-        # --------------------------------------------------------------------
-
-        M = 8
-        if logits.size(-1) > M:
-            topv, topi = logits.topk(M, dim=-1)  # 选每个空间位置/头的 Top-M 类
-            mask = torch.full_like(logits, float('-inf'))
-            mask.scatter_(-1, topi, 0.0)  # 其余置 -inf
-            attn = (logits + mask).softmax(dim=-1)
-        else:
-            attn = logits.softmax(dim=-1)
-
-        out = attn @ v
-
-        out = out.permute(0, 2, 1, 3).reshape(B, H, W, C)  # → (B,H,W,C)
-        out = self.out_proj(out)
-        out = x + self.fusion_gamma * out
-
-        return out
 
 class RGBD_Block(nn.Module):
     def __init__(
@@ -478,13 +390,10 @@ class RGBD_Block(nn.Module):
         layer_init_values=1e-5,
         init_value=2,
         heads_range=4,
-        use_semantic: bool = False,
-        text_dim: int = 512,
     ):
         super().__init__()
         self.layerscale = layerscale
         self.embed_dim = embed_dim
-        self.use_semantic = use_semantic
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=1e-6)
         self.layer_norm2 = nn.LayerNorm(self.embed_dim, eps=1e-6)
         if split_or_not:
@@ -498,34 +407,16 @@ class RGBD_Block(nn.Module):
         # the function to generate the geometry prior for the current block
         self.Geo = GeoPriorGen(embed_dim, num_heads, init_value, heads_range)
 
-        if self.use_semantic:
-            self.semantic_attn = SemanticSelfAttention(embed_dim, text_dim, num_heads)
-            self.img2text = nn.Linear(self.embed_dim, text_dim)  # << 新增：图像→文本空间
-
         if layerscale:
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
             self.gamma_2 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
 
-    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False, text_embed: torch.Tensor = None):
+    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False):
         x = x + self.cnn_pos_encode(x)
         b, h, w, d = x.size()
 
         geo_prior = self.Geo((h, w), x_e, split_or_not=split_or_not)
         out = self.Attention(self.layer_norm1(x), geo_prior, split_or_not)
-
-        if self.use_semantic and text_embed is not None:
-            # ---- 自条件门控：根据“当前特征”算每类置信度 gate (B,L) ----
-            B, H, W, C = out.shape
-            img_vec = out.mean(dim=(1, 2))  # (B, C) 全局平均
-            img_vec = F.normalize(self.img2text(img_vec), dim=-1)  # (B, D) → 文本空间
-            t = text_embed
-            if t.dim() == 2:  # 兼容老的一维文本
-                t = t.unsqueeze(1)  # (B, 1, D)
-            t = F.normalize(t, dim=-1)  # (B, L, D)
-            gate = (img_vec.unsqueeze(1) * t).sum(-1)  # 余弦相似得分 (B, L)
-            gate = gate.softmax(dim=-1)  # 归一化为分布
-
-            out = self.semantic_attn(out, text_embed, gate=gate)
 
         if self.layerscale:
             x = x + self.drop_path(self.gamma_1 * out)
@@ -567,15 +458,12 @@ class BasicLayer(nn.Module):
         use_checkpoint=False,
         layerscale=False,
         layer_init_values=1e-5,
-        use_semantic: bool = False,
-        text_dim: int = 512,
     ):
         super().__init__()
         self.embed_dim = embed_dim
         self.depth = depth
         self.use_checkpoint = use_checkpoint
         self.split_or_not = split_or_not
-        self.use_semantic = use_semantic
         # build blocks
         self.blocks = nn.ModuleList(
             [
@@ -589,8 +477,6 @@ class BasicLayer(nn.Module):
                     layer_init_values,
                     init_value=init_value,
                     heads_range=heads_range,
-                    use_semantic=use_semantic,
-                    text_dim=text_dim,
                 )
                 for i in range(depth)
             ]
@@ -602,33 +488,51 @@ class BasicLayer(nn.Module):
         else:
             self.downsample = None
 
-    def forward(self, x, x_e, text_embed=None):
-        # if text_embed is not None:
-        #     dtype = self.blocks[0].prompt_guidance.MLP[0].weight.dtype
-        #     t = text_embed.to(dtype).unsqueeze(1)
-        # else:
-        #     t = None
-
+    def forward(self, x, x_e):
         for blk in self.blocks:
-
-            # if t is not None:
-            #     params = blk.prompt_guidance.MLP(t)  # (B, 2*embed_dim)
-            #     gamma, beta = params.view(-1, 2 * self.embed_dim, 1, 1).chunk(2, dim=1)
-            # else:
-            #     gamma = beta = None
-
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(
-                    blk, x=x, x_e=x_e, split_or_not=self.split_or_not, text_embed=text_embed if self.use_semantic else None
+                    blk, x=x, x_e=x_e, split_or_not=self.split_or_not
                 )
             else:
-                x = blk(x, x_e, split_or_not=self.split_or_not, text_embed=text_embed if self.use_semantic else None)
+                x = blk(x, x_e, split_or_not=self.split_or_not)
         if self.downsample is not None:
             x_down = self.downsample(x)
             return x, x_down
         else:
             return x, x
 
+class TextGuidedEnhancer(nn.Module):
+    """Enhance feature maps using pre-encoded text features."""
+
+    def __init__(self, embed_dim: int, text_dim: int = 512, classes_file: str = "nyu_names.txt"):
+        super().__init__()
+
+        # load class names
+        root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        names_path = os.path.join(root, classes_file)
+        with open(names_path, "r") as f:
+            names = [line.strip() for line in f if line.strip()]
+
+        prompts = [f"a photo of a {n}" for n in names]
+        text_feats = prompt_utils.encode_prompts(prompts).float()
+        prompt_utils.unload_clip_model()
+        self.register_buffer("text_feats", text_feats)
+
+        self.proj = nn.Conv2d(embed_dim, text_dim, kernel_size=1)
+        self.conv = nn.Sequential(
+            nn.Conv2d(len(names), embed_dim, 1),
+            nn.BatchNorm2d(embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(embed_dim, embed_dim, 3, padding=1),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        img = F.normalize(self.proj(x), dim=1)
+        text = F.normalize(self.text_feats, dim=1)
+        sim = torch.einsum("bdhw,nd->bnhw", img, text)
+        attn = torch.sigmoid(self.conv(sim))
+        return x + x * attn
 
 class dformerv2(nn.Module):
     def __init__(
@@ -672,21 +576,6 @@ class dformerv2(nn.Module):
         # build layers
         self.layers = nn.ModuleList()
 
-        # C = self.embed_dim  # backbone 输出通道
-
-        # text driven modulation at the end of the encoder
-        D = text_dim
-
-        # M = modulation_dim or C
-        # self.mlp_gamma = nn.Sequential(
-        #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
-        # )
-        # self.mlp_beta = nn.Sequential(
-        #     nn.Linear(D, M), nn.ReLU(), nn.Linear(M, C)
-        # )
-
-        # self.final_guidance = nn.ModuleDict({str(i): FeatureWiseAffine(D, embed_dims[i]) for i in out_indices})
-
         for i_layer in range(self.num_layers):
             layer = BasicLayer(
                 embed_dim=embed_dims[i_layer],
@@ -703,17 +592,14 @@ class dformerv2(nn.Module):
                 use_checkpoint=use_checkpoint,
                 layerscale=layerscales[i_layer],
                 layer_init_values=layer_init_values,
-                use_semantic=(i_layer in [1, 2]),
-                # use_semantic=True,
-                # use_semantic=(i_layer in [1, 2, 3]),
-                # use_semantic=(i_layer in [2]),
-                text_dim=text_dim,
             )
             self.layers.append(layer)
 
         self.extra_norms = nn.ModuleList()
         for i in range(3):
             self.extra_norms.append(nn.LayerNorm(embed_dims[i + 1]))
+
+        self.text_enhancer = TextGuidedEnhancer(embed_dims[-1], text_dim=text_dim)
 
         self.apply(self._init_weights)
 
@@ -778,17 +664,9 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e, text_embed=None):
+    def forward(self, x, x_e):
         # rgb input
         x = self.patch_embed(x)
-
-        # if text_embed is not None:
-        #     text_embed = text_embed.to(x.dtype)
-        #     gamma = self.mlp_gamma(text_embed).view(-1, self.embed_dim, 1, 1)
-        #     beta = self.mlp_beta(text_embed).view(-1, self.embed_dim, 1, 1)
-        #     x = x.permute(0, 3, 1, 2)
-        #     x = (1 + gamma) * x + beta
-        #     x = x.permute(0, 2, 3, 1)
 
         # depth input
         x_e = x_e[:, 0, :, :].unsqueeze(1)
@@ -796,18 +674,14 @@ class dformerv2(nn.Module):
         outs = []
 
         for i in range(self.num_layers):
-            te = text_embed if i in [1, 2] else None
-            # te = text_embed
-            # te = text_embed if i in [1, 2, 3] else None
-            # te = text_embed if i in [2] else None
-
-            x_out, x = self.layers[i](x, x_e, text_embed=te)
+            x_out, x = self.layers[i](x, x_e)
             if i in self.out_indices:
                 if i != 0:
                     x_out = self.extra_norms[i - 1](x_out)
                 out = x_out.permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
 
+        outs[-1] = self.text_enhancer(outs[-1])
         return tuple(outs)
 
     def train(self, mode=True):

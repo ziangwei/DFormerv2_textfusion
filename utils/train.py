@@ -5,14 +5,6 @@ import pprint
 import random
 import time
 from importlib import import_module
-from prompt_utils import (
-    encode_prompts,
-    unload_clip_model,
-    register_prompt_embeds,
-    switch_prompt_set,
-    prepare_eval_prompts_multilabel,
-    prepare_classbank_prompts,
-)
 import tempfile
 import json
 import numpy as np
@@ -51,13 +43,6 @@ parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAc
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument("--use_seed", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--local-rank", default=0)
-# 新增：多标签文本配置
-parser.add_argument("--topk_json", default=None, type=str,
-                    help="Path to JSON: {filename: [label1,..,labelK]}. If set, enable multi-label text guidance.")
-parser.add_argument("--topk_K", default=5, type=int,
-                    help="K labels per image (default 5).")
-parser.add_argument("--max_templates_per_label", default=3, type=int,
-                    help="How many CLIP-style templates per label to average.")
 
 # os.environ['MASTER_PORT'] = '169710'
 torch.set_float32_matmul_precision("high")
@@ -131,69 +116,6 @@ with Engine(custom_parser=parser) as engine:
 
         if not args.compile and args.compile_mode != "default":
             logger.warning("compile_mode is only valid when compile is enabled, ignoring compile_mode")
-
-        # ---------------------------
-        # 文本嵌入预处理
-        # ---------------------------
-        train_list = Path(config.train_source).read_text().splitlines()  # 读取训练列表
-        fnames = [Path(l.split()[0]).name for l in train_list]           # 取文件名（与 prompt_idx 顺序一致）
-        topk_json_path = getattr(config, "topk_json", None) or args.topk_json
-        classbank_labels_txt = getattr(config, "classbank_labels_txt", "datasets/NYUDepthv2/nyu40_labels.txt")
-        K = getattr(config, "topk_K", args.topk_K)
-        M = getattr(config, "max_templates_per_label", args.max_templates_per_label)
-        # use_multilabel = topk_json_path is not None and os.path.exists(topk_json_path)
-        use_classbank = classbank_labels_txt is not None and os.path.exists(classbank_labels_txt)
-        use_multilabel = False  # << 删掉 Top-K 多标签机构
-        prompt_mode = "classbank"  # << 统一走 classbank（仅作为“提供原型”，不再外部选类）
-
-        # train_text_bank_NKD = None  # (N,K,D)（仅多标签时使用）
-        classbank_KD = None  # (K,D)（全类原型库）
-        train_text_bank_NKD = None  # (N,K,D)（仅 per-image 多标签时使用）
-        prompt_embeds = None        # (N,D)（单向量旧路径）
-
-        if use_classbank:
-              # -------- 全类：一次性构建 (K,D)，训练/验证统一使用 --------
-                    prep = prepare_classbank_prompts(
-                        labels_txt_path = classbank_labels_txt,
-                        max_templates_per_label = M,
-                        template_set = "clip",
-                        register_set_name = "classbank",
-                    )
-                    classbank_KD = prep["embeds"]  # (K,D) on CPU
-        elif use_multilabel:
-            # 多标签：一次性得到 (N,K,D) 并注册为 "train-ml"
-            prep_train = prepare_eval_prompts_multilabel(
-                eval_txt_path=config.train_source,
-                topk_json_path=topk_json_path,
-                K=K,
-                max_templates_per_label=M,
-                template_set="clip",
-                register_set_name="train-ml",
-            )
-            train_text_bank_NKD = prep_train["embeds"]  # (N,K,D) on CPU
-            # 可选：也为验证集准备一个多标签集合，若你有相同 JSON
-            if hasattr(config, "eval_source") and os.path.exists(config.eval_source):
-                try:
-                    _ = prepare_eval_prompts_multilabel(
-                        eval_txt_path=config.eval_source,
-                        topk_json_path=topk_json_path,
-                        K=K,
-                        max_templates_per_label=M,
-                        template_set="clip",
-                        register_set_name="eval-ml",
-                    )
-                except Exception as _e:
-                    logger.warning(f"prepare eval-ml prompts failed: {_e}")
-        else:
-            # 兼容旧逻辑：单向量（每图 1 条文本）→ (N,D)
-            prompt_dict = json.loads(Path(config.prompt_json).read_text())
-            all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-            prompt_embeds = encode_prompts(all_prompts)  # (N,D)
-            prompt_embeds = prompt_embeds.cpu()
-            register_prompt_embeds("train", prompt_embeds)
-            switch_prompt_set("train")
-            unload_clip_model()
-        # ---------------------------
 
         train_loader, train_sampler = get_train_loader(engine, RGBXDataset, config)
 
@@ -322,9 +244,6 @@ with Engine(custom_parser=parser) as engine:
             scaler = torch.cuda.amp.GradScaler()
 
         for epoch in range(engine.state.epoch, config.nepochs + 1):
-            # 根据分支切换当前使用的 prompt 集合名（只影响内部可能用到 prompt_utils 的流程）
-            active_set = "classbank" if use_classbank else ("train-ml" if use_multilabel else "train")
-            switch_prompt_set(active_set)
             model = compiled_model
             model.train()
             if engine.distributed:
@@ -342,11 +261,6 @@ with Engine(custom_parser=parser) as engine:
                 imgs = minibatch["data"]
                 gts = minibatch["label"]
                 modal_xs = minibatch["modal_x"]
-                prompt_idxs = minibatch["prompt_idx"]  # 与 train_list / fnames 对齐的下标（B,）
-
-
-                B = imgs.size(0)
-                text_embed = classbank_KD.to(device, non_blocking=True).unsqueeze(0).expand(B, -1, -1).contiguous()
 
                 imgs = imgs.cuda(non_blocking=True)
                 gts = gts.cuda(non_blocking=True)
@@ -354,9 +268,9 @@ with Engine(custom_parser=parser) as engine:
 
                 if args.amp:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        loss = model(imgs, modal_xs, text_embed=text_embed, label=gts)
+                        loss = model(imgs, modal_xs, label=gts)
                 else:
-                    loss = model(imgs, modal_xs, text_embed=text_embed, label=gts)
+                    loss = model(imgs, modal_xs, label=gts)
 
                 # reduce the whole loss over multi-gpu
                 if engine.distributed:
@@ -428,15 +342,11 @@ with Engine(custom_parser=parser) as engine:
                                             model, val_loader, config, device,
                                             [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
                                             sliding=args.sliding,
-                                            classbank_KD=classbank_KD if use_classbank else None,
-                                            prompt_mode=prompt_mode,
                                         )
                                     else:
                                         all_metrics = evaluate(
                                             model, val_loader, config, device, engine,
                                             sliding=args.sliding,
-                                            classbank_KD=classbank_KD if use_classbank else None,
-                                            prompt_mode=prompt_mode,
                                         )
                             else:
                                 if args.mst:
@@ -444,15 +354,11 @@ with Engine(custom_parser=parser) as engine:
                                         model, val_loader, config, device,
                                         [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
                                         sliding=args.sliding,
-                                        classbank_KD=classbank_KD if use_classbank else None,
-                                        prompt_mode=prompt_mode,
                                     )
                                 else:
                                     all_metrics = evaluate(
                                         model, val_loader, config, device, engine,
                                         sliding=args.sliding,
-                                        classbank_KD=classbank_KD if use_classbank else None,
-                                        prompt_mode=prompt_mode,
                                     )
                             if engine.local_rank == 0:
                                 metric = all_metrics[0]
@@ -482,15 +388,11 @@ with Engine(custom_parser=parser) as engine:
                                             model, val_loader, config, device,
                                             [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
                                             sliding=args.sliding,
-                                            classbank_KD=classbank_KD if use_classbank else None,
-                                            prompt_mode=prompt_mode,
                                         )
                                     else:
                                         metric = evaluate(
                                             model, val_loader, config, device, engine,
                                             sliding=args.sliding,
-                                            classbank_KD=classbank_KD if use_classbank else None,
-                                            prompt_mode=prompt_mode,
                                         )
                             else:
                                 if args.mst:
@@ -498,15 +400,11 @@ with Engine(custom_parser=parser) as engine:
                                         model, val_loader, config, device,
                                         [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
                                         sliding=args.sliding,
-                                        classbank_KD=classbank_KD if use_classbank else None,
-                                        prompt_mode=prompt_mode,
                                     )
                                 else:
                                     metric = evaluate(
                                         model, val_loader, config, device, engine,
                                         sliding=args.sliding,
-                                        classbank_KD=classbank_KD if use_classbank else None,
-                                        prompt_mode=prompt_mode,
                                     )
                             ious, miou = metric.compute_iou()
                             acc, macc = metric.compute_pixel_acc()
