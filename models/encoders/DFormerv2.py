@@ -503,36 +503,70 @@ class BasicLayer(nn.Module):
             return x, x
 
 class TextGuidedEnhancer(nn.Module):
-    """Enhance feature maps using pre-encoded text features."""
-
-    def __init__(self, embed_dim: int, text_dim: int = 512, classes_file: str = "nyu_names.txt"):
+    """Dense text-image alignment at the last encoder stage.
+       Per-pixel cosine to all class prototypes -> Top-M sparse softmax ->
+       text-value aggregation -> residual fusion.
+    """
+    def __init__(self, embed_dim: int, text_dim: int = 512,
+                 classes_file: str = "datasets/NYUDepthv2/nyu40_labels.txt",
+                 top_m: int = 8, tau: float = 0.9):
         super().__init__()
 
         # load class names
-        root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        names_path = os.path.join(root, classes_file)
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        names_path = classes_file if os.path.isabs(classes_file) else os.path.join(repo_root, classes_file)
         with open(names_path, "r") as f:
             names = [line.strip() for line in f if line.strip()]
 
         prompts = [f"a photo of a {n}" for n in names]
-        text_feats = prompt_utils.encode_prompts(prompts).float()
+        text_feats = prompt_utils.encode_prompts(prompts).float()    # (K, D)
         prompt_utils.unload_clip_model()
-        self.register_buffer("text_feats", text_feats)
+        self.register_buffer("text_feats", text_feats)               # 常驻缓存
 
-        self.proj = nn.Conv2d(embed_dim, text_dim, kernel_size=1)
-        self.conv = nn.Sequential(
-            nn.Conv2d(len(names), embed_dim, 1),
+        # 视觉特征 -> 文本维度 d，用于逐像素与文本做余弦
+        self.img_proj = nn.Conv2d(embed_dim, text_dim, kernel_size=1, bias=False)
+        # 文本值 -> 视觉通道C，用于按注意力聚合回到视觉空间
+        self.val_proj = nn.Linear(text_dim, embed_dim, bias=False)
+
+        # 残差融合 φ([F|Z])：把文本引导特征 Z 与原特征 F 融合
+        self.fuse = nn.Sequential(
+            nn.Conv2d(embed_dim * 2, embed_dim, 1, bias=False),
             nn.BatchNorm2d(embed_dim),
             nn.ReLU(inplace=True),
-            nn.Conv2d(embed_dim, embed_dim, 3, padding=1),
+            nn.Conv2d(embed_dim, embed_dim, 3, padding=1, bias=False),
         )
 
+        self.top_m = top_m
+        self.tau = tau
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        img = F.normalize(self.proj(x), dim=1)
-        text = F.normalize(self.text_feats, dim=1)
-        sim = torch.einsum("bdhw,nd->bnhw", img, text)
-        attn = torch.sigmoid(self.conv(sim))
-        return x + x * attn
+        # x: (B, C, H, W)
+        B, C, H, W = x.shape
+
+        # 1) 视觉/文本投影并 L2 归一化
+        Q = F.normalize(self.img_proj(x), dim=1)                    # (B, D, H, W)
+        T = F.normalize(self.text_feats, dim=1)                     # (K, D)
+
+        # 2) 逐像素余弦相似 S[b,k,h,w] = <Q[b,:,h,w], T[k,:]>
+        S = torch.einsum("bdhw,kd->bkhw", Q, T)                     # (B, K, H, W)
+
+        # 3) 可选 Top-M 稀疏化 + softmax 温度
+        if (self.top_m is not None) and (S.size(1) > self.top_m):
+            topv, topi = S.topk(self.top_m, dim=1)
+            mask = torch.full_like(S, float("-inf"))
+            S = mask.scatter(1, topi, topv)
+        # 为数值稳定，softmax 前做减最大
+        S = S - S.amax(dim=1, keepdim=True)
+        A = torch.softmax(S / self.tau, dim=1)                      # (B, K, H, W)
+
+        # 4) 文本值投影 & 聚合得到文本引导特征 Z
+        V = self.val_proj(self.text_feats)                           # (K, C)
+        Z = torch.einsum("bkhw,kc->bchw", A, V).to(x.dtype)         # (B, C, H, W)
+
+        # 5) 残差融合
+        out = x + self.fuse(torch.cat([x, Z], dim=1))
+        return out
+
 
 class dformerv2(nn.Module):
     def __init__(
@@ -599,7 +633,7 @@ class dformerv2(nn.Module):
         for i in range(3):
             self.extra_norms.append(nn.LayerNorm(embed_dims[i + 1]))
 
-        self.text_enhancer = TextGuidedEnhancer(embed_dims[-1], text_dim=text_dim)
+        self.text_enhancer = TextGuidedEnhancer(embed_dims[-1], text_dim=text_dim, top_m=8, tau=0.9)
 
         self.apply(self._init_weights)
 

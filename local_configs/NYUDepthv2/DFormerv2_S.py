@@ -1,11 +1,5 @@
 from .._base_.datasets.NYUDepthv2 import *
 
-C.prompt_json = 'datasets/NYUDepthv2/top5_labels_per_image.json'
-C.topk_json = "datasets/NYUDepthv2/top5_labels_per_image.json"
-C.topk_K = 5
-C.max_templates_per_label = 3
-C.classbank_labels_txt = "datasets/NYUDepthv2/nyu40_labels.txt"
-
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = "DFormerv2_S"  # Remember change the path below.
 C.pretrained_model = "checkpoints/pretrained/DFormerv2_Small_pretrained.pth"
