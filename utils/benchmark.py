@@ -19,6 +19,12 @@ if __name__ == "__main__":
     model.eval()
     model.to(device)
     dump_input = torch.ones(1, 3, 480, 640).to(device)
-    input_shape = (3, 480, 640)
-    flops, params = profile(model, inputs=(dump_input, dump_input))
+    text_tokens = config.num_classes + getattr(config, "max_caption_sentences", 0)
+    text_dim = getattr(config, "text_feature_dim", 512)
+    if getattr(config, "enable_text_guidance", False):
+        dummy_text = torch.zeros(1, text_tokens, text_dim, device=device)
+        inputs = (dump_input, dump_input, None, dummy_text)
+    else:
+        inputs = (dump_input, dump_input)
+    flops, params = profile(model, inputs=inputs)
     print("the flops is {}G,the params is {}M".format(round(flops / (10**9), 2), round(params / (10**6), 2)))

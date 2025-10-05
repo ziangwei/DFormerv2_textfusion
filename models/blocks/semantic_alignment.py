@@ -55,6 +55,11 @@ class SemanticAlignmentModule(nn.Module):
         query = F.normalize(self.query_proj(vis_flat), dim=-1)  # (B, H*W, C_text)
 
         # 2. Use text features as Key and project them for the Value
+        if text_features.dim() == 2:
+            text_features = text_features.unsqueeze(0)
+        if text_features.size(0) != B:
+            text_features = text_features.expand(B, -1, -1).contiguous()
+
         key = F.normalize(text_features, dim=-1)  # (B, K, C_text)
         value = self.value_proj(text_features)    # (B, K, C_visual)
 
@@ -63,10 +68,10 @@ class SemanticAlignmentModule(nn.Module):
 
         # 4. Apply Top-M sparsification
         if self.top_m is not None and self.top_m < sim_matrix.size(-1):
-            top_v, _ = sim_matrix.topk(self.top_m, dim=-1)
+            top_vals, top_indices = sim_matrix.topk(self.top_m, dim=-1)
             # Create a mask to keep only the top-m scores
             mask = torch.full_like(sim_matrix, float('-inf'))
-            mask.scatter_(-1, sim_matrix.topk(self.top_m, dim=-1)[1], top_v)
+            mask.scatter_(-1, top_indices, top_vals)
             sim_matrix = mask
 
         # 5. Compute attention weights and aggregate values

@@ -6,9 +6,11 @@ import re
 import torch.utils.data as data
 import json
 from models.builder import logger
-
-
-# from utils.prompt_utils import load_scene_list, sample_prompt, PROMPT_EMBEDS
+from utils.prompt_utils import (
+    encode_prompts,
+    build_prompt_groups_from_labels,
+    unload_clip_model,
+)
 
 def get_path(
         dataset_name,
@@ -127,27 +129,133 @@ class RGBXDataset(data.Dataset):
         self.x_modal = setting.get("x_modal", ["d"])
         self.backbone = setting["backbone"]
 
-        # =======================================================================================
-        # 核心改动 1: 初始化文本特征相关的属性
-        # =======================================================================================
-        self.text_features_path = setting.get("text_features_path", None)
-        self.text_mode = setting.get("text_mode", "class")  # "class" or "caption"
-        self.text_features = self._load_text_features()
+        self.enable_text_guidance = setting.get("enable_text_guidance", False)
+        self.text_feature_dim = setting.get("text_feature_dim", 512)
+        self.label_txt_path = setting.get("label_txt_path")
+        self.caption_json_path = setting.get("caption_json_path")
+        self.max_caption_sentences = int(setting.get("max_caption_sentences", 6))
+        self.max_caption_sentences = max(self.max_caption_sentences, 0)
+        self.text_template_set = setting.get("text_template_set", "clip")
+        self.max_templates_per_label = int(setting.get("max_templates_per_label", 3))
 
-    def _load_text_features(self):
-        """Loads text features from a file."""
-        if self.text_features_path and os.path.exists(self.text_features_path):
-            logger.info(f"Loading text features from {self.text_features_path}")
+        self.class_text_features = None
+        self.caption_text_features = {}
+        self.caption_fallback = torch.zeros(self.max_caption_sentences, self.text_feature_dim, dtype=torch.float32)
+
+        if self.enable_text_guidance:
+            self._prepare_text_guidance_assets()
+
+    def _prepare_text_guidance_assets(self):
+        """Load and encode textual assets for guidance."""
+        try:
+            self.class_text_features = self._encode_class_labels()
+        except Exception as exc:
+            logger.error(f"Failed to encode class label prompts: {exc}")
+            self.class_text_features = None
+
+        try:
+            self.caption_text_features = self._encode_caption_descriptions()
+        except Exception as exc:
+            logger.error(f"Failed to encode caption descriptions: {exc}")
+            self.caption_text_features = {}
+        finally:
+            unload_clip_model()
+
+        if self.class_text_features is None:
+            self.class_text_features = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
+
+    def _encode_class_labels(self):
+        labels = []
+        if self.label_txt_path and os.path.exists(self.label_txt_path):
+            with open(self.label_txt_path, "r", encoding="utf-8") as f:
+                labels = [ln.strip() for ln in f if ln.strip()]
+        elif self.class_names:
+            labels = list(self.class_names)
+
+        if not labels:
+            logger.warning("No class labels found for text guidance; class embeddings will be empty.")
+            return None
+
+        prompt_groups = build_prompt_groups_from_labels(
+            labels,
+            L=len(labels),
+            template_set=self.text_template_set,
+            max_templates_per_label=self.max_templates_per_label,
+        )
+        text_feats = encode_prompts(prompt_groups).cpu().to(torch.float32)
+        return text_feats
+
+    def _encode_caption_descriptions(self):
+        caption_dict = {}
+        if not self.caption_json_path or not os.path.exists(self.caption_json_path):
+            logger.warning("Caption JSON path not provided or not found; only class prompts will be used.")
+            return caption_dict
+
+        with open(self.caption_json_path, "r", encoding="utf-8") as f:
             try:
-                # Assuming the features are stored in a .pt file
-                features = torch.load(self.text_features_path, map_location='cpu')
-                logger.info(f"Text features loaded successfully. Mode: {self.text_mode}")
-                return features
-            except Exception as e:
-                logger.error(f"Failed to load text features: {e}")
-                return None
-        logger.warning("No text features path provided or file not found. Running without text guidance.")
-        return None
+                caption_entries = json.load(f)
+            except json.JSONDecodeError as exc:
+                logger.error(f"Failed to parse caption json {self.caption_json_path}: {exc}")
+                return caption_dict
+
+        for entry in caption_entries:
+            rgb_rel = entry.get("rgb_path")
+            description = entry.get("description", "")
+            if not rgb_rel or not description:
+                continue
+            key = os.path.basename(rgb_rel)
+            sentences = self._split_description(description)
+            if not sentences:
+                continue
+            text_feats = encode_prompts(sentences).cpu().to(torch.float32)
+            if text_feats.shape[0] < self.max_caption_sentences:
+                pad = torch.zeros(
+                    self.max_caption_sentences - text_feats.shape[0],
+                    text_feats.shape[1],
+                    dtype=torch.float32,
+                )
+                text_feats = torch.cat([text_feats, pad], dim=0)
+            else:
+                text_feats = text_feats[: self.max_caption_sentences]
+            caption_dict[key] = text_feats
+
+        return caption_dict
+
+    def _split_description(self, description: str):
+        description = description.replace("\n", " ").strip()
+        if not description:
+            return []
+        sentences = [seg.strip() for seg in re.split(r"(?<=[.!?])\s+", description) if seg.strip()]
+        if not sentences:
+            sentences = [description]
+        if self.max_caption_sentences > 0:
+            sentences = sentences[: self.max_caption_sentences]
+        return sentences
+
+    def _get_text_features_for_item(self, rgb_path: str, item_name: str):
+        if not self.enable_text_guidance:
+            return torch.zeros(1, self.text_feature_dim, dtype=torch.float32)
+
+        class_feats = self.class_text_features
+        if class_feats is None:
+            class_feats = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
+
+        caption_feats = None
+        key_candidates = []
+        if rgb_path:
+            key_candidates.append(os.path.basename(rgb_path))
+        if item_name:
+            key_candidates.append(os.path.basename(item_name))
+
+        for key in key_candidates:
+            if key in self.caption_text_features:
+                caption_feats = self.caption_text_features[key]
+                break
+
+        if caption_feats is None:
+            caption_feats = self.caption_fallback.clone()
+
+        return torch.cat([class_feats, caption_feats], dim=0)
 
     def __len__(self):
         if self._file_length is not None:
@@ -208,30 +316,8 @@ class RGBXDataset(data.Dataset):
             n=len(self._file_names),
         )
 
-        # =======================================================================================
-        # 核心改动 2: 根据模式获取并添加文本特征到返回字典中
-        # =======================================================================================
-        if self.text_features is not None:
-            if self.text_mode == 'class':
-                # For class mode, all samples get the same set of class embeddings
-                output_dict['text_features'] = self.text_features
-            elif self.text_mode == 'caption':
-                # For caption mode, look up the feature for the specific image
-                # The key in the saved dictionary should match 'item_name' from the txt file
-                img_key = os.path.basename(path_dict["item_name"])
-                if img_key in self.text_features:
-                    output_dict['text_features'] = self.text_features[img_key].unsqueeze(0)  # Shape -> (1, C_text)
-                else:
-                    # Fallback if a caption is not found for an image
-                    logger.warning(f"Caption for {img_key} not found in text features file. Using zero tensor.")
-                    # Assuming text features is a dict of tensors, get dim from a sample
-                    sample_feat = next(iter(self.text_features.values()))
-                    output_dict['text_features'] = torch.zeros(1, sample_feat.shape[-1])
-            else:
-                raise ValueError(f"Unknown text_mode: {self.text_mode}")
-        else:
-            # Provide a dummy tensor if text features are not loaded, to prevent crashes
-            output_dict['text_features'] = torch.zeros(1)  # A dummy tensor
+        text_feats = self._get_text_features_for_item(path_dict.get("rgb_path"), path_dict.get("item_name", ""))
+        output_dict['text_features'] = text_feats
 
         return output_dict
 

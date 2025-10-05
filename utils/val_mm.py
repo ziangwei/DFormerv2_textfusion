@@ -41,6 +41,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         images = minibatch["data"]
         labels = minibatch["label"]
         modal_xs = minibatch["modal_x"]
+        text_feats = minibatch.get("text_features")
 
         if len(images.shape) == 3:
             images = images.unsqueeze(0)
@@ -52,15 +53,18 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
 
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
+        if text_feats is not None:
+            text_feats = text_feats.to(device).float()
         if sliding:
             preds = slide_inference(
                 model,
                 images[0],
                 images[1],
+                text_feats,
                 config,
             ).softmax(dim=1)
         else:
-            preds = model(images[0], images[1]).softmax(dim=1)
+            preds = model(images[0], images[1], text_features=text_feats).softmax(dim=1)
         # print(preds.shape,labels.shape)
         B, H, W = labels.shape
         metrics.update(preds, labels)
@@ -135,7 +139,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     return all_metrics
 
 
-def slide_inference(model, imgs, modal_xs, config=None):
+def slide_inference(model, imgs, modal_xs,text_features, config=None):
     """Inference by sliding-window with overlap.
 
     If h_crop > h_img or w_crop > w_img, the small patch will be used to
@@ -190,7 +194,7 @@ def slide_inference(model, imgs, modal_xs, config=None):
             crop_modal_xs = modal_xs[:, :, y1:y2, x1:x2]
             # the output of encode_decode is seg logits tensor map
             # with shape [N, C, H, W]
-            crop_seg_logit = model(crop_img, crop_modal_xs)
+            crop_seg_logit = model(crop_img, crop_modal_xs, text_features=text_features)
             preds += F.pad(
                 crop_seg_logit,
                 (int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)),
@@ -232,9 +236,12 @@ def evaluate_msf(
         images = minibatch["data"]
         labels = minibatch["label"]
         modal_xs = minibatch["modal_x"]
+        text_feats = minibatch.get("text_features")
         # print(images.shape,labels.shape)
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
+        if text_feats is not None:
+            text_feats = text_feats.to(device).float()
         B, H, W = labels.shape
         scaled_logits = torch.zeros(B, n_classes, H, W).to(device)
 
@@ -251,10 +258,10 @@ def evaluate_msf(
 
             if sliding:
                 logits = slide_inference(
-                    model, scaled_images[0], scaled_images[1], config=config
+                    model, scaled_images[0], scaled_images[1], text_feats, config=config
                 )
             else:
-                logits = model(scaled_images[0], scaled_images[1])
+                logits = model(scaled_images[0], scaled_images[1], text_features=text_feats)
 
             logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
             scaled_logits += logits.softmax(dim=1)
@@ -266,10 +273,11 @@ def evaluate_msf(
                         model,
                         scaled_images[0],
                         scaled_images[1],
+                        text_feats,
                         config,
                     )
                 else:
-                    logits = model(scaled_images[0], scaled_images[1])
+                    logits = model(scaled_images[0], scaled_images[1], text_features=text_feats)
                 logits = torch.flip(logits, dims=(3,))
                 logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
                 scaled_logits += logits.softmax(dim=1)

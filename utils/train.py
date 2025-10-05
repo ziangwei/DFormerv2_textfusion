@@ -262,15 +262,20 @@ with Engine(custom_parser=parser) as engine:
                 gts = minibatch["label"]
                 modal_xs = minibatch["modal_x"]
 
+                text_feats = minibatch.get("text_features")
+
                 imgs = imgs.cuda(non_blocking=True)
                 gts = gts.cuda(non_blocking=True)
                 modal_xs = modal_xs.cuda(non_blocking=True)
 
+                if text_feats is not None:
+                    text_feats = text_feats.cuda(non_blocking=True).float()
+
                 if args.amp:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        loss = model(imgs, modal_xs, label=gts)
+                        loss = model(imgs, modal_xs, label=gts, text_features=text_feats)
                 else:
-                    loss = model(imgs, modal_xs, label=gts)
+                    loss = model(imgs, modal_xs, label=gts, text_features=text_feats)
 
                 # reduce the whole loss over multi-gpu
                 if engine.distributed:

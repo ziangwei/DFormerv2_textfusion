@@ -28,7 +28,18 @@ cudnn.benchmark = True
 device = "cuda:0"
 repetitions = 300
 
-dummy_input = (torch.rand(1, 3, 480, 640).cuda(), torch.rand(1, 3, 480, 640).cuda())
+text_tokens = cfg.num_classes + getattr(cfg, "max_caption_sentences", 0)
+text_dim = getattr(cfg, "text_feature_dim", 512)
+if getattr(cfg, "enable_text_guidance", False):
+    dummy_text = torch.rand(1, text_tokens, text_dim).cuda()
+    dummy_input = (
+        torch.rand(1, 3, 480, 640).cuda(),
+        torch.rand(1, 3, 480, 640).cuda(),
+        None,
+        dummy_text,
+    )
+else:
+    dummy_input = (torch.rand(1, 3, 480, 640).cuda(), torch.rand(1, 3, 480, 640).cuda())
 
 # 预热, GPU 平时可能为了节能而处于休眠状态, 因此需要预热
 print("warm up ...\n")

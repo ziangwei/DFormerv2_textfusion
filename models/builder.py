@@ -9,38 +9,6 @@ from functools import partial
 from utils.engine.logger import get_logger
 import warnings
 
-# from mmcv.cnn import MODELS as MMCV_MODELS
-# from mmcv.cnn.bricks.registry import ATTENTION as MMCV_ATTENTION
-# from mmcv.utils import Registry
-
-# MODELS = Registry('models', parent=MMCV_MODELS)
-# ATTENTION = Registry('attention', parent=MMCV_ATTENTION)
-
-# BACKBONES = MODELS
-# NECKS = MODELS
-# HEADS = MODELS
-# LOSSES = MODELS
-# SEGMENTORS = MODELS
-
-
-def build_backbone(cfg):
-    """Build backbone."""
-    return BACKBONES.build(cfg)
-
-
-def build_neck(cfg):
-    """Build neck."""
-    return NECKS.build(cfg)
-
-
-def build_head(cfg):
-    """Build head."""
-    return HEADS.build(cfg)
-
-
-def build_loss(cfg):
-    """Build loss."""
-    return LOSSES.build(cfg)
 
 
 def build_segmentor(cfg, train_cfg=None, test_cfg=None):
@@ -68,6 +36,7 @@ class EncoderDecoder(nn.Module):
         super(EncoderDecoder, self).__init__()
         self.norm_layer = norm_layer
         self.cfg = cfg
+        self.enable_text_guidance = getattr(cfg, "enable_text_guidance", False)
 
         if cfg.backbone == "DFormer-Large":
             from .encoders.DFormer import DFormer_Large as backbone
@@ -106,10 +75,16 @@ class EncoderDecoder(nn.Module):
         else:
             norm_cfg = dict(type="BN", requires_grad=True)
 
+        backbone_kwargs = dict(norm_cfg=norm_cfg)
         if cfg.drop_path_rate is not None:
-            self.backbone = backbone(drop_path_rate=cfg.drop_path_rate, norm_cfg=norm_cfg)
+            backbone_kwargs["drop_path_rate"] = cfg.drop_path_rate
         else:
-            self.backbone = backbone(drop_path_rate=0.1, norm_cfg=norm_cfg)
+            backbone_kwargs["drop_path_rate"] = 0.1
+
+        if cfg.backbone.startswith("DFormerv2"):
+            backbone_kwargs["text_dim"] = getattr(cfg, "text_feature_dim", 512)
+
+        self.backbone = backbone(**backbone_kwargs)
 
         self.aux_head = None
 
@@ -157,6 +132,24 @@ class EncoderDecoder(nn.Module):
             self.aux_index = 2
             self.aux_rate = 0.4
             self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
+
+        elif cfg.decoder == "HSGHead":
+            logger.info("Using Hierarchical Semantic-Guided Decoder")
+            from .decoders.hsg_head import HierarchicalSemanticGuidedHead
+
+            self.decode_head = HierarchicalSemanticGuidedHead(
+                in_channels=self.channels,
+                channels=getattr(cfg, "decoder_embed_dim", 512),
+                num_classes=cfg.num_classes,
+                norm_cfg=norm_cfg,
+                text_dim=getattr(cfg, "text_feature_dim", 512),
+            )
+            if cfg.aux_rate != 0:
+                from .decoders.fcnhead import FCNHead
+
+                self.aux_index = 2
+                self.aux_rate = cfg.aux_rate
+                self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
 
         elif cfg.decoder == "deeplabv3+":
             logger.info("Using Decoder: DeepLabV3+")
@@ -222,12 +215,16 @@ class EncoderDecoder(nn.Module):
                 nonlinearity="relu",
             )
 
-    def encode_decode(self, rgb, modal_x):
+    def encode_decode(self, rgb, modal_x, text_features=None):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         orisize = rgb.shape
-        # print('builder',rgb.shape,modal_x.shape)
-        x = self.backbone(rgb, modal_x)
+
+        if self.enable_text_guidance:
+            x = self.backbone(rgb, modal_x, text_features)
+        else:
+            x = self.backbone(rgb, modal_x)
+
         if len(x) == 2:  # if output is (rgb,depth) only use rgb
             x = x[0]
 
@@ -235,7 +232,11 @@ class EncoderDecoder(nn.Module):
             feats = list(x)
             x = tuple(feats)
 
-        out = self.decode_head.forward(x)
+        if self.enable_text_guidance:
+            out = self.decode_head.forward(x, text_features)
+        else:
+            out = self.decode_head.forward(x)
+
         out = F.interpolate(out, size=orisize[-2:], mode="bilinear", align_corners=False)
         if self.aux_head:
             assert self.aux_index < len(x), \
@@ -245,13 +246,15 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, modal_x=None,  label=None):
+    def forward(self, rgb, modal_x=None,  label=None, text_features=None):
         # print('builder',rgb.shape,modal_x.shape)
+        if self.enable_text_guidance and text_features is None:
+            raise ValueError("text_features must be provided when enable_text_guidance is True")
 
         if self.aux_head:
-            out, aux_fm = self.encode_decode(rgb, modal_x)
+            out, aux_fm = self.encode_decode(rgb, modal_x, text_features)
         else:
-            out = self.encode_decode(rgb, modal_x)
+            out = self.encode_decode(rgb, modal_x, text_features)
 
         if label is not None:
             loss = self.criterion(out, label.long())[label.long() != self.cfg.background].mean()

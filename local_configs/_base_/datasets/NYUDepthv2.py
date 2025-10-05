@@ -63,6 +63,14 @@ C.class_names = [
     "otherprop",
 ]
 
+C.enable_text_guidance = True
+C.text_feature_dim = 512
+C.label_txt_path = osp.join(C.dataset_path, "nyu40_labels.txt")
+C.caption_json_path = osp.join(C.dataset_path, "generated_rgb_descriptions_internvl3.json")
+C.max_caption_sentences = 6
+C.text_template_set = "clip"
+C.max_templates_per_label = 3
+
 """Image Config"""
 C.background = 255
 C.image_height = 480

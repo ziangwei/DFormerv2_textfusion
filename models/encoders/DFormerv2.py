@@ -632,7 +632,7 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e, text_features):
+    def forward(self, x, x_e, text_features=None):
         # rgb input
         x = self.patch_embed(x)
 
@@ -640,6 +640,11 @@ class dformerv2(nn.Module):
         x_e = x_e[:, 0, :, :].unsqueeze(1)
 
         outs = []
+        use_text_guidance = text_features is not None
+        if use_text_guidance:
+            if text_features.dim() == 2:
+                text_features = text_features.unsqueeze(0)
+            text_features = text_features.to(device=x.device, dtype=x.dtype)
 
         for i in range(self.num_layers):
             # DFormerv2原来的stage, 输出x_out是下采样前的特征
@@ -647,7 +652,10 @@ class dformerv2(nn.Module):
 
             # 在每个stage的输出上应用SAM进行文本引导
             # DFormerv2的x_out是 (B, H, W, C) 格式, 正好符合我们SAM的输入
-            x_out_guided = self.encoder_sam_stages[i](x_out, text_features)
+            if use_text_guidance:
+                x_out_guided = self.encoder_sam_stages[i](x_out, text_features)
+            else:
+                x_out_guided = x_out
 
             if i in self.out_indices:
                 # 注意：原始代码的norm位置可能需要微调，这里我们先放在SAM之后
