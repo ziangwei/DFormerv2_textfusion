@@ -7,6 +7,8 @@ Email: bowenyin@mail.nankai.edu.cn
 
 This source code is licensed under the license found in the
 LICENSE file in the root directory of this source tree.
+
+MODIFIED for Hierarchical Semantic Guidance.
 """
 
 import torch
@@ -22,7 +24,7 @@ from typing import Tuple
 import sys
 import os
 from collections import OrderedDict
-from utils import prompt_utils
+from ..blocks.semantic_alignment import SemanticAlignmentModule
 
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
@@ -423,12 +425,6 @@ class RGBD_Block(nn.Module):
         else:
             x = x + self.drop_path(out)
 
-        # # 对于 x 的文本引导
-        # x = x.permute(0, 3, 1, 2)  # → (B, C, H, W)
-        # if gamma is not None and beta is not None:
-        #     x = (1 + gamma) * x + beta
-        # x = x.permute(0, 2, 3, 1)  # → (B, H, W, C)
-
         if self.layerscale:
             x = x + self.drop_path(self.gamma_2 * self.ffn(self.layer_norm2(x)))
         else:
@@ -502,72 +498,6 @@ class BasicLayer(nn.Module):
         else:
             return x, x
 
-class TextGuidedEnhancer(nn.Module):
-    """Dense text-image alignment at the last encoder stage.
-       Per-pixel cosine to all class prototypes -> Top-M sparse softmax ->
-       text-value aggregation -> residual fusion.
-    """
-    def __init__(self, embed_dim: int, text_dim: int = 512,
-                 classes_file: str = "datasets/NYUDepthv2/nyu40_labels.txt",
-                 top_m: int = 8, tau: float = 0.9):
-        super().__init__()
-
-        # load class names
-        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        names_path = classes_file if os.path.isabs(classes_file) else os.path.join(repo_root, classes_file)
-        with open(names_path, "r") as f:
-            names = [line.strip() for line in f if line.strip()]
-
-        prompts = [f"a photo of a {n}" for n in names]
-        text_feats = prompt_utils.encode_prompts(prompts).float()    # (K, D)
-        prompt_utils.unload_clip_model()
-        self.register_buffer("text_feats", text_feats)               # 常驻缓存
-
-        # 视觉特征 -> 文本维度 d，用于逐像素与文本做余弦
-        self.img_proj = nn.Conv2d(embed_dim, text_dim, kernel_size=1, bias=False)
-        # 文本值 -> 视觉通道C，用于按注意力聚合回到视觉空间
-        self.val_proj = nn.Linear(text_dim, embed_dim, bias=False)
-
-        # 残差融合 φ([F|Z])：把文本引导特征 Z 与原特征 F 融合
-        self.fuse = nn.Sequential(
-            nn.Conv2d(embed_dim * 2, embed_dim, 1, bias=False),
-            nn.BatchNorm2d(embed_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(embed_dim, embed_dim, 3, padding=1, bias=False),
-        )
-
-        self.top_m = top_m
-        self.tau = tau
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (B, C, H, W)
-        B, C, H, W = x.shape
-
-        # 1) 视觉/文本投影并 L2 归一化
-        Q = F.normalize(self.img_proj(x), dim=1)                    # (B, D, H, W)
-        T = F.normalize(self.text_feats, dim=1)                     # (K, D)
-
-        # 2) 逐像素余弦相似 S[b,k,h,w] = <Q[b,:,h,w], T[k,:]>
-        S = torch.einsum("bdhw,kd->bkhw", Q, T)                     # (B, K, H, W)
-
-        # 3) 可选 Top-M 稀疏化 + softmax 温度
-        if (self.top_m is not None) and (S.size(1) > self.top_m):
-            topv, topi = S.topk(self.top_m, dim=1)
-            mask = torch.full_like(S, float("-inf"))
-            S = mask.scatter(1, topi, topv)
-        # 为数值稳定，softmax 前做减最大
-        S = S - S.amax(dim=1, keepdim=True)
-        A = torch.softmax(S / self.tau, dim=1)                      # (B, K, H, W)
-
-        # 4) 文本值投影 & 聚合得到文本引导特征 Z
-        V = self.val_proj(self.text_feats)                           # (K, C)
-        Z = torch.einsum("bkhw,kc->bchw", A, V).to(x.dtype)         # (B, C, H, W)
-
-        # 5) 残差融合
-        out = x + self.fuse(torch.cat([x, Z], dim=1))
-        return out
-
-
 class dformerv2(nn.Module):
     def __init__(
         self,
@@ -629,11 +559,15 @@ class dformerv2(nn.Module):
             )
             self.layers.append(layer)
 
-        self.extra_norms = nn.ModuleList()
-        for i in range(3):
-            self.extra_norms.append(nn.LayerNorm(embed_dims[i + 1]))
+        self.encoder_sam_stages = nn.ModuleList()
+        for i in range(self.num_layers):
+            self.encoder_sam_stages.append(
+                SemanticAlignmentModule(query_dim=embed_dims[i], text_dim=text_dim)
+            )
 
-        self.text_enhancer = TextGuidedEnhancer(embed_dims[-1], text_dim=text_dim, top_m=8, tau=0.9)
+        self.extra_norms = nn.ModuleList()
+        for i in range(len(embed_dims) -1):
+            self.extra_norms.append(nn.LayerNorm(embed_dims[i + 1]))
 
         self.apply(self._init_weights)
 
@@ -698,7 +632,7 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e):
+    def forward(self, x, x_e, text_features):
         # rgb input
         x = self.patch_embed(x)
 
@@ -708,14 +642,24 @@ class dformerv2(nn.Module):
         outs = []
 
         for i in range(self.num_layers):
+            # DFormerv2原来的stage, 输出x_out是下采样前的特征
             x_out, x = self.layers[i](x, x_e)
+
+            # 在每个stage的输出上应用SAM进行文本引导
+            # DFormerv2的x_out是 (B, H, W, C) 格式, 正好符合我们SAM的输入
+            x_out_guided = self.encoder_sam_stages[i](x_out, text_features)
+
             if i in self.out_indices:
+                # 注意：原始代码的norm位置可能需要微调，这里我们先放在SAM之后
                 if i != 0:
-                    x_out = self.extra_norms[i - 1](x_out)
-                out = x_out.permute(0, 3, 1, 2).contiguous()
+                    norm_layer = self.extra_norms[i-1]
+                    # LayerNorm作用于(B, H, W, C)
+                    x_out_guided = norm_layer(x_out_guided)
+
+                # 转换为 (B, C, H, W) 格式以符合mmseg规范
+                out = x_out_guided.permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
 
-        outs[-1] = self.text_enhancer(outs[-1])
         return tuple(outs)
 
     def train(self, mode=True):

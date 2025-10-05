@@ -4,19 +4,22 @@ import torch
 import numpy as np
 import re
 import torch.utils.data as data
+import json
 from models.builder import logger
+
+
 # from utils.prompt_utils import load_scene_list, sample_prompt, PROMPT_EMBEDS
 
 def get_path(
-    dataset_name,
-    _rgb_path,
-    _rgb_format,
-    _x_path,
-    _x_format,
-    _gt_path,
-    _gt_format,
-    x_modal,
-    item_name,
+        dataset_name,
+        _rgb_path,
+        _rgb_format,
+        _x_path,
+        _x_format,
+        _gt_path,
+        _gt_format,
+        x_modal,
+        item_name,
 ):
     if dataset_name == "StanFord2D3D":
         rgb_path = os.path.join(
@@ -90,21 +93,14 @@ def get_path(
             _gt_path,
             item_name.replace("rgb", "semantic").replace("image", "gt_labelIds") + _gt_format,
         )
-    else:
-        item_name = item_name.split("/")[1].split(".jpg")[0]
-        rgb_path = os.path.join(
-            _rgb_path,
-            item_name.replace(".jpg", "").replace(".png", "") + _rgb_format,
-        )
-        d_path = os.path.join(
-            _x_path,
-            item_name.replace(".jpg", "").replace(".png", "") + _x_format,
-        )
-        gt_path = os.path.join(
-            _gt_path,
-            item_name.replace(".jpg", "").replace(".png", "") + _gt_format,
-        )
-    path_result = {"rgb_path": rgb_path, "gt_path": gt_path}
+    else:  # Default for NYUDepthv2 and others
+        base_name = os.path.basename(item_name).split('.')[0]
+        rgb_path = os.path.join(_rgb_path, base_name + _rgb_format)
+        d_path = os.path.join(_x_path, base_name + _x_format)
+        gt_path = os.path.join(_gt_path, base_name + _gt_format)
+
+    path_result = {"rgb_path": rgb_path, "gt_path": gt_path,
+                   "item_name": item_name}  # Return item_name for text feature lookup
     for modal in x_modal:
         path_result[modal + "_path"] = eval(modal + "_path")
     return path_result
@@ -113,7 +109,6 @@ def get_path(
 class RGBXDataset(data.Dataset):
     def __init__(self, setting, split_name, preprocess=None, file_length=None):
         super(RGBXDataset, self).__init__()
-        # self.scene_list = load_scene_list("datasets/NYUDepthv2/sceneTypes.txt")
         self._split_name = split_name
         self._rgb_path = setting["rgb_root"]
         self._rgb_format = setting["rgb_format"]
@@ -122,7 +117,6 @@ class RGBXDataset(data.Dataset):
         self._transform_gt = setting["transform_gt"]
         self._x_path = setting["x_root"]
         self._x_format = setting["x_format"]
-        self._x_single_channel = setting["x_single_channel"]
         self._train_source = setting["train_source"]
         self._eval_source = setting["eval_source"]
         self.class_names = setting["class_names"]
@@ -133,6 +127,27 @@ class RGBXDataset(data.Dataset):
         self.x_modal = setting.get("x_modal", ["d"])
         self.backbone = setting["backbone"]
 
+        # =======================================================================================
+        # 核心改动 1: 初始化文本特征相关的属性
+        # =======================================================================================
+        self.text_features_path = setting.get("text_features_path", None)
+        self.text_mode = setting.get("text_mode", "class")  # "class" or "caption"
+        self.text_features = self._load_text_features()
+
+    def _load_text_features(self):
+        """Loads text features from a file."""
+        if self.text_features_path and os.path.exists(self.text_features_path):
+            logger.info(f"Loading text features from {self.text_features_path}")
+            try:
+                # Assuming the features are stored in a .pt file
+                features = torch.load(self.text_features_path, map_location='cpu')
+                logger.info(f"Text features loaded successfully. Mode: {self.text_mode}")
+                return features
+            except Exception as e:
+                logger.error(f"Failed to load text features: {e}")
+                return None
+        logger.warning("No text features path provided or file not found. Running without text guidance.")
+        return None
 
     def __len__(self):
         if self._file_length is not None:
@@ -142,10 +157,8 @@ class RGBXDataset(data.Dataset):
     def __getitem__(self, index):
         if self._file_length is not None:
             item_name = self._construct_new_file_names(self._file_length)[index]
-            prompt_idx = index % len(self._file_names)
         else:
             item_name = self._file_names[index]
-            prompt_idx = index
 
         path_dict = get_path(
             self.dataset_name,
@@ -158,10 +171,8 @@ class RGBXDataset(data.Dataset):
             self.x_modal,
             item_name,
         )
-        if self.dataset_name == "SUNRGBD" and self.backbone.startswith("DFormerv2"):
-            rgb_mode = "RGB"  # some checkpoints are run by BGR and some are on RGB, need to select
-        else:
-            rgb_mode = "BGR"
+
+        rgb_mode = "BGR"
         rgb = self._open_image(path_dict["rgb_path"], rgb_mode)
 
         gt = self._open_image(path_dict["gt_path"], cv2.IMREAD_GRAYSCALE, dtype=np.uint8)
@@ -171,57 +182,56 @@ class RGBXDataset(data.Dataset):
         x = {}
         for modal in self.x_modal:
             if modal == "d":
-                x[modal] = self._open_image(path_dict[modal + "_path"], cv2.IMREAD_GRAYSCALE)
-                x[modal] = cv2.merge([x[modal], x[modal], x[modal]])
+                x_img = self._open_image(path_dict[modal + "_path"], cv2.IMREAD_GRAYSCALE)
+                if x_img is not None and len(x_img.shape) == 2:
+                    x[modal] = cv2.merge([x_img, x_img, x_img])
+                else:  # Handle cases where depth image is not found or has wrong format
+                    x[modal] = np.zeros_like(rgb, dtype=np.uint8)
             else:
                 x[modal] = self._open_image(path_dict[modal + "_path"], "RGB")
+
         if len(self.x_modal) == 1:
             x = x[self.x_modal[0]]
-
-        if self.dataset_name == "Scannet":
-            rgb = cv2.resize(rgb, (640, 480), interpolation=cv2.INTER_LINEAR)
-            x = cv2.resize(x, (640, 480), interpolation=cv2.INTER_LINEAR)
-            gt = cv2.resize(gt, (640, 480), interpolation=cv2.INTER_NEAREST)
-        elif self.dataset_name == "StanFord2D3D":
-            rgb = cv2.resize(rgb, dsize=(480, 480), interpolation=cv2.INTER_LINEAR)
-            x = cv2.resize(x, dsize=(480, 480), interpolation=cv2.INTER_LINEAR)
-            gt = cv2.resize(gt, dsize=(480, 480), interpolation=cv2.INTER_NEAREST)
-
-        # if self._x_single_channel:
-        #     x = self._open_image(x_path, cv2.IMREAD_GRAYSCALE)
-        #     x = cv2.merge([x, x, x])
-        # else:
-        #     x = self._open_image(x_path, cv2.COLOR_BGR2RGB)
-
-
 
         if self.preprocess is not None:
             rgb, gt, x = self.preprocess(rgb, gt, x)
 
         rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
         gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
-        # for modal in x:
         x = torch.from_numpy(np.ascontiguousarray(x)).float()
-
-        # if self._split_name == "train":
-        #     rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
-        #     gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
-        #     x = torch.from_numpy(np.ascontiguousarray(x)).float()
-        # else:
-        #     rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
-        #     gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
-        #     x = torch.from_numpy(np.ascontiguousarray(x)).float()
-
-        rgb_path = path_dict["rgb_path"]
 
         output_dict = dict(
             data=rgb,
             label=gt,
             modal_x=x,
-            prompt_idx=prompt_idx,
-            fn=str(rgb_path),
+            fn=str(path_dict["rgb_path"]),
             n=len(self._file_names),
         )
+
+        # =======================================================================================
+        # 核心改动 2: 根据模式获取并添加文本特征到返回字典中
+        # =======================================================================================
+        if self.text_features is not None:
+            if self.text_mode == 'class':
+                # For class mode, all samples get the same set of class embeddings
+                output_dict['text_features'] = self.text_features
+            elif self.text_mode == 'caption':
+                # For caption mode, look up the feature for the specific image
+                # The key in the saved dictionary should match 'item_name' from the txt file
+                img_key = os.path.basename(path_dict["item_name"])
+                if img_key in self.text_features:
+                    output_dict['text_features'] = self.text_features[img_key].unsqueeze(0)  # Shape -> (1, C_text)
+                else:
+                    # Fallback if a caption is not found for an image
+                    logger.warning(f"Caption for {img_key} not found in text features file. Using zero tensor.")
+                    # Assuming text features is a dict of tensors, get dim from a sample
+                    sample_feat = next(iter(self.text_features.values()))
+                    output_dict['text_features'] = torch.zeros(1, sample_feat.shape[-1])
+            else:
+                raise ValueError(f"Unknown text_mode: {self.text_mode}")
+        else:
+            # Provide a dummy tensor if text features are not loaded, to prevent crashes
+            output_dict['text_features'] = torch.zeros(1)  # A dummy tensor
 
         return output_dict
 
@@ -258,14 +268,18 @@ class RGBXDataset(data.Dataset):
 
     @staticmethod
     def _open_image(filepath, mode=cv2.IMREAD_COLOR, dtype=None):
-        if mode == "RGB":
-            img = np.array(cv2.imread(filepath, cv2.IMREAD_UNCHANGED), dtype=dtype)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        elif mode == "BGR":
-            img = np.array(cv2.imread(filepath, cv2.IMREAD_UNCHANGED), dtype=dtype)
-        else:
-            img = np.array(cv2.imread(filepath, mode), dtype=dtype)
-        return img
+        try:
+            if mode == "RGB":
+                img = np.array(cv2.imread(filepath, cv2.IMREAD_UNCHANGED), dtype=dtype)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            elif mode == "BGR":
+                img = np.array(cv2.imread(filepath, cv2.IMREAD_UNCHANGED), dtype=dtype)
+            else:
+                img = np.array(cv2.imread(filepath, mode), dtype=dtype)
+            return img
+        except Exception as e:
+            logger.error(f"Error opening image {filepath}: {e}")
+            return None
 
     @staticmethod
     def _gt_transform(gt):
