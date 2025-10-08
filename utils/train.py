@@ -21,6 +21,7 @@ from utils.engine.engine import Engine
 from utils.engine.logger import get_logger
 from utils.init_func import configure_optimizers, group_weight
 from utils.lr_policy import WarmUpPolyLR
+import torch.distributed as dist
 from utils.pyt_utils import all_reduce_tensor
 
 parser = argparse.ArgumentParser()
@@ -43,6 +44,18 @@ parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAc
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument("--use_seed", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--local-rank", default=0)
+# --- text guidance runtime switches ---
+parser.add_argument("--text-source", choices=["labels", "captions", "both"])
+parser.add_argument("--text-encoder", choices=["clip", "jinaclip"])
+parser.add_argument("--text-encoder-name", type=str)
+parser.add_argument("--text-feature-dim", type=int)
+parser.add_argument("--label-txt-path", type=str)
+parser.add_argument("--caption-json-path", type=str)
+parser.add_argument("--text-template-set", choices=["clip", "jinaclip", "none"])
+parser.add_argument("--max-templates-per-label", type=int)
+parser.add_argument("--max-caption-sentences", type=int)
+parser.add_argument("--caption-topk", type=int)
+parser.add_argument("--caption-topk-mode", choices=["class_sim", "firstk", "lenk"])
 
 # os.environ['MASTER_PORT'] = '169710'
 torch.set_float32_matmul_precision("high")
@@ -96,6 +109,31 @@ with Engine(custom_parser=parser) as engine:
         args = parser.parse_args()
 
         config = getattr(import_module(args.config), "C")
+        # === override text guidance config by CLI (if provided) ===
+
+        if args.text_source is not None:
+            config.text_source = args.text_source
+        if args.text_encoder is not None:
+            config.text_encoder = args.text_encoder
+        if args.text_encoder_name is not None:
+            config.text_encoder_name = args.text_encoder_name
+        if args.text_feature_dim is not None:
+            config.text_feature_dim = int(args.text_feature_dim)
+        if args.label_txt_path is not None:
+            config.label_txt_path = args.label_txt_path
+        if args.caption_json_path is not None:
+            config.caption_json_path = args.caption_json_path
+        if args.text_template_set is not None:
+            config.text_template_set = args.text_template_set
+        if args.max_templates_per_label is not None:
+            config.max_templates_per_label = int(args.max_templates_per_label)
+        if args.max_caption_sentences is not None:
+            config.max_caption_sentences = int(args.max_caption_sentences)
+        if args.caption_topk is not None:
+            config.caption_topk = int(args.caption_topk)
+        if args.caption_topk_mode is not None:
+            config.caption_topk_mode = args.caption_topk_mode
+
         logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
         # check if pad_SUNRGBD is used correctly
         if args.pad_SUNRGBD and config.dataset_name != "SUNRGBD":
@@ -116,6 +154,43 @@ with Engine(custom_parser=parser) as engine:
 
         if not args.compile and args.compile_mode != "default":
             logger.warning("compile_mode is only valid when compile is enabled, ignoring compile_mode")
+
+        # ==== [Fix] 指定节点本地缓存目录 + 预热，避免并发下载竞态/NFS冲突 ====
+
+        try:
+            import socket, tempfile
+            node_cache = os.path.join(tempfile.gettempdir(), f"hf_cache_{socket.gethostname()}")
+            os.environ.setdefault("HF_HOME", node_cache)
+            os.environ.setdefault("TRANSFORMERS_CACHE", node_cache)
+            os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+            # 如需禁用 hf_transfer 以避免奇怪网络错误，可以打开下一行
+            # os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
+            logger.info(f"[HF cache] Using cache dir: {node_cache}")
+        except Exception as _e:
+            logger.warning(f"[HF cache] set cache dir skipped: {_e}")
+
+        def _warmup_text_cache(cfg):
+            try:
+                from utils.prompt_utils import encode_prompts
+                _ = encode_prompts(
+                    ["cache warmup"],  # 任意一句
+                    encoder=getattr(cfg, "text_encoder", "jinaclip"),
+                    encoder_name=getattr(cfg, "text_encoder_name", None),
+                    target_dim=getattr(cfg, "text_feature_dim", 512),
+                )
+                logger.info("[HF warmup] text encoder cache ready.")
+            except Exception as _e:
+                # 如果节点不联网，可以提前把模型下到缓存，再设置 TRANSFORMERS_OFFLINE=1
+                logger.warning(f"[HF warmup] skipped: {_e}")
+
+        if engine.distributed and dist.is_available() and dist.is_initialized():
+            if engine.local_rank == 0:
+                _warmup_text_cache(config)
+            dist.barrier()  # 等 rank0 下载完成
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"  # 其余 rank 强制离线读缓存
+            dist.barrier()  # 再同步一次，确保 env 生效后再继续
+        else:
+            _warmup_text_cache(config)
 
         train_loader, train_sampler = get_train_loader(engine, RGBXDataset, config)
 
@@ -429,7 +504,9 @@ with Engine(custom_parser=parser) as engine:
                 for h in logger.handlers:
                     h.flush()
 
-                logger.info(f"Epoch {epoch} validation result: mIoU {miou}, best mIoU {best_miou}")
+                logger.info(
+                    f"Epoch {epoch} validation result: mIoU: {miou:.4f},Best mIoU: {best_miou:.4f}, "
+                    f"Acc: {acc:.4f}, mAcc: {macc:.4f}, mF1: {mf1:.4f}")
                 eval_timer.stop()
 
             eval_count = 0

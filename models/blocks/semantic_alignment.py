@@ -1,90 +1,122 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 class SemanticAlignmentModule(nn.Module):
     """
-    Semantic Alignment Module (SAM)
-
-    This module aligns visual features with textual features using a sparse cross-attention mechanism.
-    It takes visual features as queries and textual features as keys/values. The core idea is to
-    use a Top-M selection to sparsify the attention, allowing each visual token to focus on the
-    most relevant text embeddings. This is inspired by the TextGuidedEnhancer but generalized
-    for use at any stage of the network.
+    SAM v2: 可学习缩放 + 真·TopK聚合 + 门控 + Dropout + 统一 Pre-LN
+    形状: visual (B,H,W,Cv), text (B,K,Ct) 或 (K,Ct)
     """
-    def __init__(self, query_dim, text_dim, top_m=5, temp=0.07, add_residual=True):
+    def __init__(
+        self,
+        query_dim,              # C_visual
+        text_dim,               # C_text
+        top_m=5,
+        use_topk=True,
+        attn_drop=0.0,
+        proj_drop=0.0,
+        ffn_drop=0.0,
+        add_residual=True,
+        gate_channels=False     # False: 标量门控；True: channel 门控
+    ):
         super().__init__()
         self.top_m = top_m
-        self.temp = temp
+        self.use_topk = use_topk
         self.add_residual = add_residual
+        self.gate_channels = gate_channels
 
-        # Projection layer for visual features (Query) to match text feature dimension
-        self.query_proj = nn.Linear(query_dim, text_dim)
-
-        # Projection layer for text features (Value) to match visual feature dimension
-        self.value_proj = nn.Linear(text_dim, query_dim)
-
-        # Feed-forward network to further refine the fused features
-        self.ffn = nn.Sequential(
-            nn.Linear(query_dim, query_dim * 4),
-            nn.GELU(),
-            nn.Linear(query_dim * 4, query_dim)
-        )
-
-        # Layer normalization
+        # 预归一化
         self.norm1 = nn.LayerNorm(query_dim)
         self.norm2 = nn.LayerNorm(query_dim)
 
-    def forward(self, visual_features, text_features):
-        """
-        Args:
-            visual_features (torch.Tensor): Visual features, shape (B, H, W, C_visual)
-            text_features (torch.Tensor): Text features, shape (B, K, C_text), where K is the number of text tokens.
+        # Q 从视觉到文本维度（用作 d_k）
+        self.q_proj = nn.Linear(query_dim, text_dim, bias=False)
+        # V 从文本到视觉维度
+        self.v_proj = nn.Linear(text_dim, query_dim, bias=False)
 
-        Returns:
-            torch.Tensor: Text-aligned visual features, shape (B, H, W, C_visual)
-        """
-        # Store original features for the residual connection
-        residual = visual_features
-        visual_features = self.norm1(visual_features)
+        # 可学习缩放（配合 1/sqrt(d_k)）
+        self.logit_scale = nn.Parameter(torch.tensor(math.log(1/0.07)))  # ≈ 1/0.07
+        self.d_k = float(text_dim)
 
-        B, H, W, C_visual = visual_features.shape
-        vis_flat = visual_features.view(B, H * W, C_visual)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj_drop = nn.Dropout(proj_drop)
 
-        # 1. Project visual features to create the Query
-        query = F.normalize(self.query_proj(vis_flat), dim=-1)  # (B, H*W, C_text)
-
-        # 2. Use text features as Key and project them for the Value
-        if text_features.dim() == 2:
-            text_features = text_features.unsqueeze(0)
-        if text_features.size(0) != B:
-            text_features = text_features.expand(B, -1, -1).contiguous()
-
-        key = F.normalize(text_features, dim=-1)  # (B, K, C_text)
-        value = self.value_proj(text_features)    # (B, K, C_visual)
-
-        # 3. Compute similarity matrix (attention scores)
-        sim_matrix = torch.einsum('bnc,bkc->bnk', query, key)  # (B, H*W, K)
-
-        # 4. Apply Top-M sparsification
-        if self.top_m is not None and self.top_m < sim_matrix.size(-1):
-            top_vals, top_indices = sim_matrix.topk(self.top_m, dim=-1)
-            # Create a mask to keep only the top-m scores
-            mask = torch.full_like(sim_matrix, float('-inf'))
-            mask.scatter_(-1, top_indices, top_vals)
-            sim_matrix = mask
-
-        # 5. Compute attention weights and aggregate values
-        attn_weights = F.softmax(sim_matrix / self.temp, dim=-1)
-        aligned_features = torch.einsum('bnk,bkc->bnc', attn_weights, value)  # (B, H*W, C_visual)
-
-        # 6. Apply residual connection and FFN
-        if self.add_residual:
-            fused_features = residual.view(B, H * W, -1) + aligned_features
+        # 门控：标量或通道门
+        if gate_channels:
+            self.gate = nn.Sequential(
+                nn.Linear(query_dim, query_dim),
+                nn.Sigmoid()
+            )
         else:
-            fused_features = aligned_features
+            self.gate = nn.Sequential(
+                nn.Linear(query_dim, 1),
+                nn.Sigmoid()
+            )
 
-        fused_features = self.norm2(fused_features)
-        fused_features = fused_features + self.ffn(fused_features)
+        # FFN
+        self.ffn = nn.Sequential(
+            nn.Linear(query_dim, query_dim * 4),
+            nn.GELU(),
+            nn.Dropout(ffn_drop),
+            nn.Linear(query_dim * 4, query_dim),
+            nn.Dropout(ffn_drop),
+        )
 
-        return fused_features.view(B, H, W, C_visual)
+        # 简单初始化
+        nn.init.xavier_uniform_(self.q_proj.weight)
+        nn.init.xavier_uniform_(self.v_proj.weight)
+
+    def _ensure_batched_text(self, text_features, B):
+        if text_features.dim() == 2:                 # (K,Ct)
+            text_features = text_features.unsqueeze(0)  # (1,K,Ct)
+        if text_features.size(0) != B:               # broadcast
+            text_features = text_features.expand(B, -1, -1).contiguous()
+        return text_features
+
+    def forward(self, visual_features, text_features):
+        # NHWC -> BN C
+        B, H, W, Cv = visual_features.shape
+        x = self.norm1(visual_features).view(B, H * W, Cv)    # Pre-LN
+        q = F.normalize(self.q_proj(x), dim=-1)               # (B,N,Ct)
+
+        text_features = self._ensure_batched_text(text_features, B)
+        k = F.normalize(text_features, dim=-1)                # (B,K,Ct)
+        v = self.v_proj(text_features)                        # (B,K,Cv)
+
+        # sim: (B,N,K)
+        scale = self.logit_scale.exp() / math.sqrt(self.d_k)
+        sim = torch.einsum('bnc,bkc->bnk', q, k) * scale
+
+        if self.use_topk and self.top_m is not None and self.top_m < sim.size(-1):
+            # 只算 Top-K 的注意力和值聚合
+            top_vals, top_idx = sim.topk(self.top_m, dim=-1)                    # (B,N,M)
+            attn = F.softmax(top_vals, dim=-1)
+            attn = self.attn_drop(attn)
+
+            # 从 v 里按 (B,N,M) 的 idx 取对应行：(B,N,M,Cv)
+            v_exp = v.unsqueeze(1).expand(B, H * W, v.size(1), v.size(2))
+            v_sel = torch.gather(v_exp, 2, top_idx.unsqueeze(-1).expand(B, H * W, self.top_m, v.size(2)))
+            aligned = (attn.unsqueeze(-1) * v_sel).sum(dim=2)                   # (B,N,Cv)
+        else:
+            attn = F.softmax(sim, dim=-1)
+            attn = self.attn_drop(attn)
+            aligned = torch.einsum('bnk,bkc->bnc', attn, v)                     # (B,N,Cv)
+
+        aligned = self.proj_drop(aligned)
+
+        # 门控 + 残差
+        if self.gate_channels:
+            gate = self.gate(x)                         # (B,N,Cv)
+        else:
+            gate = self.gate(x)                         # (B,N,1)
+        if not self.gate_channels:
+            aligned = aligned * gate
+        else:
+            aligned = aligned * gate
+
+        y = x + aligned if self.add_residual else aligned
+        y = self.norm2(y)
+        y = y + self.ffn(y)                             # Pre-LN 结构
+
+        return y.view(B, H, W, Cv)

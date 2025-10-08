@@ -19,7 +19,19 @@ if __name__ == "__main__":
     model.eval()
     model.to(device)
     dump_input = torch.ones(1, 3, 480, 640).to(device)
-    text_tokens = config.num_classes + getattr(config, "max_caption_sentences", 0)
+
+    src = getattr(config, "text_source", "both")
+    cap_k = getattr(config, "caption_topk", 0)
+    cap_max = getattr(config, "max_caption_sentences", 0)
+    cap_tokens = cap_k if (isinstance(cap_k, int) and cap_k > 0) else cap_max
+
+    if src == "labels":
+               text_tokens = config.num_classes
+    elif src == "captions":
+        text_tokens = cap_tokens
+    else:
+        text_tokens = config.num_classes + cap_tokens
+
     text_dim = getattr(config, "text_feature_dim", 512)
     if getattr(config, "enable_text_guidance", False):
         dummy_text = torch.zeros(1, text_tokens, text_dim, device=device)

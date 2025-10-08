@@ -154,12 +154,17 @@ def get_train_loader(engine, dataset, config):
         "dataset_name": config.dataset_name,
         "backbone": config.backbone,
         "enable_text_guidance": getattr(config, "enable_text_guidance", False),
-        "text_feature_dim": getattr(config, "text_feature_dim", 512),
         "label_txt_path": getattr(config, "label_txt_path", None),
         "caption_json_path": getattr(config, "caption_json_path", None),
-        "max_caption_sentences": getattr(config, "max_caption_sentences", 6),
         "text_template_set": getattr(config, "text_template_set", "clip"),
         "max_templates_per_label": getattr(config, "max_templates_per_label", 3),
+        "text_source": getattr(config, "text_source", "both"),
+        "text_encoder": getattr(config, "text_encoder", "jinaclip"),
+        "text_encoder_name": getattr(config, "text_encoder_name", None),
+        "text_feature_dim": getattr(config, "text_feature_dim", 512),
+        "max_caption_sentences": getattr(config, "max_caption_sentences", 8),
+        "caption_topk": getattr(config, "caption_topk", 0),
+        "caption_topk_mode": getattr(config, "caption_topk_mode", "class_sim"),
     }
     train_preprocess = TrainPre(config.norm_mean, config.norm_std, config.x_is_single_channel, config)
 
@@ -210,12 +215,17 @@ def get_val_loader(engine, dataset, config, val_batch_size=1):
         "dataset_name": config.dataset_name,
         "backbone": config.backbone,
         "enable_text_guidance": getattr(config, "enable_text_guidance", False),
-        "text_feature_dim": getattr(config, "text_feature_dim", 512),
         "label_txt_path": getattr(config, "label_txt_path", None),
         "caption_json_path": getattr(config, "caption_json_path", None),
-        "max_caption_sentences": getattr(config, "max_caption_sentences", 6),
         "text_template_set": getattr(config, "text_template_set", "clip"),
         "max_templates_per_label": getattr(config, "max_templates_per_label", 3),
+        "text_source": getattr(config, "text_source", "both"),
+        "text_encoder": getattr(config, "text_encoder", "jinaclip"),
+        "text_encoder_name": getattr(config, "text_encoder_name", None),
+        "text_feature_dim": getattr(config, "text_feature_dim", 512),
+        "max_caption_sentences": getattr(config, "max_caption_sentences", 8),
+        "caption_topk": getattr(config, "caption_topk", 0),
+        "caption_topk_mode": getattr(config, "caption_topk_mode", "class_sim"),
     }
     val_preprocess = ValPre(config.norm_mean, config.norm_std, config.x_is_single_channel, config)
 

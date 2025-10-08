@@ -218,8 +218,6 @@ def evaluate_msf(
     engine,
     save_dir=None,
     sliding=False,
-    classbank_KD: torch.Tensor | None = None,
-    prompt_mode: str = "single",
 ):
 
     model.eval()

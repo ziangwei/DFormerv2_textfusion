@@ -10,8 +10,9 @@ from utils.prompt_utils import (
     encode_prompts,
     build_prompt_groups_from_labels,
     unload_clip_model,
+    split_into_sentences,
+    select_caption_topk
 )
-
 def get_path(
         dataset_name,
         _rgb_path,
@@ -137,10 +138,37 @@ class RGBXDataset(data.Dataset):
         self.max_caption_sentences = max(self.max_caption_sentences, 0)
         self.text_template_set = setting.get("text_template_set", "clip")
         self.max_templates_per_label = int(setting.get("max_templates_per_label", 3))
+        self.text_feature_dim = setting.get("text_feature_dim", 512)
+        self.text_template_set = setting.get("text_template_set", "clip")
+        self.max_templates_per_label = int(setting.get("max_templates_per_label", 3))
+        self.text_source = setting.get("text_source", "both")
+        self.text_encoder = setting.get("text_encoder", "jinaclip")
+        self.text_encoder_name = setting.get("text_encoder_name", None)
+        self.max_caption_sentences = int(setting.get("max_caption_sentences", 8))
+        self.caption_topk = int(setting.get("caption_topk", 0))  # 0 表示不开句级Top-K
+        self.caption_topk_mode = setting.get("caption_topk_mode", "class_sim")
+        # 预备：类原型（给 class_sim Top-K 用）
+        self.labels_txt_path = setting.get("label_txt_path", None)
+
+        from utils.prompt_utils import build_prompt_groups_from_labels, encode_prompts
+
+        if self.labels_txt_path is not None:
+            labels = [ln.strip() for ln in open(self.labels_txt_path, 'r', encoding='utf-8').read().splitlines() if ln.strip()]
+            groups = build_prompt_groups_from_labels(labels, L=len(labels),
+                                                     template_set=self.text_template_set,
+                                                     max_templates_per_label=self.max_templates_per_label)
+            self.classbank = encode_prompts(groups,
+                                            encoder=self.text_encoder,
+                                            encoder_name=self.text_encoder_name,
+                                            target_dim=self.text_feature_dim).cpu()  # [C,D]
+        else:
+            self.classbank = None
 
         self.class_text_features = None
         self.caption_text_features = {}
-        self.caption_fallback = torch.zeros(self.max_caption_sentences, self.text_feature_dim, dtype=torch.float32)
+        # 统一句子通道长度（便于 DataLoader 默认collate）：K = caption_topk(>0) 否则用 max_caption_sentences
+        self._cap_tokens = self.caption_topk if self.caption_topk > 0 else self.max_caption_sentences
+        self.caption_fallback = torch.zeros(self._cap_tokens, self.text_feature_dim, dtype=torch.float32)
 
         if self.enable_text_guidance:
             self._prepare_text_guidance_assets()
@@ -148,7 +176,7 @@ class RGBXDataset(data.Dataset):
     def _prepare_text_guidance_assets(self):
         """Load and encode textual assets for guidance."""
         try:
-            self.class_text_features = self._encode_class_labels()
+            self.class_text_features = self.classbank if getattr(self, "classbank", None) is not None else self._encode_class_labels()
         except Exception as exc:
             logger.error(f"Failed to encode class label prompts: {exc}")
             self.class_text_features = None
@@ -182,10 +210,15 @@ class RGBXDataset(data.Dataset):
             template_set=self.text_template_set,
             max_templates_per_label=self.max_templates_per_label,
         )
-        text_feats = encode_prompts(prompt_groups).cpu().to(torch.float32)
+        text_feats = encode_prompts(
+            prompt_groups,
+            encoder = self.text_encoder,
+            encoder_name = self.text_encoder_name,
+            target_dim = self.force_text_dim,
+        ).cpu().to(torch.float32)
         return text_feats
 
-    def _encode_caption_descriptions(self):
+    def _encode_caption_descriptions(self, rgb_path: str, description_text: str):
         caption_dict = {}
         if not self.caption_json_path or not os.path.exists(self.caption_json_path):
             logger.warning("Caption JSON path not provided or not found; only class prompts will be used.")
@@ -204,20 +237,43 @@ class RGBXDataset(data.Dataset):
             if not rgb_rel or not description:
                 continue
             key = os.path.basename(rgb_rel)
-            sentences = self._split_description(description)
-            if not sentences:
-                continue
-            text_feats = encode_prompts(sentences).cpu().to(torch.float32)
-            if text_feats.shape[0] < self.max_caption_sentences:
-                pad = torch.zeros(
-                    self.max_caption_sentences - text_feats.shape[0],
-                    text_feats.shape[1],
-                    dtype=torch.float32,
+            # 句级 Top-K 预筛（或全量切句）
+
+            if self.caption_topk > 0:
+                chosen, feats = select_caption_topk(
+                    description,
+                    K = self.caption_topk,
+                    mode = self.caption_topk_mode,
+                    labels_txt_path = self.label_txt_path,
+                    template_set = self.text_template_set,
+                    max_templates_per_label = self.max_templates_per_label,
+                    encoder = self.text_encoder,
+                    encoder_name = self.text_encoder_name,
+                    target_dim = self.text_feature_dim,
                 )
-                text_feats = torch.cat([text_feats, pad], dim=0)
+                text_feats = feats
             else:
-                text_feats = text_feats[: self.max_caption_sentences]
-            caption_dict[key] = text_feats
+                sents = self._split_description(description)
+
+                if len(sents) == 0:
+                    continue
+
+                text_feats = encode_prompts(
+                    sents,
+                    encoder = self.text_encoder,
+                    encoder_name = self.text_encoder_name,
+                    target_dim = self.text_feature_dim,
+                ).cpu().to(torch.float32)
+
+                # 对齐长度到 K（_cap_tokens）
+
+                if text_feats.shape[0] < self._cap_tokens:
+                    pad = torch.zeros(self._cap_tokens - text_feats.shape[0], text_feats.shape[1],
+                                      dtype=torch.float32)
+                    text_feats = torch.cat([text_feats, pad], dim=0)
+                elif text_feats.shape[0] > self._cap_tokens:
+                    text_feats = text_feats[: self._cap_tokens]
+                caption_dict[key] = text_feats
 
         return caption_dict
 
@@ -255,7 +311,12 @@ class RGBXDataset(data.Dataset):
         if caption_feats is None:
             caption_feats = self.caption_fallback.clone()
 
-        return torch.cat([class_feats, caption_feats], dim=0)
+        if self.text_source == "labels":
+            return class_feats
+        elif self.text_source == "captions":
+            return caption_feats
+        else:  # both
+            return torch.cat([class_feats, caption_feats], dim=0)
 
     def __len__(self):
         if self._file_length is not None:
