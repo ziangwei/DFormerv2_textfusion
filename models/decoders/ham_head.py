@@ -2,40 +2,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
-
 from mmseg.ops import resize
 
-# from ..builder import HEADS
 from .decode_head import BaseDecodeHead
 
+try:
+    from ..blocks.semantic_alignment import SemanticAlignmentModule
+except ImportError:
+    import sys, os
+    sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
+    from models.blocks.semantic_alignment import SemanticAlignmentModule
 
 class _MatrixDecomposition2DBase(nn.Module):
     def __init__(self, args=dict()):
         super().__init__()
-
         self.spatial = args.setdefault("SPATIAL", True)
-
         self.S = args.setdefault("MD_S", 1)
         self.D = args.setdefault("MD_D", 512)
         self.R = args.setdefault("MD_R", 64)
-
         self.train_steps = args.setdefault("TRAIN_STEPS", 6)
         self.eval_steps = args.setdefault("EVAL_STEPS", 7)
-
         self.inv_t = args.setdefault("INV_T", 100)
         self.eta = args.setdefault("ETA", 0.9)
-
         self.rand_init = args.setdefault("RAND_INIT", True)
-
-        print("spatial", self.spatial)
-        print("S", self.S)
-        print("D", self.D)
-        print("R", self.R)
-        print("train_steps", self.train_steps)
-        print("eval_steps", self.eval_steps)
-        print("inv_t", self.inv_t)
-        print("eta", self.eta)
-        print("rand_init", self.rand_init)
 
     def _build_bases(self, B, S, D, R, cuda=False):
         raise NotImplementedError
@@ -43,16 +32,12 @@ class _MatrixDecomposition2DBase(nn.Module):
     def local_step(self, x, bases, coef):
         raise NotImplementedError
 
-    # @torch.no_grad()
     def local_inference(self, x, bases):
-        # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
         coef = torch.bmm(x.transpose(1, 2), bases)
         coef = F.softmax(self.inv_t * coef, dim=-1)
-
         steps = self.train_steps if self.training else self.eval_steps
         for _ in range(steps):
             bases, coef = self.local_step(x, bases, coef)
-
         return bases, coef
 
     def compute_coef(self, x, bases, coef):
@@ -60,129 +45,78 @@ class _MatrixDecomposition2DBase(nn.Module):
 
     def forward(self, x, return_bases=False):
         B, C, H, W = x.shape
-
-        # (B, C, H, W) -> (B * S, D, N)
         if self.spatial:
-            D = C // self.S
-            N = H * W
-            x = x.view(B * self.S, D, N)
+            D = C // self.S; N = H * W; x = x.view(B * self.S, D, N)
         else:
-            D = H * W
-            N = C // self.S
-            x = x.view(B * self.S, N, D).transpose(1, 2)
+            D = H * W; N = C // self.S; x = x.view(B * self.S, N, D).transpose(1, 2)
 
-        if not self.rand_init and not hasattr(self, "bases"):
-            bases = self._build_bases(1, self.S, D, self.R, cuda=True)
-            self.register_buffer("bases", bases)
-
-        # (S, D, R) -> (B * S, D, R)
         if self.rand_init:
-            bases = self._build_bases(B, self.S, D, self.R, cuda=True)
+            bases = self._build_bases(B, self.S, D, self.R, cuda=x.is_cuda)
         else:
+            if not hasattr(self, "bases"):
+                self.register_buffer("bases", self._build_bases(1, self.S, D, self.R, cuda=x.is_cuda))
             bases = self.bases.repeat(B, 1, 1)
 
         bases, coef = self.local_inference(x, bases)
-
-        # (B * S, N, R)
         coef = self.compute_coef(x, bases, coef)
-
-        # (B * S, D, R) @ (B * S, N, R)^T -> (B * S, D, N)
         x = torch.bmm(bases, coef.transpose(1, 2))
-
-        # (B * S, D, N) -> (B, C, H, W)
-        if self.spatial:
-            x = x.view(B, C, H, W)
-        else:
-            x = x.transpose(1, 2).view(B, C, H, W)
-
-        # (B * H, D, R) -> (B, H, N, D)
-        bases = bases.view(B, self.S, D, self.R)
-
+        if self.spatial: x = x.view(B, C, H, W)
+        else:            x = x.transpose(1, 2).view(B, C, H, W)
         return x
-
 
 class NMF2D(_MatrixDecomposition2DBase):
     def __init__(self, args=dict()):
-        super().__init__(args)
-
-        self.inv_t = 1
-
+        super().__init__(args); self.inv_t = 1
     def _build_bases(self, B, S, D, R, cuda=False):
-        if cuda:
-            bases = torch.rand((B * S, D, R)).cuda()
-        else:
-            bases = torch.rand((B * S, D, R))
-
-        bases = F.normalize(bases, dim=1)
-
-        return bases
-
-    # @torch.no_grad()
+        bases = torch.rand((B * S, D, R))
+        if cuda: bases = bases.cuda()
+        bases = F.normalize(bases, dim=1); return bases
     def local_step(self, x, bases, coef):
-        # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
         numerator = torch.bmm(x.transpose(1, 2), bases)
-        # (B * S, N, R) @ [(B * S, D, R)^T @ (B * S, D, R)] -> (B * S, N, R)
         denominator = coef.bmm(bases.transpose(1, 2).bmm(bases))
-        # Multiplicative Update
         coef = coef * numerator / (denominator + 1e-6)
-
-        # (B * S, D, N) @ (B * S, N, R) -> (B * S, D, R)
         numerator = torch.bmm(x, coef)
-        # (B * S, D, R) @ [(B * S, N, R)^T @ (B * S, N, R)] -> (B * S, D, R)
         denominator = bases.bmm(coef.transpose(1, 2).bmm(coef))
-        # Multiplicative Update
         bases = bases * numerator / (denominator + 1e-6)
-
         return bases, coef
-
     def compute_coef(self, x, bases, coef):
-        # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
         numerator = torch.bmm(x.transpose(1, 2), bases)
-        # (B * S, N, R) @ (B * S, D, R)^T @ (B * S, D, R) -> (B * S, N, R)
         denominator = coef.bmm(bases.transpose(1, 2).bmm(bases))
-        # multiplication update
         coef = coef * numerator / (denominator + 1e-6)
-
         return coef
-
 
 class Hamburger(nn.Module):
     def __init__(self, ham_channels=512, ham_kwargs=dict(), norm_cfg=None, **kwargs):
         super().__init__()
-
-        self.ham_in = ConvModule(ham_channels, ham_channels, 1, norm_cfg=None, act_cfg=None)
-
-        self.ham = NMF2D(ham_kwargs)
-
+        self.ham_in  = ConvModule(ham_channels, ham_channels, 1, norm_cfg=None, act_cfg=None)
+        self.ham     = NMF2D(ham_kwargs)
         self.ham_out = ConvModule(ham_channels, ham_channels, 1, norm_cfg=norm_cfg, act_cfg=None)
-
     def forward(self, x):
-        enjoy = self.ham_in(x)
-        enjoy = F.relu(enjoy, inplace=True)
-        enjoy = self.ham(enjoy)
-        enjoy = self.ham_out(enjoy)
-        ham = F.relu(x + enjoy, inplace=True)
+        y = F.relu(self.ham_in(x), inplace=True)
+        y = self.ham(y)
+        y = self.ham_out(y)
+        return F.relu(x + y, inplace=True)  # 残差
 
-        return ham
-
-
-# @HEADS.register_module()
-class LightHamHead(BaseDecodeHead):
-    """Is Attention Better Than Matrix Decomposition?
-    This head is the implementation of `HamNet
-    <https://arxiv.org/abs/2109.04553>`_.
-    Args:
-        ham_channels (int): input channels for Hamburger.
-        ham_kwargs (int): kwagrs for Ham.
-
-    TODO:
-        Add other MD models (Ham).
+class LightHamSAMHead(BaseDecodeHead):
     """
-
-    def __init__(self, ham_channels=512, ham_kwargs=dict(), **kwargs):
-        super(LightHamHead, self).__init__(input_transform="multiple_select", **kwargs)
+    HamHead 最小改动：squeeze → [SAM]*1 → Hamburger → align → cls_seg
+    - 仅在 squeeze 之后单点引入 SAM（NHWC 对齐），不改动其余路径
+    - 文本可选；无文本时等价于原 LightHamHead
+    """
+    def __init__(
+        self,
+        ham_channels=512,
+        ham_kwargs=dict(),
+        text_dim=512,
+        enable_sam=True,
+        sam_use_topk=True,
+        sam_top_m=5,
+        **kwargs,
+    ):
+        super().__init__(input_transform="multiple_select", **kwargs)
         self.ham_channels = ham_channels
 
+        # 拼多尺度后压缩到 ham_channels（与原 HamHead 相同）
         self.squeeze = ConvModule(
             sum(self.in_channels),
             self.ham_channels,
@@ -192,26 +126,47 @@ class LightHamHead(BaseDecodeHead):
             act_cfg=self.act_cfg,
         )
 
-        self.hamburger = Hamburger(ham_channels, ham_kwargs, **kwargs)
+        # 单点 SAM（可关）
+        self.enable_sam = enable_sam
+        if self.enable_sam:
+            self.sam = SemanticAlignmentModule(
+                query_dim=self.ham_channels,
+                text_dim=text_dim,
+                use_topk=sam_use_topk,
+                top_m=sam_top_m,
+                # 轻注入，避免过强扰动
+                alpha_init=0.05,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                ffn_drop=0.0,
+            )
 
+        # 原汉堡块与对齐层保持不变
+        self.hamburger = Hamburger(ham_channels, ham_kwargs, **kwargs)
         self.align = ConvModule(
-            self.ham_channels, self.channels, 1, conv_cfg=self.conv_cfg, norm_cfg=self.norm_cfg, act_cfg=self.act_cfg
+            self.ham_channels, self.channels, 1,
+            conv_cfg=self.conv_cfg, norm_cfg=self.norm_cfg, act_cfg=self.act_cfg
         )
 
-    def forward(self, inputs):
-        """Forward function."""
-        inputs = self._transform_inputs(inputs)
+    def _apply_sam_if_needed(self, x_bchw, text_features):
+        if (not self.enable_sam) or (text_features is None):
+            return x_bchw
+        b, c, h, w = x_bchw.shape
+        x_nhwc = x_bchw.permute(0, 2, 3, 1).contiguous()
+        y_nhwc = self.sam(x_nhwc, text_features)  # NHWC
+        return y_nhwc.permute(0, 3, 1, 2).contiguous()
 
-        inputs = [
-            resize(level, size=inputs[0].shape[2:], mode="bilinear", align_corners=self.align_corners)
-            for level in inputs
-        ]
+    def forward(self, inputs, text_features=None):
+        # 与 HamHead 相同的多尺度对齐与拼接
+        feats = self._transform_inputs(inputs)
+        feats = [resize(f, size=feats[0].shape[2:], mode="bilinear", align_corners=self.align_corners) for f in feats]
+        x = torch.cat(feats, dim=1)          # B, sum(Ci), H, W
+        x = self.squeeze(x)                  # B, ham_channels, H, W
 
-        inputs = torch.cat(inputs, dim=1)
-        x = self.squeeze(inputs)
+        # 仅此处插入 SAM；无文本则跳过 → 与原 HamHead 等价
+        x = self._apply_sam_if_needed(x, text_features)
 
-        x = self.hamburger(x)
-
-        output = self.align(x)
-        output = self.cls_seg(output)
-        return output
+        x = self.hamburger(x)                # B, ham_channels, H, W
+        x = self.align(x)                    # B, channels, H, W
+        out = self.cls_seg(x)                # B, num_classes, H, W
+        return out

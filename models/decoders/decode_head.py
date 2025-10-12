@@ -94,7 +94,8 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         return s
 
     def _init_inputs(self, in_channels, in_index, input_transform):
-        """Check and initialize input transforms.
+        """
+        Check and initialize input transforms.
 
         The in_channels, in_index and input_transform must match.
         Specifically, when input_transform is None, only single feature map

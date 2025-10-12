@@ -1,7 +1,7 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29369} #158
+PORT=${PORT:-29568} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
 
@@ -22,8 +22,8 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --master_port=$PORT \
     utils/train.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
-    --text-source both \
-    --text-encoder clip \
+    --text-source imglabels \
+    --text-encoder jinaclip \
     --sam-enc-stages 1,2,3 \
     --sam-dec-stages 1,2,3 \
     --no-sliding \
