@@ -44,8 +44,9 @@ parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAc
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument("--use_seed", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--local-rank", default=0)
+
 # --- text guidance runtime switches ---
-parser.add_argument("--text-source", choices=["labels", "captions", "both"])
+parser.add_argument("--text-source", choices=["labels", "captions", "both", "imglabels"])
 parser.add_argument("--text-encoder", choices=["clip", "jinaclip"])
 parser.add_argument("--text-encoder-name", type=str)
 parser.add_argument("--text-feature-dim", type=int)
@@ -56,12 +57,35 @@ parser.add_argument("--max-templates-per-label", type=int)
 parser.add_argument("--max-caption-sentences", type=int)
 parser.add_argument("--caption-topk", type=int)
 parser.add_argument("--caption-topk-mode", choices=["class_sim", "firstk", "lenk"])
+parser.add_argument("--image-labels-json-path", type=str)
+
+# --- SAM per-stage switches ---
+parser.add_argument("--sam-enc-stages", type=str, default="0,1,2,3", help="Comma separated, e.g., 0,2")
+parser.add_argument("--sam-dec-stages", type=str, default="0,1,2,3", help="Comma separated, e.g., 1,3")
 
 # os.environ['MASTER_PORT'] = '169710'
 torch.set_float32_matmul_precision("high")
 import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 # torch._dynamo.config.automatic_dynamic_shapes = False
+
+def _parse_stages(s: str):
+    if s is None:
+        return [0,1,2,3]
+    s = str(s).strip()
+    if not s:
+        # 空串代表“不插入任何层”
+        return []
+    out = []
+    for x in s.split(","):
+        x = x.strip()
+        if x == "":
+            continue
+        try:
+            out.append(int(x))
+        except:
+            pass
+    return out
 
 def is_eval(epoch, config):
     return epoch > int(config.checkpoint_start_epoch) or epoch == 1 or epoch % 10 == 0
@@ -133,6 +157,12 @@ with Engine(custom_parser=parser) as engine:
             config.caption_topk = int(args.caption_topk)
         if args.caption_topk_mode is not None:
             config.caption_topk_mode = args.caption_topk_mode
+        if args.image_labels_json_path is not None:
+            config.image_labels_json_path = args.image_labels_json_path
+
+        # === SAM per-stage ===
+        config.sam_enc_stages = _parse_stages(args.sam_enc_stages)
+        config.sam_dec_stages = _parse_stages(args.sam_dec_stages)
 
         logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
         # check if pad_SUNRGBD is used correctly
@@ -163,8 +193,6 @@ with Engine(custom_parser=parser) as engine:
             os.environ.setdefault("HF_HOME", node_cache)
             os.environ.setdefault("TRANSFORMERS_CACHE", node_cache)
             os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-            # 如需禁用 hf_transfer 以避免奇怪网络错误，可以打开下一行
-            # os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
             logger.info(f"[HF cache] Using cache dir: {node_cache}")
         except Exception as _e:
             logger.warning(f"[HF cache] set cache dir skipped: {_e}")
@@ -506,7 +534,7 @@ with Engine(custom_parser=parser) as engine:
 
                 logger.info(
                     f"Epoch {epoch} validation result: mIoU: {miou:.4f},Best mIoU: {best_miou:.4f}, "
-                    f"Acc: {acc:.4f}, mAcc: {macc:.4f}, mF1: {mf1:.4f}")
+                )
                 eval_timer.stop()
 
             eval_count = 0

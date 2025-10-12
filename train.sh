@@ -1,8 +1,14 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-# PORT=${PORT:-29158} #158
+PORT=${PORT:-29369} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
+
+
+CACHE_DIR="/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache"
+mkdir -p ${CACHE_DIR}
+export HF_HOME=${CACHE_DIR}
+echo "Hugging Face cache has been set to: ${HF_HOME}"
 
 export CUDA_VISIBLE_DEVICES="0,1"
 export TORCHDYNAMO_VERBOSE=1
@@ -16,6 +22,10 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --master_port=$PORT \
     utils/train.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
+    --text-source both \
+    --text-encoder clip \
+    --sam-enc-stages 1,2,3 \
+    --sam-dec-stages 1,2,3 \
     --no-sliding \
     --no-compile \
     --syncbn \
@@ -25,6 +35,16 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --val_amp \
     --pad_SUNRGBD \
     --no-use_seed \
+
+# --text-source imglabels \
+# 文本来源：labels / captions / both / imglabels
+# --text-encoder jinaclip \
+# 选择文本编码器：clip / jinaclip
+# Encoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
+# --sam-enc-stages 0,2 \
+# Decoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
+# --sam-dec-stages 1,3 \
+
 
 # config for DFormers on NYUDepthv2
 # local_configs.NYUDepthv2.DFormer_Large

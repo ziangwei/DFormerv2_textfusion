@@ -1,29 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from utils.init_func import init_weight
-from utils.load_utils import load_pretrain
-from functools import partial
-
 from utils.engine.logger import get_logger
-import warnings
-
-
-
-def build_segmentor(cfg, train_cfg=None, test_cfg=None):
-    """Build segmentor."""
-    if train_cfg is not None or test_cfg is not None:
-        warnings.warn("train_cfg and test_cfg is deprecated, please specify them in model", UserWarning)
-    assert cfg.get("train_cfg") is None or train_cfg is None, (
-        "train_cfg specified in both outer field and model field "
-    )
-    assert cfg.get("test_cfg") is None or test_cfg is None, "test_cfg specified in both outer field and model field "
-    return SEGMENTORS.build(cfg, default_args=dict(train_cfg=train_cfg, test_cfg=test_cfg))
-
 
 logger = get_logger()
-
 
 class EncoderDecoder(nn.Module):
     def __init__(
@@ -40,32 +21,24 @@ class EncoderDecoder(nn.Module):
 
         if cfg.backbone == "DFormer-Large":
             from .encoders.DFormer import DFormer_Large as backbone
-
             self.channels = [96, 192, 288, 576]
         elif cfg.backbone == "DFormer-Base":
             from .encoders.DFormer import DFormer_Base as backbone
-
             self.channels = [64, 128, 256, 512]
         elif cfg.backbone == "DFormer-Small":
             from .encoders.DFormer import DFormer_Small as backbone
-
             self.channels = [64, 128, 256, 512]
         elif cfg.backbone == "DFormer-Tiny":
             from .encoders.DFormer import DFormer_Tiny as backbone
-
             self.channels = [32, 64, 128, 256]
-
         elif cfg.backbone == "DFormerv2_L":
             from .encoders.DFormerv2 import DFormerv2_L as backbone
-
             self.channels = [112, 224, 448, 640]
         elif cfg.backbone == "DFormerv2_B":
             from .encoders.DFormerv2 import DFormerv2_B as backbone
-
             self.channels = [80, 160, 320, 512]
         elif cfg.backbone == "DFormerv2_S":
             from .encoders.DFormerv2 import DFormerv2_S as backbone
-
             self.channels = [64, 128, 256, 512]
         else:
             raise NotImplementedError
@@ -76,22 +49,44 @@ class EncoderDecoder(nn.Module):
             norm_cfg = dict(type="BN", requires_grad=True)
 
         backbone_kwargs = dict(norm_cfg=norm_cfg)
-        if cfg.drop_path_rate is not None:
-            backbone_kwargs["drop_path_rate"] = cfg.drop_path_rate
-        else:
-            backbone_kwargs["drop_path_rate"] = 0.1
+        backbone_kwargs["drop_path_rate"] = cfg.drop_path_rate if cfg.drop_path_rate is not None else 0.1
 
         if cfg.backbone.startswith("DFormerv2"):
             backbone_kwargs["text_dim"] = getattr(cfg, "text_feature_dim", 512)
+            backbone_kwargs["sam_enc_stages"] = getattr(cfg, "sam_enc_stages", [0, 1, 2, 3])
+            # 透传 SAM Top-K 策略
+            backbone_kwargs["sam_use_topk"] = getattr(cfg, "sam_use_topk", True)
+            backbone_kwargs["sam_top_m"] = getattr(cfg, "sam_top_m", 5)
 
         self.backbone = backbone(**backbone_kwargs)
-
         self.aux_head = None
 
-        if cfg.decoder == "MLPDecoder":
+        if cfg.decoder == "HSGHead":
+            logger.info("Using Hierarchical Semantic-Guided Decoder")
+            from .decoders.hsg_head import HierarchicalSemanticGuidedHead
+            chs = list(self.channels)
+            self.decode_head = HierarchicalSemanticGuidedHead(
+                in_channels=chs,
+                in_index=list(range(len(chs))),
+                input_transform=("multiple_select" if len(chs) > 1 else None),
+                channels=getattr(cfg, "decoder_embed_dim", 512),
+                num_classes=cfg.num_classes,
+                norm_cfg=norm_cfg,
+                text_dim=getattr(cfg, "text_feature_dim", 512),
+                # decoder 侧的层级控制与 Top-K 策略
+                sam_dec_stages=getattr(cfg, "sam_dec_stages", [0, 1, 2, 3]),
+                sam_use_topk=getattr(cfg, "sam_use_topk", True),
+                sam_top_m=getattr(cfg, "sam_top_m", 5),
+            )
+            if cfg.aux_rate != 0:
+                from .decoders.fcnhead import FCNHead
+                self.aux_index = 2
+                self.aux_rate = cfg.aux_rate
+                self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
+
+        elif cfg.decoder == "MLPDecoder":
             logger.info("Using MLP Decoder")
             from .decoders.MLPDecoder import DecoderHead
-
             self.decode_head = DecoderHead(
                 in_channels=self.channels,
                 num_classes=cfg.num_classes,
@@ -101,10 +96,7 @@ class EncoderDecoder(nn.Module):
 
         elif cfg.decoder == "ham":
             logger.info("Using Ham Decoder")
-            print(cfg.num_classes)
             from .decoders.ham_head import LightHamHead as DecoderHead
-
-            # from mmseg.models.decode_heads.ham_head import LightHamHead as DecoderHead
             self.decode_head = DecoderHead(
                 in_channels=self.channels[1:],
                 num_classes=cfg.num_classes,
@@ -113,67 +105,39 @@ class EncoderDecoder(nn.Module):
                 channels=cfg.decoder_embed_dim,
             )
             from .decoders.fcnhead import FCNHead
-
             if cfg.aux_rate != 0:
                 self.aux_index = 2
                 self.aux_rate = cfg.aux_rate
-                print("aux rate is set to", str(self.aux_rate))
                 self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
 
         elif cfg.decoder == "UPernet":
             logger.info("Using Upernet Decoder")
             from .decoders.UPernet import UPerHead
-
             self.decode_head = UPerHead(
                 in_channels=self.channels, num_classes=cfg.num_classes, norm_layer=norm_layer, channels=512
             )
             from .decoders.fcnhead import FCNHead
-
             self.aux_index = 2
             self.aux_rate = 0.4
             self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
-
-        elif cfg.decoder == "HSGHead":
-            logger.info("Using Hierarchical Semantic-Guided Decoder")
-            from .decoders.hsg_head import HierarchicalSemanticGuidedHead
-
-            self.decode_head = HierarchicalSemanticGuidedHead(
-                in_channels=self.channels,
-                channels=getattr(cfg, "decoder_embed_dim", 512),
-                num_classes=cfg.num_classes,
-                norm_cfg=norm_cfg,
-                text_dim=getattr(cfg, "text_feature_dim", 512),
-            )
-            if cfg.aux_rate != 0:
-                from .decoders.fcnhead import FCNHead
-
-                self.aux_index = 2
-                self.aux_rate = cfg.aux_rate
-                self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
 
         elif cfg.decoder == "deeplabv3+":
             logger.info("Using Decoder: DeepLabV3+")
             from .decoders.deeplabv3plus import DeepLabV3Plus as Head
-
             self.decode_head = Head(in_channels=self.channels, num_classes=cfg.num_classes, norm_layer=norm_layer)
             from .decoders.fcnhead import FCNHead
-
             self.aux_index = 2
             self.aux_rate = 0.4
             self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
+
         elif cfg.decoder == "nl":
             logger.info("Using Decoder: nl+")
             from .decoders.nl_head import NLHead as Head
-
             self.decode_head = Head(
-                in_channels=self.channels[1:],
-                in_index=[1, 2, 3],
-                num_classes=cfg.num_classes,
-                norm_cfg=norm_cfg,
-                channels=512,
+                in_channels=self.channels[1:], in_index=[1, 2, 3], num_classes=cfg.num_classes,
+                norm_cfg=norm_cfg, channels=512
             )
             from .decoders.fcnhead import FCNHead
-
             self.aux_index = 2
             self.aux_rate = 0.4
             self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
@@ -181,7 +145,6 @@ class EncoderDecoder(nn.Module):
         else:
             logger.info("No decoder(FCN-32s)")
             from .decoders.fcnhead import FCNHead
-
             self.decode_head = FCNHead(
                 in_channels=self.channels[-1], kernel_size=3, num_classes=cfg.num_classes, norm_layer=norm_layer
             )
@@ -216,18 +179,14 @@ class EncoderDecoder(nn.Module):
             )
 
     def encode_decode(self, rgb, modal_x, text_features=None):
-        """Encode images with backbone and decode into a semantic segmentation
-        map of the same size as input."""
         orisize = rgb.shape
-
         if self.enable_text_guidance:
             x = self.backbone(rgb, modal_x, text_features)
         else:
             x = self.backbone(rgb, modal_x)
 
-        if len(x) == 2:  # if output is (rgb,depth) only use rgb
+        if len(x) == 2:
             x = x[0]
-
         if isinstance(x, (list, tuple)):
             feats = list(x)
             x = tuple(feats)
@@ -239,15 +198,11 @@ class EncoderDecoder(nn.Module):
 
         out = F.interpolate(out, size=orisize[-2:], mode="bilinear", align_corners=False)
         if self.aux_head:
-            assert self.aux_index < len(x), \
-                f"aux_index ({self.aux_index}) must be less than number of backbone outputs ({len(x)})"
-            # 直接取第 aux_index 个特征 map
             aux_fm = self.aux_head(x[self.aux_index])
             return out, aux_fm
         return out
 
-    def forward(self, rgb, modal_x=None,  label=None, text_features=None):
-        # print('builder',rgb.shape,modal_x.shape)
+    def forward(self, rgb, modal_x=None, label=None, text_features=None):
         if self.enable_text_guidance and text_features is None:
             raise ValueError("text_features must be provided when enable_text_guidance is True")
 
@@ -259,8 +214,6 @@ class EncoderDecoder(nn.Module):
         if label is not None:
             loss = self.criterion(out, label.long())[label.long() != self.cfg.background].mean()
             if self.aux_head:
-                loss += (
-                    self.aux_rate * self.criterion(aux_fm, label.long())[label.long() != self.cfg.background].mean()
-                )
+                loss += self.aux_rate * self.criterion(aux_fm, label.long())[label.long() != self.cfg.background].mean()
             return loss
         return out

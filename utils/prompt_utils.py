@@ -1,13 +1,14 @@
-# prompt_utils.py (unified)
-import os, re, json, math
+# prompt_utils.py (based on your original version; CLIP -> open_clip, Jina-CLIP via HF)
+import os, re, json
 from pathlib import Path
-from typing import List, Sequence, Union, Optional, Tuple
+from typing import List, Union, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
 
 # --- Optional backends ---
-from transformers import AutoModel, AutoTokenizer, CLIPModel
+from transformers import AutoModel, AutoTokenizer  # Jina-CLIP 走 HF
+# 注意：不再从 transformers 加载 CLIPModel，CLIP 统一改走 open_clip
 
 # =========================
 # Global cache (models & embeds)
@@ -15,14 +16,50 @@ from transformers import AutoModel, AutoTokenizer, CLIPModel
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _GLOBAL = {
     "model": None,
-    "tokenizer": None,
-    "name": None,    # "<encoder_name>:<device>"
+    "tokenizer": None,   # open_clip 才会用到
+    "name": None,        # "<encoder>:<encoder_name>:<device>"
     "device": _DEVICE,
 }
 
 PROMPT_EMBEDS = None
 PROMPT_CACHE = {}
 ACTIVE_PROMPT_SET = "train"
+
+# =========================
+# Utils
+# =========================
+def _l2norm(x: torch.Tensor) -> torch.Tensor:
+    return F.normalize(x, dim=-1) if x.numel() else x
+
+def _postproject(feats: torch.Tensor, target_dim: Optional[int]) -> torch.Tensor:
+    if target_dim is None:
+        return feats
+    D = feats.shape[-1]
+    if D == target_dim:
+        return feats
+    if D > target_dim:
+        return feats[..., :target_dim]
+    pad = torch.zeros(feats.size(0), target_dim - D, device=feats.device, dtype=feats.dtype)
+    return torch.cat([feats, pad], dim=-1)
+
+# =========================
+# open_clip name resolver
+# =========================
+def _resolve_openclip_name(encoder_name: Optional[str]) -> Tuple[str, str]:
+    """
+    将常见的 HF/口语化名字映射到 open_clip 的 (model_name, pretrained_tag)
+    """
+    if not encoder_name:
+        return "ViT-B-16", "openai"
+    n = encoder_name.lower()
+    if "vit-b-16" in n or "b/16" in n or "base-patch16" in n:
+        return "ViT-B-16", "openai"
+    if "vit-l-14" in n or "l/14" in n or "large-patch14" in n:
+        return "ViT-L-14", "openai"
+    if "vit-h-14" in n or "h/14" in n:
+        return "ViT-H-14", "laion2b_s32b_b79k"
+    # 兜底
+    return "ViT-B-16", "openai"
 
 # =========================
 # Encoder loader
@@ -32,29 +69,35 @@ def _load_encoder(encoder: str = "jinaclip",
                   device: Optional[torch.device] = None):
     """
     encoder: "clip" | "jinaclip"
-    encoder_name:
-      - clip:     default "openai/clip-vit-base-patch16"
-      - jinaclip: default "jinaai/jina-clip-v2"
+      - clip:     走 open_clip（避免 transformers 的 .bin/weights_only 问题）
+      - jinaclip: 走 transformers（jinaai/jina-clip-v2）
     """
     if device is None:
         device = _DEVICE
     if encoder_name is None:
-        encoder_name = "openai/clip-vit-base-patch16" if encoder == "clip" else "jinaai/jina-clip-v2"
+        encoder_name = "jinaai/jina-clip-v2" if encoder == "jinaclip" else "ViT-B-16"
 
-    cache_key = f"{encoder}:{encoder_name}:{device}"
-    if _GLOBAL.get("name") != cache_key:
-        if encoder == "clip":
-            model = CLIPModel.from_pretrained(encoder_name)
-            tok = AutoTokenizer.from_pretrained(encoder_name)
-            model.eval().to(device)
-            for p in model.parameters(): p.requires_grad = False
-            _GLOBAL.update({"model": model, "tokenizer": tok, "name": cache_key, "device": device})
-        else:  # jinaclip
-            model = AutoModel.from_pretrained(encoder_name, trust_remote_code=True)
-            model.eval().to(device)
-            for p in model.parameters(): p.requires_grad = False
-            _GLOBAL.update({"model": model, "tokenizer": None, "name": cache_key, "device": device})
-    return _GLOBAL["model"], _GLOBAL["tokenizer"], _GLOBAL["device"]
+    if _GLOBAL["model"] is not None:
+        return _GLOBAL["model"], _GLOBAL["tokenizer"], _GLOBAL["device"]
+
+    if encoder == "clip":
+        # 使用 open_clip
+        import open_clip
+        model_name, pretrained_tag = _resolve_openclip_name(encoder_name)
+        model, _, _ = open_clip.create_model_and_transforms(model_name, pretrained=pretrained_tag, device=device)
+        tok = open_clip.get_tokenizer(model_name)
+        model.eval().to(device)
+        for p in model.parameters(): p.requires_grad = False
+        _GLOBAL.update({"model": model, "tokenizer": tok, "name": f"{encoder}:{model_name}", "device": device})
+        return model, tok, device
+
+    # 默认：Jina-CLIP via HF
+    model_id = encoder_name or "jinaai/jina-clip-v2"
+    model = AutoModel.from_pretrained(model_id, trust_remote_code=True)
+    model.eval().to(device)
+    for p in model.parameters(): p.requires_grad = False
+    _GLOBAL.update({"model": model, "tokenizer": None, "name": f"{encoder}:{model_id}", "device": device})
+    return model, None, device
 
 def unload_clip_model():
     _GLOBAL.update({"model": None, "tokenizer": None, "name": None})
@@ -73,28 +116,18 @@ def _encode_texts(texts: List[str],
     model, tok, device = _load_encoder(encoder, encoder_name, device)
     with torch.no_grad():
         if encoder == "clip":
-            inputs = tok(texts, padding=True, truncation=True, return_tensors="pt").to(device)
-            feats = model.get_text_features(**inputs)           # [N, D]
+            # open_clip：tokenizer 返回 callable；也可用 open_clip.tokenize
+            import open_clip
+            toks = open_clip.tokenize(texts).to(device)
+            feats = model.encode_text(toks)       # [N, D]
         else:
             # Jina-CLIP 提供 encode_text(list[str], truncate_dim=?)
             truncate_dim = int(os.getenv("JINA_CLIP_DIM", "512"))
-            feats = model.encode_text(texts, truncate_dim=truncate_dim)
-            if not isinstance(feats, torch.Tensor):
-                feats = torch.from_numpy(feats).to(device)
+            out = model.encode_text(texts, truncate_dim=truncate_dim)
+            feats = out if isinstance(out, torch.Tensor) else torch.from_numpy(out).to(device)
     feats = feats.to(device)
-    feats = F.normalize(feats, dim=-1)
+    feats = _l2norm(feats)
     return feats
-
-def _postproject(feats: torch.Tensor, target_dim: Optional[int]) -> torch.Tensor:
-    if target_dim is None:
-        return feats
-    D = feats.shape[-1]
-    if D == target_dim:
-        return feats
-    if D > target_dim:
-        return feats[..., :target_dim]
-    pad = torch.zeros(feats.size(0), target_dim - D, device=feats.device, dtype=feats.dtype)
-    return torch.cat([feats, pad], dim=-1)
 
 def encode_prompts(prompts: List[Union[str, List[str]]],
                    encoder: str = "jinaclip",
@@ -103,9 +136,8 @@ def encode_prompts(prompts: List[Union[str, List[str]]],
     """
     输入：
       - List[str]：直接编码 -> [N, D]
-      - List[List[str]]：对同一组内句子编码并平均 -> [G, D]
-    输出：
-      Tensor [N_or_G, target_dim or D]
+      - List[List[str]]：同组平均 -> [G, D]
+    输出：Tensor [N_or_G, target_dim or D]
     """
     if len(prompts) == 0:
         td = target_dim or int(os.getenv("JINA_CLIP_DIM", "512"))
@@ -120,8 +152,7 @@ def encode_prompts(prompts: List[Union[str, List[str]]],
     outs = []
     for group in prompts:
         feats = _encode_texts(group, encoder, encoder_name)  # [k, D]
-        feats = feats.mean(dim=0, keepdim=True)              # [1, D]
-        outs.append(feats)
+        outs.append(feats.mean(dim=0, keepdim=True))         # [1, D]
     feats = torch.cat(outs, dim=0)                           # [G, D]
     return _postproject(feats, target_dim)
 
@@ -215,7 +246,7 @@ def prepare_classbank_prompts(labels_txt_path: str,
                               encoder_name: Optional[str] = None,
                               target_dim: Optional[int] = None,
                               register_set_name: str = "classbank"):
-    labels = [ln.strip() for ln in Path(labels_txt_path).read_text().splitlines() if ln.strip()]
+    labels = [ln.strip() for ln in Path(labels_txt_path).read_text(encoding="utf-8").splitlines() if ln.strip()]
     K = len(labels)
     groups = build_prompt_groups_from_labels(labels, L=K, template_set=template_set,
                                              max_templates_per_label=max_templates_per_label)
@@ -232,7 +263,7 @@ _SENT_SPLIT = re.compile(r"[。！？!?\.]\s+")
 
 def split_into_sentences(text: str, max_sentences: int = 8) -> List[str]:
     if not text: return []
-    parts = [p.strip() for p in _SENT_SPLIT.split(text) if p.strip()]
+    parts = [p.strip() for p in _SENT_SPLIT.split(text.replace("\n", " ")) if p.strip()]
     return parts[:max_sentences]
 
 def select_caption_topk(description: str,
@@ -247,37 +278,40 @@ def select_caption_topk(description: str,
     """
     将单条描述切分成句子 → 选择 Top-K 句子 → 返回 (句子列表, 特征矩阵[K,D])
     mode:
-      - class_sim: 每句和“全类原型库”的最大 cos 相似度
+      - class_sim: 每句与“类原型库”的最大 cos 相似度
       - firstk   : 取前 K 句
       - lenk     : 取长度前 K
     """
     sents = split_into_sentences(description, max_sentences=K * 2 if K > 0 else 8)
     if len(sents) == 0:
-        return [], torch.zeros(0, target_dim or 512)
+        td = target_dim or 512
+        return [], torch.zeros(0, td)
 
     if K <= 0 or len(sents) <= K:
         feats = encode_prompts(sents, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim)
+        unload_clip_model()
         return sents, feats
 
     if mode == "firstk":
         chosen = sents[:K]
         feats = encode_prompts(chosen, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim)
+        unload_clip_model()
         return chosen, feats
 
     if mode == "lenk":
         idx = sorted(range(len(sents)), key=lambda i: len(sents[i]), reverse=True)[:K]
         chosen = [sents[i] for i in idx]
         feats = encode_prompts(chosen, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim)
+        unload_clip_model()
         return chosen, feats
 
     # class_sim
     assert labels_txt_path is not None, "class_sim 需要 labels_txt_path"
-    labels = [ln.strip() for ln in Path(labels_txt_path).read_text().splitlines() if ln.strip()]
+    labels = [ln.strip() for ln in Path(labels_txt_path).read_text(encoding="utf-8").splitlines() if ln.strip()]
     groups = build_prompt_groups_from_labels(labels, L=len(labels), template_set=template_set,
                                              max_templates_per_label=max_templates_per_label)
     classbank = encode_prompts(groups, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim)  # [C,D]
     sent_feats = encode_prompts(sents, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim) # [N,D]
-    # cos 已归一化，直接点乘
     scores = (sent_feats @ classbank.T).amax(dim=1)  # [N]
     topk_idx = torch.topk(scores, k=min(K, len(sents)), dim=0).indices.tolist()
     chosen = [sents[i] for i in topk_idx]
@@ -294,12 +328,11 @@ def prepare_eval_prompts(eval_txt_path: str,
                          encoder_name: Optional[str] = None,
                          target_dim: Optional[int] = None,
                          register_set_name: str = "eval"):
-    eval_list = Path(eval_txt_path).read_text().splitlines()
+    eval_list = Path(eval_txt_path).read_text(encoding="utf-8").splitlines()
     fnames = [Path(l.split()[0]).name for l in eval_list]
-    prompt_dict = json.loads(Path(prompt_json_path).read_text())
+    prompt_dict = json.loads(Path(prompt_json_path).read_text(encoding="utf-8"))
     all_prompts = [prompt_dict.get(fn, "") for fn in fnames]
-    prompt_embeds = encode_prompts(all_prompts, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim)
-    prompt_embeds = prompt_embeds.cpu()
+    prompt_embeds = encode_prompts(all_prompts, encoder=encoder, encoder_name=encoder_name, target_dim=target_dim).cpu()
     register_prompt_embeds(register_set_name, prompt_embeds)
     switch_prompt_set(register_set_name)
     unload_clip_model()

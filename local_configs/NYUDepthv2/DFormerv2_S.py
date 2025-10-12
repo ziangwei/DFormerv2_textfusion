@@ -15,8 +15,8 @@ C.optimizer = "AdamW"
 C.enable_text_guidance = True
 # 统一文本向量维度（必须和 SAM 的 text_dim 一致；Jina-CLIP 默认 512，OpenAI CLIP ViT-B/16 也是 512）
 C.text_feature_dim = 512
-# 文本来源：labels / captions / both
-C.text_source = "labels"
+# 文本来源：labels / captions / both / imglabels
+C.text_source = "imglabels"
 # 选择文本编码器：clip / jinaclip
 C.text_encoder = "clip"
 # 具体模型名（留空走默认：clip→openai/clip-vit-base-patch16；jinaclip→jinaai/jina-clip-v2）
@@ -24,6 +24,7 @@ C.text_encoder_name = None
 # 标签与描述数据
 C.label_txt_path = "datasets/NYUDepthv2/nyu40_labels.txt"
 C.caption_json_path = "datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json"
+C.image_labels_json_path = "datasets/NYUDepthv2/topk_labels_text_internvl3.json"
 # 模板与数量（对“类名→多模板短句”的扩写）
 C.text_template_set = "clip"           # clip / none
 C.max_templates_per_label = 3
@@ -37,6 +38,17 @@ C.caption_topk = 6
 # - lenk：按长度取前 K（启发式）
 C.caption_topk_mode = "class_sim"
 
+# ==============================
+# SAM 分层开关（可通过命令行覆盖）
+# ==============================
+# Encoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
+C.sam_enc_stages = [0, 1, 2, 3]
+# Decoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
+C.sam_dec_stages = [0, 1, 2, 3]
+
+# SAM 的像素级 Top-K（imglabels 建议关）
+C.sam_use_topk = (C.text_source != "imglabels")
+C.sam_top_m = 5
 
 """Train Config"""
 C.lr = 6e-5

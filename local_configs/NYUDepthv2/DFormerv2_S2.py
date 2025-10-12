@@ -15,7 +15,7 @@ C.optimizer = "AdamW"
 C.enable_text_guidance = True
 # 统一文本向量维度（必须和 SAM 的 text_dim 一致；Jina-CLIP 默认 512，OpenAI CLIP ViT-B/16 也是 512）
 C.text_feature_dim = 512
-# 文本来源：labels / captions / both
+# 文本来源：labels / captions / both / imglabels
 C.text_source = "captions"
 # 选择文本编码器：clip / jinaclip
 C.text_encoder = "jinaclip"
@@ -82,4 +82,3 @@ C.log_file = C.log_dir + "/log_" + exp_time + ".log"
 C.link_log_file = C.log_file + "/log_last.log"
 C.val_log_file = C.log_dir + "/val_" + exp_time + ".log"
 C.link_val_log_file = C.log_dir + "/val_last.log"
-

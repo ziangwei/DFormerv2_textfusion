@@ -1,14 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=text_generate
-#SBATCH --partition=lrz-v100x2
-#SBATCH --gres=gpu:2       # 请求1个GPU
-#SBATCH --time=14:00:00    # 运行时间限制
-#SBATCH --mem=64G          # 内存需求
+#SBATCH --job-name=generate_labels_top5    # 任务名
+#SBATCH --partition=lrz-hgx-h100-94x4
+#SBATCH --nodes=1                     # 申请1个节点
+#SBATCH --gpus-per-node=1             # 为每个节点申请1个GPU
+#SBATCH --mem=64G                     # 申请64GB内存，和您之前设的一样
+#SBATCH --time=08:00:00               # 任务最长运行时长，设置为8小时，应该足够了
 
-# srun python3 blip_generate.py
+CACHE_DIR="/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache"
+mkdir -p ${CACHE_DIR}
+export HF_HOME=${CACHE_DIR}
 
-# srun python3 generate_clip_prompts.py
+python generate_tags_internvl3.py \
+  --model_id OpenGVLab/InternVL3-38B \
+  --num_tags 5 \
+  --batch_size 1 \
+  --max_new_tokens 64
 
-# srun python3 check.py
-
-srun python3 label_generate.py
+echo "标签生成完成！"

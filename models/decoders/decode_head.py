@@ -1,16 +1,10 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from abc import ABCMeta, abstractmethod
-
 import torch
 import torch.nn as nn
 from mmengine.model.base_module import BaseModule
-# , auto_fp16, force_fp32
-
-# from mmseg.core import build_pixel_sampler
 from mmseg.ops import resize
-from ..builder import build_loss
 from ..losses import accuracy
-
 
 class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
     """Base class for BaseDecodeHead.
@@ -82,21 +76,6 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
 
         self.ignore_index = ignore_index
         self.align_corners = align_corners
-
-        # if isinstance(loss_decode, dict):
-        #     self.loss_decode = build_loss(loss_decode)
-        # elif isinstance(loss_decode, (list, tuple)):
-        #     self.loss_decode = nn.ModuleList()
-        #     for loss in loss_decode:
-        #         self.loss_decode.append(build_loss(loss))
-        # else:
-        #     raise TypeError(f'loss_decode must be a dict or sequence of dict,\
-        #         but got {type(loss_decode)}')
-
-        # if sampler is not None:
-        #     self.sampler = build_pixel_sampler(sampler, context=self)
-        # else:
-        #     self.sampler = None
 
         self.conv_seg = nn.Conv2d(channels, num_classes, kernel_size=1)
         if dropout_ratio > 0:
