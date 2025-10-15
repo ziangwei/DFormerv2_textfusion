@@ -392,11 +392,11 @@ with Engine(custom_parser=parser) as engine:
                     loss.backward()
                     optimizer.step()
 
-                if not args.amp:
-                    if epoch == 1:
-                        for name, param in model.named_parameters():
-                            if param.grad is None:
-                                logger.warning(f"{name} has no grad, please check")
+                # if not args.amp:
+                #     if epoch == 1:
+                #         for name, param in model.named_parameters():
+                #             if param.grad is None:
+                #                 logger.warning(f"{name} has no grad, please check")
 
                 current_idx = (epoch - 1) * config.niters_per_epoch + idx
                 lr = lr_policy.get_lr(current_idx)

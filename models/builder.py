@@ -66,8 +66,8 @@ class EncoderDecoder(nn.Module):
             from .decoders.hsg_head import HierarchicalSemanticGuidedHead
             chs = list(self.channels)
             self.decode_head = HierarchicalSemanticGuidedHead(
-                in_channels=chs,
-                in_index=list(range(len(chs))),
+                in_channels=chs[1:],
+                in_index=[1, 2, 3],
                 input_transform=("multiple_select" if len(chs) > 1 else None),
                 channels=getattr(cfg, "decoder_embed_dim", 512),
                 num_classes=cfg.num_classes,

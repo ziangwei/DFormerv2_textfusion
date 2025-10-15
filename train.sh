@@ -1,7 +1,7 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29568} #158
+PORT=${PORT:-29378} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
 
@@ -24,8 +24,8 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
     --text-source imglabels \
     --text-encoder jinaclip \
-    --sam-enc-stages 1,2,3 \
-    --sam-dec-stages 1,2,3 \
+    --sam-enc-stages 1,2 \
+    --sam-dec-stages 1,2 \
     --no-sliding \
     --no-compile \
     --syncbn \
@@ -42,9 +42,9 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
 # 选择文本编码器：clip / jinaclip
 # Encoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
 # --sam-enc-stages 0,2 \
-# Decoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
+# Decoder 侧在哪些 stage 启用 SAM（按 1/2/3）
 # --sam-dec-stages 1,3 \
-
+# 例子: 1，3的时候 decoder启用了对于H/8和H/32的stage输出的decoder内的SAM
 
 # config for DFormers on NYUDepthv2
 # local_configs.NYUDepthv2.DFormer_Large
