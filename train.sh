@@ -1,7 +1,7 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29378} #158
+PORT=${PORT:-29398} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
 
@@ -24,8 +24,8 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
     --text-source imglabels \
     --text-encoder jinaclip \
-    --sam-enc-stages 1,2 \
-    --sam-dec-stages 1,2 \
+    --sam-enc-stages "" \
+    --sam-dec-stages 1 \
     --no-sliding \
     --no-compile \
     --syncbn \

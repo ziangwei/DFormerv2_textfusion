@@ -339,15 +339,20 @@ class BasicLayer(nn.Module):
         )
         self.downsample = PatchMerging(dim=embed_dim, out_dim=out_dim, norm_layer=norm_layer) if downsample is not None else None
 
-    def forward(self, x, x_e):
+    def forward(self, x, x_e, text_features=None, sam_module=None):
         for blk in self.blocks:
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not)
             else:
                 x = blk(x, x_e, split_or_not=self.split_or_not)
+
+        # ★ 在下采样前注入 SAM（此时通道=embed_dim[i]，与 sam_module 的 LayerNorm 维度匹配）
+        if (sam_module is not None) and (text_features is not None):
+            x = sam_module(x, text_features)
+
         if self.downsample is not None:
             x_down = self.downsample(x)
-            return x, x_down
+            return x, x_down  # x 作为导出（x_out），x_down 进下一层
         else:
             return x, x
 
@@ -490,14 +495,16 @@ class dformerv2(nn.Module):
         outs = []
         use_text_guidance = text_features is not None
         if use_text_guidance and text_features.dim() == 2:
-            text_features = text_features.unsqueeze(0)
+            text_features = text_features.unsqueeze(1)
         if use_text_guidance:
             text_features = text_features.to(device=x.device, dtype=x.dtype)
 
         for i in range(self.num_layers):
-            x_out, x = self.layers[i](x, x_e)
-            if use_text_guidance and (i in self._sam_enc_enabled):
-                x_out = self.encoder_sam_stages[i](x_out, text_features)
+            # 仅当启用且有文本时，传入当层的 SAM 模块；否则传 None
+            sam_module = self.encoder_sam_stages[i] if (use_text_guidance and (i in self._sam_enc_enabled)) else None
+
+            # 传入 text_features 与 sam_module，让 BasicLayer 在“下采样前”完成注入
+            x_out, x = self.layers[i](x, x_e, text_features=text_features, sam_module=sam_module)
 
             if i in self.out_indices:
                 if i != 0:
