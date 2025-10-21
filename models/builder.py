@@ -57,6 +57,7 @@ class EncoderDecoder(nn.Module):
             # 透传 SAM Top-K 策略
             backbone_kwargs["sam_use_topk"] = getattr(cfg, "sam_use_topk", True)
             backbone_kwargs["sam_top_m"] = getattr(cfg, "sam_top_m", 5)
+            backbone_kwargs["superpower"] = getattr(cfg, "superpower", False)
 
         self.backbone = backbone(**backbone_kwargs)
         self.aux_head = None

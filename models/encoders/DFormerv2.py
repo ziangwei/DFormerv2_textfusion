@@ -339,20 +339,26 @@ class BasicLayer(nn.Module):
         )
         self.downsample = PatchMerging(dim=embed_dim, out_dim=out_dim, norm_layer=norm_layer) if downsample is not None else None
 
-    def forward(self, x, x_e, text_features=None, sam_module=None):
-        for blk in self.blocks:
+    def forward(self, x, x_e, text_features=None, sam_module=None, sam_blocks=None, superpower=False):
+        for b_idx, blk in enumerate(self.blocks):  # ← 用 enumerate 取 b_idx
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not)
             else:
                 x = blk(x, x_e, split_or_not=self.split_or_not)
 
-        # ★ 在下采样前注入 SAM（此时通道=embed_dim[i]，与 sam_module 的 LayerNorm 维度匹配）
-        if (sam_module is not None) and (text_features is not None):
+            # 逐 block 注入：仅当 superpower=True 且 sam_blocks 非空，且 b_idx 在范围内
+            if superpower and (sam_blocks is not None) and (len(sam_blocks) > 0) and (b_idx < len(sam_blocks)):
+                sam_b = sam_blocks[b_idx]
+                if (sam_b is not None) and (text_features is not None):
+                    x = sam_b(x, text_features)
+
+        # “stage 末一次”注入：仅当 superpower=False 才走这里
+        if (not superpower) and (sam_module is not None) and (text_features is not None):
             x = sam_module(x, text_features)
 
         if self.downsample is not None:
             x_down = self.downsample(x)
-            return x, x_down  # x 作为导出（x_out），x_down 进下一层
+            return x, x_down
         else:
             return x, x
 
@@ -379,6 +385,7 @@ class dformerv2(nn.Module):
         sam_enc_stages=(0, 1, 2, 3),
         sam_use_topk=True,
         sam_top_m=5,
+        superpower: bool = False
     ):
         super().__init__()
         self.out_indices = out_indices
@@ -390,6 +397,7 @@ class dformerv2(nn.Module):
         self._sam_enc_enabled = set(int(x) for x in sam_enc_stages) if sam_enc_stages is not None else set([0, 1, 2, 3])
 
         self.patch_embed = PatchEmbed(in_chans=3, embed_dim=embed_dims[0], norm_layer=norm_layer if self.patch_norm else None)
+        self.superpower = bool(superpower)
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         self.layers = nn.ModuleList()
@@ -429,6 +437,22 @@ class dformerv2(nn.Module):
             if i not in self._sam_enc_enabled:
                 for p in m.parameters():
                     p.requires_grad = False
+
+        self.encoder_sam_blocks = nn.ModuleList()
+        for i in range(self.num_layers):
+            if self.superpower and (i in self._sam_enc_enabled):
+                depth_i = depths[i]
+                ml = nn.ModuleList([
+                    SemanticAlignmentModule(
+                        query_dim=embed_dims[i], text_dim=text_dim,
+                        use_topk=sam_use_topk, top_m=sam_top_m,
+                    )
+                    for _ in range(depth_i)
+                ])
+                self.encoder_sam_blocks.append(ml)
+            else:
+                # 占位，保持索引对齐；不占参数
+                self.encoder_sam_blocks.append(nn.ModuleList())
 
         self.extra_norms = nn.ModuleList()
         for i in range(len(embed_dims) - 1):
@@ -495,17 +519,36 @@ class dformerv2(nn.Module):
         outs = []
         use_text_guidance = text_features is not None
         if use_text_guidance and text_features.dim() == 2:
-            text_features = text_features.unsqueeze(1)
+            text_features = text_features.unsqueeze(0)
         if use_text_guidance:
             text_features = text_features.to(device=x.device, dtype=x.dtype)
 
         for i in range(self.num_layers):
-            # 仅当启用且有文本时，传入当层的 SAM 模块；否则传 None
-            sam_module = self.encoder_sam_stages[i] if (use_text_guidance and (i in self._sam_enc_enabled)) else None
+            if self.superpower:
+                # 逐 block：仅当该 stage 启用时传入对应 ModuleList；否则传空
+                sam_blocks = self.encoder_sam_blocks[i] if (
+                            use_text_guidance and (i in self._sam_enc_enabled)) else None
+                x_out, x = self.layers[i](x, x_e,
+                                          text_features=text_features,
+                                          sam_module=None,
+                                          sam_blocks=sam_blocks,
+                                          superpower=True)
+            else:
+                # === export-only：先跑完本 stage，再只对 x_out 做 SAM（不改 x / 不进主干） ===
+                # 1) 进入 BasicLayer 时不传 sam_module，避免在 layer 内注入
+                x_out, x = self.layers[i](
+                    x, x_e,
+                    text_features=None,
+                    sam_module=None,
+                    sam_blocks=None,
+                    superpower=False,
+                )
 
-            # 传入 text_features 与 sam_module，让 BasicLayer 在“下采样前”完成注入
-            x_out, x = self.layers[i](x, x_e, text_features=text_features, sam_module=sam_module)
-
+                # 2) 仅当启用并有文本时，对 x_out 做一次 SAM
+                if use_text_guidance and (i in self._sam_enc_enabled):
+                    sam_module = self.encoder_sam_stages[i]
+                    x_out = sam_module(x_out, text_features)
+                
             if i in self.out_indices:
                 if i != 0:
                     norm_layer = self.extra_norms[i - 1]

@@ -1,9 +1,8 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29398} #158
+PORT=${PORT:-29518} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
-
 
 CACHE_DIR="/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache"
 mkdir -p ${CACHE_DIR}
@@ -24,8 +23,8 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
     --text-source imglabels \
     --text-encoder jinaclip \
-    --sam-enc-stages "" \
-    --sam-dec-stages 1 \
+    --sam-enc-stages 1,2,3 \
+    --sam-dec-stages 1,2,3 \
     --no-sliding \
     --no-compile \
     --syncbn \
@@ -35,6 +34,7 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --val_amp \
     --pad_SUNRGBD \
     --no-use_seed \
+    --superpower \
 
 # --text-source imglabels \
 # 文本来源：labels / captions / both / imglabels
@@ -45,6 +45,9 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
 # Decoder 侧在哪些 stage 启用 SAM（按 1/2/3）
 # --sam-dec-stages 1,3 \
 # 例子: 1，3的时候 decoder启用了对于H/8和H/32的stage输出的decoder内的SAM
+# --superpower \ 代指block内部的结构
+
+
 
 # config for DFormers on NYUDepthv2
 # local_configs.NYUDepthv2.DFormer_Large

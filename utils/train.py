@@ -62,6 +62,7 @@ parser.add_argument("--image-labels-json-path", type=str)
 # --- SAM per-stage switches ---
 parser.add_argument("--sam-enc-stages", type=str, default="0,1,2,3", help="Comma separated, e.g., 0,2")
 parser.add_argument("--sam-dec-stages", type=str, default="0,1,2,3", help="Comma separated, e.g., 1,3")
+parser.add_argument("--superpower", default=False, action=argparse.BooleanOptionalAction)
 
 # os.environ['MASTER_PORT'] = '169710'
 torch.set_float32_matmul_precision("high")
@@ -163,6 +164,7 @@ with Engine(custom_parser=parser) as engine:
         # === SAM per-stage ===
         config.sam_enc_stages = _parse_stages(args.sam_enc_stages)
         config.sam_dec_stages = _parse_stages(args.sam_dec_stages)
+        config.superpower = bool(getattr(args, "superpower", False))
 
         logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
         # check if pad_SUNRGBD is used correctly
