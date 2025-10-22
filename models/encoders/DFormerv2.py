@@ -302,19 +302,32 @@ class RGBD_Block(nn.Module):
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
             self.gamma_2 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
 
-    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False):
+    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False,
+                sam_b: nn.Module = None, text_features: torch.Tensor = None, superpower: bool = False):
         x = x + self.cnn_pos_encode(x)
         b, h, w, d = x.size()
         geo_prior = self.Geo((h, w), x_e, split_or_not=split_or_not)
+
+        # 自注意力
         out = self.Attention(self.layer_norm1(x), geo_prior, split_or_not)
+
+        # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
+        if superpower and (sam_b is not None) and (text_features is not None):
+            # 使用我们在 semantic_alignment 里新增的 forward_ssa（无 top-k / 无 FFN / 单标量门控）
+            out = sam_b.forward_ssa(out, text_features)
+
+        # 残差1
         if self.layerscale:
             x = x + self.drop_path(self.gamma_1 * out)
         else:
             x = x + self.drop_path(out)
+
+        # FFN（保持不变）
         if self.layerscale:
             x = x + self.drop_path(self.gamma_2 * self.ffn(self.layer_norm2(x)))
         else:
             x = x + self.drop_path(self.ffn(self.layer_norm2(x)))
+
         return x
 
 
@@ -340,19 +353,20 @@ class BasicLayer(nn.Module):
         self.downsample = PatchMerging(dim=embed_dim, out_dim=out_dim, norm_layer=norm_layer) if downsample is not None else None
 
     def forward(self, x, x_e, text_features=None, sam_module=None, sam_blocks=None, superpower=False):
-        for b_idx, blk in enumerate(self.blocks):  # ← 用 enumerate 取 b_idx
+        for b_idx, blk in enumerate(self.blocks):
             if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not)
+                # 注意：把本 block 对应的 sam_b/text_features/superpower 一并传给 RGBD_Block.forward
+                x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not,
+                                          sam_b=(sam_blocks[b_idx] if (superpower and sam_blocks is not None and b_idx < len(sam_blocks)) else None),
+                                          text_features=text_features,
+                                          superpower=superpower)
             else:
-                x = blk(x, x_e, split_or_not=self.split_or_not)
+                x = blk(x, x_e, split_or_not=self.split_or_not,
+                        sam_b=(sam_blocks[b_idx] if (superpower and sam_blocks is not None and b_idx < len(sam_blocks)) else None),
+                        text_features=text_features,
+                        superpower=superpower)
 
-            # 逐 block 注入：仅当 superpower=True 且 sam_blocks 非空，且 b_idx 在范围内
-            if superpower and (sam_blocks is not None) and (len(sam_blocks) > 0) and (b_idx < len(sam_blocks)):
-                sam_b = sam_blocks[b_idx]
-                if (sam_b is not None) and (text_features is not None):
-                    x = sam_b(x, text_features)
-
-        # “stage 末一次”注入：仅当 superpower=False 才走这里
+        # 非 superpower（旧导出或 pre_down）时，如需在 stage 末做一次 SAM，仍走旧分支
         if (not superpower) and (sam_module is not None) and (text_features is not None):
             x = sam_module(x, text_features)
 
@@ -548,7 +562,7 @@ class dformerv2(nn.Module):
                 if use_text_guidance and (i in self._sam_enc_enabled):
                     sam_module = self.encoder_sam_stages[i]
                     x_out = sam_module(x_out, text_features)
-                
+
             if i in self.out_indices:
                 if i != 0:
                     norm_layer = self.extra_norms[i - 1]

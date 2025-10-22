@@ -1,7 +1,7 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29518} #158
+PORT=${PORT:-29528} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
 CACHE_DIR="/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache"

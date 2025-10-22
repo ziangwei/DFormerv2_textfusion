@@ -77,6 +77,9 @@ class SemanticAlignmentModule(nn.Module):
         # 残差缩放
         self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))
 
+        # SSA 风格的单标量门控（仅给 forward_ssa 用）
+        self.gamma = nn.Parameter(torch.tensor(0.05, dtype=torch.float))
+
         # 初始化
         nn.init.xavier_uniform_(self.q_proj.weight)
         nn.init.xavier_uniform_(self.v_proj.weight)
@@ -157,4 +160,38 @@ class SemanticAlignmentModule(nn.Module):
         y = self.norm2(y)
         y = y + self.ffn(y)  # Pre-LN 结构
 
+        return y.view(B, H, W, Cv)
+
+    def forward_ssa(self, visual_features: torch.Tensor, text_features: torch.Tensor):
+        """
+        轻量（SSA-like）前向：仅用于 encoder/superpower。
+        - 不做 top-k（避免中层过早稀疏）
+        - 不做额外 FFN / LN
+        - 单标量门控 self.gamma
+        visual_features: (B,H,W,Cv)  —— 放在 block 内、GSA 输出之后使用
+        text_features:   (B,T,Ct) 或 (T,Ct)
+        """
+        B, H, W, Cv = visual_features.shape
+
+        # 直接投影与归一化（不用额外 LN）
+        x = visual_features.view(B, H * W, Cv)  # (B,N,Cv)
+        q = F.normalize(self.q_proj(x), dim=-1, eps=1e-6)  # (B,N,Ct)
+
+        # 文本处理（广播 + 归一化）
+        text_features = self._ensure_batched_text(text_features, B)  # (B,T,Ct)
+        k = F.normalize(text_features, dim=-1, eps=1e-6)  # (B,T,Ct)
+        v = self.v_proj(text_features)  # (B,T,Cv)
+
+        # 全量注意力（不做 top-k），屏蔽 padding
+        pad_mask = self._make_text_pad_mask(text_features)  # (B,T)
+        scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
+        sim = torch.einsum('bnc,btc->bnt', q, k) * scale  # (B,N,T)
+        if pad_mask.any():
+            sim = sim.masked_fill(pad_mask.unsqueeze(1), float("-inf"))
+        attn = F.softmax(sim, dim=-1)  # (B,N,T)
+
+        aligned = torch.einsum('bnt,btc->bnc', attn, v)  # (B,N,Cv)
+
+        # 单标量门控 + 残差（无额外 LN/FFN）
+        y = x + self.gamma * aligned
         return y.view(B, H, W, Cv)
