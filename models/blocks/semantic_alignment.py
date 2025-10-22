@@ -1,4 +1,3 @@
-import os
 import math
 import torch
 import torch.nn as nn
@@ -7,26 +6,25 @@ import torch.nn.functional as F
 
 class SemanticAlignmentModule(nn.Module):
     """
-    文本引导的语义对齐模块（SAM v2.1）
-    - 支持可选 Top-K（像素级），默认对 imglabels 可关闭
-    - 对 padding 的全零 token 做 mask
-    - q/k/text 全部 L2 归一化
-    - 残差缩放 alpha（可学习，初始 0.1），温度 logit_scale clamp
+    多头版 SAM（与各 stage 的 num_heads 对齐；在 Cv=query_dim 空间做多头）
+    - Decoder 侧 forward: 多头注意力 (+可选Top-K) + 残差门控(alpha) + FFN (Pre-LN)
+    - Encoder/Superpower 侧 forward_ssa: 多头 SSA-lite（无Top-K/无FFN/无额外LN，单标量 gamma）
     """
 
     def __init__(
         self,
-        query_dim: int,          # C_visual
-        text_dim: int,           # C_text
+        query_dim: int,            # Cv（当前 stage 的通道数）
+        text_dim: int,             # Ct（通常 512）
         top_m: int = 5,
         use_topk: bool = True,
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         ffn_drop: float = 0.0,
         add_residual: bool = True,
-        gate_channels: bool = False,  # False: scalar gate; True: channel gate
-        alpha_init: float = 0.1,      # 残差缩放初值
-        clamp_logit: float = 2.0      # 温度上下界的绝对值：exp(clamp(...))
+        gate_channels: bool = False,
+        alpha_init: float = 0.1,
+        clamp_logit: float = 2.0,
+        num_heads: int = 1,        # 由调用方传：该 stage 的 num_heads
     ):
         super().__init__()
         self.top_m = top_m
@@ -35,37 +33,38 @@ class SemanticAlignmentModule(nn.Module):
         self.gate_channels = gate_channels
         self.clamp_logit = float(clamp_logit)
 
-        # 环境变量可一键关闭 Top-K（对所有端口），不设置则不影响
-        self._env_use_topk = (os.environ.get("SAM_USE_TOPK", "1") != "0")
+        # === 多头配置：在 Cv 空间按头数切分 ===
+        self.num_heads = int(num_heads)
+        assert query_dim % self.num_heads == 0, \
+            f"query_dim({query_dim}) must be divisible by num_heads({self.num_heads})"
+        self.head_dim = query_dim // self.num_heads  # Dh
+        self.d_k = float(self.head_dim)              # 缩放用
 
-        # 预归一化
+        # === 预归一化（decoder 侧 forward 用；SSA-lite 不用） ===
         self.norm1 = nn.LayerNorm(query_dim)
         self.norm2 = nn.LayerNorm(query_dim)
 
-        # 线性投影
-        self.q_proj = nn.Linear(query_dim, text_dim)
-        self.v_proj = nn.Linear(text_dim, query_dim)
+        # === 线性投影：统一映射到 Cv 空间做注意力 ===
+        self.q_proj  = nn.Linear(query_dim, query_dim)   # (B,N,Cv)->(B,N,Cv)
+        self.k_proj  = nn.Linear(text_dim,  query_dim)   # (B,T,Ct)->(B,T,Cv)
+        self.v_proj  = nn.Linear(text_dim,  query_dim)   # (B,T,Ct)->(B,T,Cv)
 
-        # 门控
+        # 多头拼接后已是 Cv，按需再做投影；为保持接口一致提供 out_proj（可为 Identity）
+        self.out_proj = nn.Identity()
+
+        # === 门控（decoder 侧使用；encoder 侧用 gamma） ===
         if gate_channels:
-            self.gate = nn.Sequential(
-                nn.Linear(query_dim, query_dim),
-                nn.Sigmoid()
-            )
+            self.gate = nn.Sequential(nn.Linear(query_dim, query_dim), nn.Sigmoid())
         else:
-            self.gate = nn.Sequential(
-                nn.Linear(query_dim, 1),
-                nn.Sigmoid()
-            )
+            self.gate = nn.Sequential(nn.Linear(query_dim, 1), nn.Sigmoid())
 
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        # 温度（对数域）与维度
+        # 温度参数（对数域）
         self.logit_scale = nn.Parameter(torch.tensor(math.log(1 / 0.07)))
-        self.d_k = float(text_dim)
 
-        # FFN
+        # FFN（decoder 侧 forward 使用；SSA-lite 不用）
         self.ffn = nn.Sequential(
             nn.Linear(query_dim, query_dim * 4),
             nn.GELU(),
@@ -74,124 +73,114 @@ class SemanticAlignmentModule(nn.Module):
             nn.Dropout(ffn_drop),
         )
 
-        # 残差缩放
-        self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))
-
-        # SSA 风格的单标量门控（仅给 forward_ssa 用）
-        self.gamma = nn.Parameter(torch.tensor(0.05, dtype=torch.float))
+        # 残差缩放参数
+        self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
+        self.gamma = nn.Parameter(torch.tensor(0.05, dtype=torch.float))       # encoder/superpower (SSA-lite)
 
         # 初始化
-        nn.init.xavier_uniform_(self.q_proj.weight)
-        nn.init.xavier_uniform_(self.v_proj.weight)
-        if self.q_proj.bias is not None:
-            nn.init.zeros_(self.q_proj.bias)
-        if self.v_proj.bias is not None:
-            nn.init.zeros_(self.v_proj.bias)
+        nn.init.xavier_uniform_(self.q_proj.weight);  nn.init.zeros_(self.q_proj.bias)
+        nn.init.xavier_uniform_(self.k_proj.weight);  nn.init.zeros_(self.k_proj.bias)
+        nn.init.xavier_uniform_(self.v_proj.weight);  nn.init.zeros_(self.v_proj.bias)
+
+    # ---------- 工具函数 ----------
+    @staticmethod
+    def _ensure_batched_text(text_features: torch.Tensor, B: int) -> torch.Tensor:
+        """
+        接受 (B,T,Ct) / (T,Ct) / (B,Ct) → 统一为 (B,T,Ct)
+        """
+        if text_features.dim() == 3:
+            return text_features
+        if text_features.dim() == 2:  # (T,Ct) 共享 token
+            return text_features.unsqueeze(0).expand(B, -1, -1)
+        if text_features.dim() == 1:  # (Ct,)
+            return text_features.view(1, 1, -1).expand(B, 1, -1)
+        raise ValueError(f"Unsupported text tensor shape: {text_features.shape}")
 
     @staticmethod
-    def _make_text_pad_mask(text_feats: torch.Tensor, eps: float = 1e-6):
-        """返回 (B,T) 的bool掩码：True 表示该 token 是 padding（整行≈0）。"""
-        with torch.no_grad():
-            norm = text_feats.float().abs().sum(dim=-1)  # (B,T)
-            mask = norm <= eps
-        return mask
+    def _make_text_pad_mask(text_feats: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+        """
+        将全零 token 视作 padding：返回 (B,T) 的 bool 掩码
+        """
+        return (text_feats.float().abs().sum(dim=-1) <= eps)
 
-    @staticmethod
-    def _ensure_batched_text(text_features: torch.Tensor, B: int):
-        if text_features.dim() == 2:  # (T,Ct)
-            text_features = text_features.unsqueeze(0)  # (1,T,Ct)
-        if text_features.size(0) != B:
-            text_features = text_features.expand(B, -1, -1).contiguous()
-        return text_features
-
+    # ---------- Decoder 侧：多头 +（可选）TopK + FFN ----------
     def forward(self, visual_features: torch.Tensor, text_features: torch.Tensor):
         """
-        visual_features: (B,H,W,Cv) NHWC
-        text_features:   (B,T,Ct) 或 (T,Ct)
+        visual_features: (B,H,W,Cv)  —— NHWC
+        text_features:   (B,T,Ct) / (T,Ct) / (B,Ct)
         """
         B, H, W, Cv = visual_features.shape
 
-        # 预归一化 + q
-        x = self.norm1(visual_features).view(B, H * W, Cv)  # (B,N,Cv)
-        q = self.q_proj(x)                                  # (B,N,Ct)
-        q = F.normalize(q, dim=-1, eps=1e-6)
+        # Pre-LN + Q
+        x = self.norm1(visual_features).view(B, H * W, Cv)     # (B,N,Cv)
+        q_full = self.q_proj(x)                                # (B,N,Cv)
 
-        # 文本处理（广播 + 归一化 + padding mask）
-        text_features = self._ensure_batched_text(text_features, B)    # (B,T,Ct)
-        k = F.normalize(text_features, dim=-1, eps=1e-6)               # (B,T,Ct)
-        v = self.v_proj(text_features)                                  # (B,T,Cv)
-        pad_mask = self._make_text_pad_mask(text_features)              # (B,T)
+        # 文本 → K/V（到 Cv 空间）
+        text_b = self._ensure_batched_text(text_features, B)   # (B,T,Ct)
+        k_full = self.k_proj(text_b)                           # (B,T,Cv)
+        v_full = self.v_proj(text_b)                           # (B,T,Cv)
+        pad_mask = self._make_text_pad_mask(text_b)            # (B,T)
 
-        # 相似度 logits
+        # 多头拆分
+        Hh, Dh = self.num_heads, self.head_dim
+        q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,N,H,Dh)
+        k = F.normalize(k_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,T,H,Dh)
+        v = v_full.view(B, -1, Hh, Dh)                                  # (B,T,H,Dh)
+
+        # 注意力
         scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
-        sim = torch.einsum('bnc,btc->bnt', q, k) * scale  # (B,N,T)
+        sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale             # (B,N,H,T)
+        if pad_mask.any():
+            sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
-        # 是否执行 Top-K（像素级）
-        effective_topk = (self.use_topk and self._env_use_topk and
-                          (self.top_m is not None))
-        if effective_topk and (self.top_m < sim.size(-1)):
-            # 取每个像素的 Top-K 文本
-            top_vals, top_idx = sim.topk(self.top_m, dim=-1)  # (B,N,M)
-            if pad_mask.any():
-                pad_mask_top = torch.gather(pad_mask.unsqueeze(1).expand(B, H * W, -1), 2, top_idx)
-                top_vals = top_vals.masked_fill(pad_mask_top, float("-inf"))
-            attn = F.softmax(top_vals, dim=-1)
-            attn = self.attn_drop(attn)  # (B,N,M)
+        # Top-K（对 T 维；行为与原实现一致）
+        if self.use_topk and (self.top_m is not None) and (self.top_m < sim.size(-1)):
+            topv, topi = torch.topk(sim, k=self.top_m, dim=-1)          # (B,N,H,M)
+            mask = torch.zeros_like(sim).scatter_(-1, topi, 1.0)
+            sim = sim.masked_fill(mask.eq(0), float('-inf'))
 
-            # 从 v 里 gather 出对应 (B,N,M,Cv)
-            v_exp = v.unsqueeze(1).expand(B, H * W, v.size(1), v.size(2))
-            v_sel = torch.gather(v_exp, 2, top_idx.unsqueeze(-1).expand(B, H * W, self.top_m, v.size(2)))
-            aligned = (attn.unsqueeze(-1) * v_sel).sum(dim=2)  # (B,N,Cv)
-        else:
-            # 全量 softmax，但先屏蔽 padding token
-            if pad_mask.any():
-                sim = sim.masked_fill(pad_mask.unsqueeze(1), float("-inf"))
-            attn = F.softmax(sim, dim=-1)             # (B,N,T)
-            attn = self.attn_drop(attn)
-            aligned = torch.einsum('bnt,btc->bnc', attn, v)  # (B,N,Cv)
+        attn = F.softmax(sim, dim=-1)
+        attn = self.attn_drop(attn)
 
-        aligned = self.proj_drop(aligned)
+        # 聚合回 Cv（多头拼接）
+        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)             # (B,N,H,Dh)
+        aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))      # (B,N,Cv)
+        aligned = self.out_proj(aligned)                                  # Identity
 
-        # 门控 + 残差
-        gate = self.gate(x)  # (B,N,1) 或 (B,N,Cv)
-        aligned = aligned * gate
-
-        y = x + self.alpha * aligned if self.add_residual else aligned
+        # 残差 + 门控 + FFN（Pre-LN）
+        gate = self.gate(x)                                              # (B,N,1) 或 (B,N,Cv)
+        y = (x + self.alpha * gate * aligned) if self.add_residual else (self.alpha * aligned)
         y = self.norm2(y)
-        y = y + self.ffn(y)  # Pre-LN 结构
-
+        y = y + self.ffn(y)
         return y.view(B, H, W, Cv)
 
+    # ---------- Encoder/Superpower 侧：多头 SSA-lite（无Top-K/无FFN/无额外LN） ----------
     def forward_ssa(self, visual_features: torch.Tensor, text_features: torch.Tensor):
         """
-        轻量（SSA-like）前向：仅用于 encoder/superpower。
-        - 不做 top-k（避免中层过早稀疏）
-        - 不做额外 FFN / LN
-        - 单标量门控 self.gamma
-        visual_features: (B,H,W,Cv)  —— 放在 block 内、GSA 输出之后使用
-        text_features:   (B,T,Ct) 或 (T,Ct)
+        放在 block 内 GSA 之后、FFN 之前。
+        visual_features: (B,H,W,Cv)
+        text_features:   (B,T,Ct) / (T,Ct) / (B,Ct)
         """
         B, H, W, Cv = visual_features.shape
 
-        # 直接投影与归一化（不用额外 LN）
-        x = visual_features.view(B, H * W, Cv)  # (B,N,Cv)
-        q = F.normalize(self.q_proj(x), dim=-1, eps=1e-6)  # (B,N,Ct)
+        x = visual_features.view(B, H * W, Cv)               # (B,N,Cv)
+        q_full = self.q_proj(x)                              # (B,N,Cv)
 
-        # 文本处理（广播 + 归一化）
-        text_features = self._ensure_batched_text(text_features, B)  # (B,T,Ct)
-        k = F.normalize(text_features, dim=-1, eps=1e-6)  # (B,T,Ct)
-        v = self.v_proj(text_features)  # (B,T,Cv)
+        text_b = self._ensure_batched_text(text_features, B) # (B,T,Ct)
+        k_full = self.k_proj(text_b)                         # (B,T,Cv)
+        v_full = self.v_proj(text_b)                         # (B,T,Cv)
 
-        # 全量注意力（不做 top-k），屏蔽 padding
-        pad_mask = self._make_text_pad_mask(text_features)  # (B,T)
+        Hh, Dh = self.num_heads, self.head_dim
+        q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,N,H,Dh)
+        k = F.normalize(k_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,T,H,Dh)
+        v = v_full.view(B, -1, Hh, Dh)                                  # (B,T,H,Dh)
+
         scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
-        sim = torch.einsum('bnc,btc->bnt', q, k) * scale  # (B,N,T)
-        if pad_mask.any():
-            sim = sim.masked_fill(pad_mask.unsqueeze(1), float("-inf"))
-        attn = F.softmax(sim, dim=-1)  # (B,N,T)
+        sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale             # (B,N,H,T)
+        attn = F.softmax(sim, dim=-1)
 
-        aligned = torch.einsum('bnt,btc->bnc', attn, v)  # (B,N,Cv)
+        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)            # (B,N,H,Dh)
+        aligned = aligned_h.reshape(B, -1, Hh * Dh)                      # (B,N,Cv)
 
-        # 单标量门控 + 残差（无额外 LN/FFN）
         y = x + self.gamma * aligned
         return y.view(B, H, W, Cv)

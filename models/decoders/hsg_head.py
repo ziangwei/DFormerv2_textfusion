@@ -37,6 +37,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                  sam_dec_stages=(0, 1, 2, 3),  # 全局 stage 索引集合
                  sam_use_topk=True,
                  sam_top_m=5,
+                 backbone_num_heads=(4, 4, 8, 16),
                  **kwargs):
         super().__init__(in_channels=in_channels,
                          in_index=in_index,
@@ -48,6 +49,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
 
         self.ham_channels = channels
         self.text_dim = text_dim
+        self.backbone_num_heads = list(backbone_num_heads)  # ★ 新增
 
         # === 逐层 SAM 准备（按全局索引控制） ===
         # 将外部传入的 sam_dec_stages（全局 0/1/2/3）映射到本地输入序列
@@ -68,6 +70,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                         use_topk=sam_use_topk,
                         top_m=sam_top_m,
                         # 轻注入，避免“前期快、后期疲软”
+                        num_heads=self.backbone_num_heads[global_idx],
                         alpha_init=0.05,
                         attn_drop=0.0, proj_drop=0.0, ffn_drop=0.0,
                     )

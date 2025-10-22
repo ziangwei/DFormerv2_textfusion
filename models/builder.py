@@ -78,6 +78,7 @@ class EncoderDecoder(nn.Module):
                 sam_dec_stages=getattr(cfg, "sam_dec_stages", [0, 1, 2, 3]),
                 sam_use_topk=getattr(cfg, "sam_use_topk", True),
                 sam_top_m=getattr(cfg, "sam_top_m", 5),
+                backbone_num_heads=getattr(self.backbone, "num_heads", [4, 4, 8, 16]),  # 动态透传 S/B/L 的头数
             )
             if cfg.aux_rate != 0:
                 from .decoders.fcnhead import FCNHead

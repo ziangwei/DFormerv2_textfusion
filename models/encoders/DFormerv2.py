@@ -406,6 +406,7 @@ class dformerv2(nn.Module):
         self.num_layers = len(depths)
         self.patch_norm = patch_norm
         self.norm_eval = norm_eval
+        self.num_heads = num_heads  # ★ 新增：保存各 stage 的头数
 
         # 哪些 encoder stage 启用 SAM
         self._sam_enc_enabled = set(int(x) for x in sam_enc_stages) if sam_enc_stages is not None else set([0, 1, 2, 3])
@@ -443,6 +444,7 @@ class dformerv2(nn.Module):
                     text_dim=text_dim,
                     use_topk=sam_use_topk,
                     top_m=sam_top_m,
+                    num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
                 )
             )
 
@@ -460,6 +462,7 @@ class dformerv2(nn.Module):
                     SemanticAlignmentModule(
                         query_dim=embed_dims[i], text_dim=text_dim,
                         use_topk=sam_use_topk, top_m=sam_top_m,
+                        num_heads=self.num_heads[i],  # 同一 stage 的头数
                     )
                     for _ in range(depth_i)
                 ])
