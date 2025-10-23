@@ -399,7 +399,8 @@ class dformerv2(nn.Module):
         sam_enc_stages=(0, 1, 2, 3),
         sam_use_topk=True,
         sam_top_m=5,
-        superpower: bool = False
+        superpower: bool = False,
+        sam_enc_gamma_scale: float = 0.01,
     ):
         super().__init__()
         self.out_indices = out_indices
@@ -445,6 +446,7 @@ class dformerv2(nn.Module):
                     use_topk=sam_use_topk,
                     top_m=sam_top_m,
                     num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
+                    gamma_scale=sam_enc_gamma_scale,
                 )
             )
 
@@ -463,6 +465,7 @@ class dformerv2(nn.Module):
                         query_dim=embed_dims[i], text_dim=text_dim,
                         use_topk=sam_use_topk, top_m=sam_top_m,
                         num_heads=self.num_heads[i],  # 同一 stage 的头数
+                        gamma_scale=sam_enc_gamma_scale,
                     )
                     for _ in range(depth_i)
                 ])

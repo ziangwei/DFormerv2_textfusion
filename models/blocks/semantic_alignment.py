@@ -25,6 +25,7 @@ class SemanticAlignmentModule(nn.Module):
         alpha_init: float = 0.1,
         clamp_logit: float = 2.0,
         num_heads: int = 1,        # 由调用方传：该 stage 的 num_heads
+        gamma_scale: float = 1.0,  # SSA-lite 的额外缩放，默认为 1
     ):
         super().__init__()
         self.top_m = top_m
@@ -76,6 +77,7 @@ class SemanticAlignmentModule(nn.Module):
         # 残差缩放参数
         self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
         self.gamma = nn.Parameter(torch.tensor(0.05, dtype=torch.float))       # encoder/superpower (SSA-lite)
+        self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
 
         # 初始化
         nn.init.xavier_uniform_(self.q_proj.weight);  nn.init.zeros_(self.q_proj.bias)
@@ -163,12 +165,14 @@ class SemanticAlignmentModule(nn.Module):
         """
         B, H, W, Cv = visual_features.shape
 
-        x = visual_features.view(B, H * W, Cv)               # (B,N,Cv)
-        q_full = self.q_proj(x)                              # (B,N,Cv)
+        x = self.norm1(visual_features).view(B, H * W, Cv)   # (B,N,Cv)
+        q_input = self.norm1(visual_features).view(B, H * W, Cv)
+        q_full = self.q_proj(q_input)                        # (B,N,Cv)
 
         text_b = self._ensure_batched_text(text_features, B) # (B,T,Ct)
         k_full = self.k_proj(text_b)                         # (B,T,Cv)
         v_full = self.v_proj(text_b)                         # (B,T,Cv)
+        pad_mask = self._make_text_pad_mask(text_b)          # (B,T)
 
         Hh, Dh = self.num_heads, self.head_dim
         q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,N,H,Dh)
@@ -177,10 +181,14 @@ class SemanticAlignmentModule(nn.Module):
 
         scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
         sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale             # (B,N,H,T)
+
+        if pad_mask.any():
+            sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
+
         attn = F.softmax(sim, dim=-1)
 
         aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)            # (B,N,H,Dh)
         aligned = aligned_h.reshape(B, -1, Hh * Dh)                      # (B,N,Cv)
 
-        y = x + self.gamma * aligned
+        y = x + (self.gamma * self.gamma_scale) * aligned
         return y.view(B, H, W, Cv)
