@@ -19,6 +19,8 @@ C.text_feature_dim = 512
 C.text_source = "imglabels"
 # 选择文本编码器：clip / jinaclip
 C.text_encoder = "clip"
+# 每张图最多取前 K 个标签，与旧版管线保持一致
+C.max_image_labels = 5
 # 具体模型名（留空走默认：clip→openai/clip-vit-base-patch16；jinaclip→jinaai/jina-clip-v2）
 C.text_encoder_name = None
 # 标签与描述数据

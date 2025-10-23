@@ -156,6 +156,7 @@ def get_train_loader(engine, dataset, config):
         "enable_text_guidance": getattr(config, "enable_text_guidance", False),
         "label_txt_path": getattr(config, "label_txt_path", None),
         "caption_json_path": getattr(config, "caption_json_path", None),
+        "image_labels_json_path": getattr(config, "image_labels_json_path", None),
         "text_template_set": getattr(config, "text_template_set", "clip"),
         "max_templates_per_label": getattr(config, "max_templates_per_label", 3),
         "text_source": getattr(config, "text_source", "both"),
@@ -165,6 +166,7 @@ def get_train_loader(engine, dataset, config):
         "max_caption_sentences": getattr(config, "max_caption_sentences", 8),
         "caption_topk": getattr(config, "caption_topk", 0),
         "caption_topk_mode": getattr(config, "caption_topk_mode", "class_sim"),
+        "max_image_labels": getattr(config, "max_image_labels", 0),
     }
     train_preprocess = TrainPre(config.norm_mean, config.norm_std, config.x_is_single_channel, config)
 
@@ -218,6 +220,7 @@ def get_val_loader(engine, dataset, config, val_batch_size=1):
         "label_txt_path": getattr(config, "label_txt_path", None),
         "caption_json_path": getattr(config, "caption_json_path", None),
         "text_template_set": getattr(config, "text_template_set", "clip"),
+        "image_labels_json_path": getattr(config, "image_labels_json_path", None),
         "max_templates_per_label": getattr(config, "max_templates_per_label", 3),
         "text_source": getattr(config, "text_source", "both"),
         "text_encoder": getattr(config, "text_encoder", "jinaclip"),
@@ -226,6 +229,7 @@ def get_val_loader(engine, dataset, config, val_batch_size=1):
         "max_caption_sentences": getattr(config, "max_caption_sentences", 8),
         "caption_topk": getattr(config, "caption_topk", 0),
         "caption_topk_mode": getattr(config, "caption_topk_mode", "class_sim"),
+        "max_image_labels": getattr(config, "max_image_labels", 0),
     }
     val_preprocess = ValPre(config.norm_mean, config.norm_std, config.x_is_single_channel, config)
 

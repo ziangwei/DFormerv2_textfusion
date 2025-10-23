@@ -147,6 +147,8 @@ class RGBXDataset(data.Dataset):
         self.max_caption_sentences = int(setting.get("max_caption_sentences", 8))
         self.caption_topk = int(setting.get("caption_topk", 0))  # 0 表示不开句级Top-K
         self.caption_topk_mode = setting.get("caption_topk_mode", "class_sim")
+        # 每图最多保留多少个标签（0 表示不限，回退到数据中的最大长度）
+        self.max_image_labels = int(setting.get("max_image_labels", 0))
         # 预备：类原型（给 class_sim Top-K 用）
         self.labels_txt_path = setting.get("label_txt_path", None)
         self.image_labels_json_path = setting.get("image_labels_json_path", None)
@@ -210,7 +212,7 @@ class RGBXDataset(data.Dataset):
             logger.error(f"Failed to encode image-level label texts: {exc}")
             self.imglabel_text_features = {}
         finally:
-             unload_clip_model()
+            unload_clip_model()
 
         if self.class_text_features is None:
             self.class_text_features = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
@@ -220,8 +222,8 @@ class RGBXDataset(data.Dataset):
     def _encode_image_labels(self):
         """
         读取 image_labels_json（key 为相对路径或文件名，value 为该图的标签文本列表），
-        对每张图的全部标签进行编码，不做 Top-K；为了 batch，对齐到全数据的最大长度。
-        缓存到与 JSON 同目录的 .text_cache 下。
+        对每张图的标签进行编码，可选地截断到固定的 max_image_labels，
+        再将特征 pad/截断到统一长度后缓存到与 JSON 同目录的 .text_cache 下。
         """
 
         out = {}
@@ -231,8 +233,11 @@ class RGBXDataset(data.Dataset):
 
         cache_dir = os.path.join(os.path.dirname(self.image_labels_json_path), ".text_cache")
         os.makedirs(cache_dir, exist_ok=True)
-        cache_name = f"imglabels_{os.path.splitext(os.path.basename(self.image_labels_json_path))[0]}_" \
-                       f"dim{self.text_feature_dim}_tmpl{self.max_templates_per_label}_set{self.text_template_set}.pt"
+        cache_name = (
+            f"imglabels_{os.path.splitext(os.path.basename(self.image_labels_json_path))[0]}_"
+            f"dim{self.text_feature_dim}_tmpl{self.max_templates_per_label}_"
+            f"set{self.text_template_set}_maxk{self.max_image_labels}.pt"
+        )
         cache_pt = os.path.join(cache_dir, cache_name)
 
         # 非主进程尝试直接读缓存
@@ -245,11 +250,12 @@ class RGBXDataset(data.Dataset):
             except Exception:
                 pass
 
-       # 读取 JSON
+        # 读取 JSON
 
         with open(self.image_labels_json_path, "r", encoding="utf-8") as f:
             mapping = json.load(f)  # {path_or_basename: [str,...]}
-        # 统计最大长度（不做Top-K）
+        # 根据设置统计 pad 长度（limit>0 时固定为 limit）
+        limit = max(int(self.max_image_labels or 0), 0)
         max_len = 0
         # 先收集标准化后的列表
         standardized = {}
@@ -260,48 +266,60 @@ class RGBXDataset(data.Dataset):
             # 去重保序 + 小写规整
             seen, clean = set(), []
             for lb in lab_list:
-                s = (lb or "").strip()
+                s = self._extract_image_label_text(lb)
                 if not s:
                     continue
                 s = s.lower()
                 if s not in seen:
-                    clean.append(s); seen.add(s)
+                    clean.append(s.lower()); seen.add(s)
 
             if not clean:
                 continue
-            standardized[os.path.basename(k)] = clean
-            max_len = max(max_len, len(clean))
+            if limit > 0:
+                # 保持 JSON 中既有的相似度排序，仅截断到前 limit 个
+                clean = clean[:limit]
+            standardized[k] = clean
+            if limit == 0:
+                max_len = max(max_len, len(clean))
 
-        if max_len == 0:
-               self._imglabel_tokens = 0
-               return out
+        pad_len = limit if limit > 0 else max_len
 
-     # 编码并对齐长度（pad 到 max_len）
-        for base, labels in standardized.items():
-              # 复用“每个 label 一个模板组 → 组内平均”得到 [K,D]
+        if pad_len == 0:
+            self._imglabel_tokens = 0
+            return out
+
+        # 编码并对齐长度（pad 到 pad_len）
+        for key, labels in standardized.items():
+            # 复用“每个 label 一个模板组 → 组内平均”得到 [K,D]
             groups = build_prompt_groups_from_labels(
-                    labels, L=len(labels),
-                    template_set = self.text_template_set,
-                max_templates_per_label = self.max_templates_per_label,
+                labels,
+                L=len(labels),
+                template_set=self.text_template_set,
+                max_templates_per_label=self.max_templates_per_label,
             )
             feats = encode_prompts(
-                    groups,
-                    encoder = self.text_encoder,
-                encoder_name = self.text_encoder_name,
-                target_dim = self.text_feature_dim,
+                groups,
+                encoder=self.text_encoder,
+                encoder_name=self.text_encoder_name,
+                target_dim=self.text_feature_dim,
             ).cpu().to(torch.float32)  # [Ki, D]
-            if feats.shape[0] < max_len:
-                pad = torch.zeros(max_len - feats.shape[0], feats.shape[1], dtype=torch.float32)
+            if feats.shape[0] < pad_len:
+                pad = torch.zeros(pad_len - feats.shape[0], feats.shape[1], dtype=torch.float32)
                 feats = torch.cat([feats, pad], dim=0)
-            out[base] = feats
+            elif feats.shape[0] > pad_len:
+                feats = feats[:pad_len]
+            out[key] = feats
+            base = os.path.basename(key)
+            if base not in out:
+                out[base] = feats
 
-        self._imglabel_tokens = max_len
+        self._imglabel_tokens = pad_len
 
         # 主进程写缓存，其它进程 barrier 后读取
 
         try:
             if self.is_master():
-                torch.save({"pad_len": max_len, "feats": out}, cache_pt)
+                torch.save({"pad_len": pad_len, "feats": out}, cache_pt)
                 try:
                     import torch.distributed as dist
                     if dist.is_available() and dist.is_initialized():
@@ -312,6 +330,35 @@ class RGBXDataset(data.Dataset):
             pass
 
         return out
+
+    def _extract_image_label_text(self, entry):
+        """标准化 image-level 标签条目，兼容多种 JSON 格式。"""
+
+        if entry is None:
+            return ""
+
+        if isinstance(entry, str):
+            return entry.strip()
+
+        if isinstance(entry, dict):
+            for key in ("label", "name", "text", "category", "class", "cls", "cls_name"):
+                val = entry.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+            # 兜底：如果字典里只有一个值，也尝试取出
+            for val in entry.values():
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+            return ""
+
+        if isinstance(entry, (list, tuple)) and entry:
+            first = entry[0]
+            if isinstance(first, str):
+                return first.strip()
+            if isinstance(first, dict):
+                return self._extract_image_label_text(first)
+
+        return str(entry).strip()
 
     def _encode_class_labels(self):
         labels = []
@@ -510,10 +557,18 @@ class RGBXDataset(data.Dataset):
         elif self.text_source == "imglabels":
             # 优先用 rgb_path 的 basename 匹配
             key_candidates = []
-            if rgb_path: key_candidates.append(os.path.basename(rgb_path))
-            if item_name: key_candidates.append(os.path.basename(item_name))
+            if rgb_path:
+                key_candidates.extend([rgb_path, os.path.basename(rgb_path)])
+            if item_name:
+                key_candidates.extend([item_name, os.path.basename(item_name)])
             img_feats = None
             for k in key_candidates:
+                if not k:
+                    continue
+                key = os.path.basename(k) if k not in self.imglabel_text_features else k
+                if key in self.imglabel_text_features:
+                    img_feats = self.imglabel_text_features[key]
+                    break
                 if k in self.imglabel_text_features:
                     img_feats = self.imglabel_text_features[k]; break
 
