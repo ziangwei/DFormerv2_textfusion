@@ -400,7 +400,7 @@ class dformerv2(nn.Module):
         sam_use_topk=True,
         sam_top_m=5,
         superpower: bool = False,
-        sam_enc_gamma_scale: float = 0.01,
+        sam_enc_gamma_scale: float = 1.0,
     ):
         super().__init__()
         self.out_indices = out_indices

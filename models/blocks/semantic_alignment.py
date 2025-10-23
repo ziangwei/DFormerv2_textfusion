@@ -76,7 +76,7 @@ class SemanticAlignmentModule(nn.Module):
 
         # 残差缩放参数
         self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
-        self.gamma = nn.Parameter(torch.tensor(0.05, dtype=torch.float))       # encoder/superpower (SSA-lite)
+        self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))       # encoder/superpower (SSA-lite)
         self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
 
         # 初始化
@@ -157,38 +157,42 @@ class SemanticAlignmentModule(nn.Module):
         return y.view(B, H, W, Cv)
 
     # ---------- Encoder/Superpower 侧：多头 SSA-lite（无Top-K/无FFN/无额外LN） ----------
-    def forward_ssa(self, visual_features: torch.Tensor, text_features: torch.Tensor):
-        """
-        放在 block 内 GSA 之后、FFN 之前。
-        visual_features: (B,H,W,Cv)
-        text_features:   (B,T,Ct) / (T,Ct) / (B,Ct)
-        """
+    def forward_ssa(self, visual_features, text_features):
         B, H, W, Cv = visual_features.shape
+        x = visual_features.view(B, H * W, Cv)
+        q_full = self.q_proj(x)
 
-        x = self.norm1(visual_features).view(B, H * W, Cv)   # (B,N,Cv)
-        q_input = self.norm1(visual_features).view(B, H * W, Cv)
-        q_full = self.q_proj(q_input)                        # (B,N,Cv)
+        # (1) 统一成 (B,T,Ct)
+        text_b = self._ensure_batched_text(text_features, B)  # [B, T, Ct]
+        pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
 
-        text_b = self._ensure_batched_text(text_features, B) # (B,T,Ct)
-        k_full = self.k_proj(text_b)                         # (B,T,Cv)
-        v_full = self.v_proj(text_b)                         # (B,T,Cv)
-        pad_mask = self._make_text_pad_mask(text_b)          # (B,T)
+        # (2) 若存在全 pad 的样本，直接旁路
+        if bool(pad_mask.all(dim=1).any()):
+            return visual_features
+
+        # (3) 动态裁短到本 batch 的最大有效长度
+        valid_len = (~pad_mask).sum(dim=1)  # [B]
+        T_active = int(valid_len.max().item())
+        if T_active < text_b.size(1):
+            text_b = text_b[:, :T_active, :]
+            pad_mask = pad_mask[:, :T_active]
+
+        # (4) 线性投影（此时 T 仅为 T_active）
+        k_full = self.k_proj(text_b)  # [B, T_active, Cv]
+        v_full = self.v_proj(text_b)  # [B, T_active, Cv]
 
         Hh, Dh = self.num_heads, self.head_dim
-        q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,N,H,Dh)
-        k = F.normalize(k_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,T,H,Dh)
-        v = v_full.view(B, -1, Hh, Dh)                                  # (B,T,H,Dh)
+        q = q_full.view(B, -1, Hh, Dh)
+        k = k_full.view(B, -1, Hh, Dh)
+        v = v_full.view(B, -1, Hh, Dh)
 
-        scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
-        sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale             # (B,N,H,T)
+        # (5) 标准缩放 + mask 再 softmax
+        sim = torch.einsum('bnhd,bthd->bnht', q, k) / math.sqrt(self.d_k)
+        sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
-        if pad_mask.any():
-            sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
-
-        attn = F.softmax(sim, dim=-1)
-
-        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)            # (B,N,H,Dh)
-        aligned = aligned_h.reshape(B, -1, Hh * Dh)                      # (B,N,Cv)
+        attn = torch.softmax(sim, dim=-1)
+        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)
+        aligned = aligned_h.reshape(B, -1, Hh * Dh)
 
         y = x + (self.gamma * self.gamma_scale) * aligned
         return y.view(B, H, W, Cv)
