@@ -213,14 +213,79 @@ with Engine(custom_parser=parser) as engine:
                 # 如果节点不联网，可以提前把模型下到缓存，再设置 TRANSFORMERS_OFFLINE=1
                 logger.warning(f"[HF warmup] skipped: {_e}")
 
+
+        def _prebuild_text_caches(cfg):
+            """
+            由 rank0 在构建 DataLoader 之前预先实例化一次 Dataset（split='train'），
+            触发 RGBXDataset 的 classbank/captions/imglabels 缓存构建。
+            其他 rank 只需 barrier 后直接读缓存。
+            """
+            try:
+                from utils.dataloader.RGBXDataset import RGBXDataset
+                data_setting = {
+                    "rgb_root": cfg.rgb_root_folder,
+                    "rgb_format": cfg.rgb_format,
+                    "gt_root": cfg.gt_root_folder,
+                    "gt_format": cfg.gt_format,
+                    "transform_gt": cfg.gt_transform,
+                    "x_root": cfg.x_root_folder,
+                    "x_format": cfg.x_format,
+                    "x_single_channel": cfg.x_is_single_channel,
+                    "class_names": cfg.class_names,
+                    "train_source": cfg.train_source,
+                    "eval_source": cfg.eval_source,
+                    "dataset_name": cfg.dataset_name,
+                    "backbone": cfg.backbone,
+                    "enable_text_guidance": getattr(cfg, "enable_text_guidance", False),
+                    "label_txt_path": getattr(cfg, "label_txt_path", None),
+                    "caption_json_path": getattr(cfg, "caption_json_path", None),
+                    "image_labels_json_path": getattr(cfg, "image_labels_json_path", None),
+                    "text_template_set": getattr(cfg, "text_template_set", "clip"),
+                    "max_templates_per_label": getattr(cfg, "max_templates_per_label", 3),
+                    "text_source": getattr(cfg, "text_source", "both"),
+                    "text_encoder": getattr(cfg, "text_encoder", "jinaclip"),
+                    "text_encoder_name": getattr(cfg, "text_encoder_name", None),
+                    "text_feature_dim": getattr(cfg, "text_feature_dim", 512),
+                    "max_caption_sentences": getattr(cfg, "max_caption_sentences", 8),
+                    "caption_topk": getattr(cfg, "caption_topk", 0),
+                    "caption_topk_mode": getattr(cfg, "caption_topk_mode", "class_sim"),
+                    "max_image_labels": getattr(cfg, "max_image_labels", 0),
+                }
+                # 只实例化，不用 loader；触发 __init__ -> _prepare_text_guidance_assets() -> *_encode_*()
+                _ = RGBXDataset(data_setting, "train", preprocess=None)
+                logger.info("[Text prebuild] text caches are ready (classbank/captions/imglabels).")
+            except Exception as _e:
+                logger.warning(f"[Text prebuild] skipped: {_e}")
+
+
         if engine.distributed and dist.is_available() and dist.is_initialized():
             if engine.local_rank == 0:
+                logger.info(f"[warmup] rank{engine.local_rank} start")
                 _warmup_text_cache(config)
-            dist.barrier()  # 等 rank0 下载完成
-            os.environ["TRANSFORMERS_OFFLINE"] = "1"  # 其余 rank 强制离线读缓存
-            dist.barrier()  # 再同步一次，确保 env 生效后再继续
+                logger.info(f"[warmup] rank{engine.local_rank} done")
+            logger.info(f"[warmup] rank{engine.local_rank} waiting barrier#1")
+            dist.barrier()
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            logger.info(f"[warmup] rank{engine.local_rank} waiting barrier#2")
+            dist.barrier()
         else:
             _warmup_text_cache(config)
+
+        # === 预构建文本缓存（仅 rank0 实际执行；其余 rank 等待后直接读缓存） ===
+        if engine.distributed and dist.is_available() and dist.is_initialized():
+            try:
+                if engine.local_rank == 0:
+                    logger.info(f"[prebuild] rank{engine.local_rank} start")
+                    _prebuild_text_caches(config)
+                    logger.info(f"[prebuild] rank{engine.local_rank} done")
+            except Exception as e:
+                # 打印异常，不要让 rank0 提前 return，确保能走到 barrier
+                logger.exception(f"[prebuild] rank{engine.local_rank} failed: {e}")
+            finally:
+                logger.info(f"[prebuild] rank{engine.local_rank} waiting barrier")
+                dist.barrier()
+        else:
+            _prebuild_text_caches(config)
 
         train_loader, train_sampler = get_train_loader(engine, RGBXDataset, config)
 

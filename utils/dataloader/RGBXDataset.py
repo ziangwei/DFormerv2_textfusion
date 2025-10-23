@@ -435,12 +435,21 @@ class RGBXDataset(data.Dataset):
                      f"dim{self.text_feature_dim}_topk{self.caption_topk}_{self.caption_topk_mode}.pt"
         cache_pt = os.path.join(cache_dir, cache_name)
 
-        # 非 rank0：若命中缓存，直接读返回
-        if (not self.is_master()) and os.path.isfile(cache_pt):
+        # --- 新增：读取 JSON mtime，用于缓存一致性校验 ---
+        json_mtime = None
+        try:
+            json_mtime = int(os.path.getmtime(self.caption_json_path))
+        except Exception:
+            pass
+
+        # 任何 rank（包含 rank0）都先尝试命中缓存（若带 mtime 则校验）
+        if os.path.isfile(cache_pt):
             try:
-                return torch.load(cache_pt, map_location="cpu")
+                payload = torch.load(cache_pt, map_location="cpu")
+                if ("json_mtime" not in payload) or (payload.get("json_mtime") == json_mtime):
+                    return payload["feats"] if isinstance(payload, dict) and "feats" in payload else payload
             except Exception as e:
-                logger.warning(f"Load caption cache failed on non-master: {e}; fallback to recompute on this rank.")
+                logger.warning(f"Load caption cache failed: {e}; will recompute.")
 
         # 读 JSON
         try:
@@ -493,6 +502,7 @@ class RGBXDataset(data.Dataset):
                     encoder_name=self.text_encoder_name,
                     target_dim=self.text_feature_dim,
                 )  # [N, D], on CPU by default
+                sent_feats = sent_feats.cpu()
                 scores = (sent_feats @ classbank.T).amax(dim=1)  # [N]
                 topk = min(self.caption_topk, len(sents))
                 idx = torch.topk(scores, k=topk, dim=0).indices
@@ -528,20 +538,12 @@ class RGBXDataset(data.Dataset):
 
                 caption_dict[key] = text_feats
 
-        # rank0 写缓存，其他 rank 读（加一个 barrier 更稳）
         try:
             if self.is_master():
-                torch.save(caption_dict, cache_pt)
-                try:
-                    import torch.distributed as dist
-                    if dist.is_available() and dist.is_initialized():
-                        dist.barrier()
-                except Exception:
-                    pass
+                torch.save({"feats": caption_dict, "json_mtime": json_mtime}, cache_pt)
         except Exception as e:
             logger.warning(f"Save caption cache failed: {e}")
 
-        return caption_dict
 
     def _split_description(self, description: str):
         description = description.replace("\n", " ").strip()
