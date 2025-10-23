@@ -239,16 +239,39 @@ class RGBXDataset(data.Dataset):
             f"set{self.text_template_set}_maxk{self.max_image_labels}.pt"
         )
         cache_pt = os.path.join(cache_dir, cache_name)
-
+        json_mtime = int(os.path.getmtime(self.image_labels_json_path))
         # 非主进程尝试直接读缓存
 
-        if (not self.is_master()) and os.path.isfile(cache_pt):
+        # 若存在缓存且与 JSON 时间戳匹配，则直接载入（避免重复编码）
+        if os.path.isfile(cache_pt):
             try:
                 payload = torch.load(cache_pt, map_location="cpu")
-                self._imglabel_tokens = payload.get("pad_len", None)
-                return payload.get("feats", {})
+                if payload.get("json_mtime") == json_mtime:
+                    self._imglabel_tokens = payload.get("pad_len", None)
+                    feats = payload.get("feats", {})
+                    if feats:
+                        return feats
             except Exception:
                 pass
+
+        if not self.is_master():
+            # 等待主进程重新编码并刷新缓存
+            try:
+                import torch.distributed as dist
+                if dist.is_available() and dist.is_initialized():
+                    dist.barrier()
+            except Exception:
+                pass
+            if os.path.isfile(cache_pt):
+                try:
+                    payload = torch.load(cache_pt, map_location="cpu")
+                    if payload.get("json_mtime") == json_mtime:
+                        self._imglabel_tokens = payload.get("pad_len", None)
+                        feats = payload.get("feats", {})
+                        if feats:
+                            return feats
+                except Exception:
+                    pass
 
         # 读取 JSON
 
@@ -319,7 +342,11 @@ class RGBXDataset(data.Dataset):
 
         try:
             if self.is_master():
-                torch.save({"pad_len": pad_len, "feats": out}, cache_pt)
+                torch.save({
+                    "pad_len": pad_len,
+                    "feats": out,
+                    "json_mtime": json_mtime,
+                }, cache_pt)
                 try:
                     import torch.distributed as dist
                     if dist.is_available() and dist.is_initialized():
