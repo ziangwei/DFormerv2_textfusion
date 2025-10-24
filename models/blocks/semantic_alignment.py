@@ -50,8 +50,8 @@ class SemanticAlignmentModule(nn.Module):
         self.k_proj  = nn.Linear(text_dim,  query_dim)   # (B,T,Ct)->(B,T,Cv)
         self.v_proj  = nn.Linear(text_dim,  query_dim)   # (B,T,Ct)->(B,T,Cv)
 
-        # 多头拼接后已是 Cv，按需再做投影；为保持接口一致提供 out_proj（可为 Identity）
-        self.out_proj = nn.Identity()
+        # 多头聚合后再做一次线性投影，保持与旧 SSA 逻辑一致
+        self.out_proj = nn.Linear(query_dim, query_dim)
 
         # === 门控（decoder 侧使用；encoder 侧用 gamma） ===
         if gate_channels:
@@ -78,11 +78,13 @@ class SemanticAlignmentModule(nn.Module):
         self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
         self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))       # encoder/superpower (SSA-lite)
         self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
+        self.register_buffer("ssa_scale", torch.tensor(self.head_dim ** -0.5, dtype=torch.float))
 
         # 初始化
         nn.init.xavier_uniform_(self.q_proj.weight);  nn.init.zeros_(self.q_proj.bias)
         nn.init.xavier_uniform_(self.k_proj.weight);  nn.init.zeros_(self.k_proj.bias)
         nn.init.xavier_uniform_(self.v_proj.weight);  nn.init.zeros_(self.v_proj.bias)
+        nn.init.xavier_uniform_(self.out_proj.weight); nn.init.zeros_(self.out_proj.bias)
 
     # ---------- 工具函数 ----------
     @staticmethod
@@ -147,7 +149,7 @@ class SemanticAlignmentModule(nn.Module):
         # 聚合回 Cv（多头拼接）
         aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)             # (B,N,H,Dh)
         aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))      # (B,N,Cv)
-        aligned = self.out_proj(aligned)                                  # Identity
+        aligned = self.out_proj(aligned)                                  # 线性映射（与 SSA 对齐）
 
         # 残差 + 门控 + FFN（Pre-LN）
         gate = self.gate(x)                                              # (B,N,1) 或 (B,N,Cv)
@@ -158,21 +160,28 @@ class SemanticAlignmentModule(nn.Module):
 
     # ---------- Encoder/Superpower 侧：多头 SSA-lite（无Top-K/无FFN/无额外LN） ----------
     def forward_ssa(self, visual_features, text_features):
+        """Encoder/Superpower: 轻量版多头注意力
+
+        Args:
+            visual_features: (B, H, W, Cv) 的视觉特征
+            text_features:   支持 (B,T,Ct) / (T,Ct) / (B,Ct)
+        """
         B, H, W, Cv = visual_features.shape
         x = visual_features.view(B, H * W, Cv)
         q_full = self.q_proj(x)
 
         # (1) 统一成 (B,T,Ct)
-        text_b = self._ensure_batched_text(text_features, B)  # [B, T, Ct]
+        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B, T, Ct]
         pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
 
-        # (2) 若存在全 pad 的样本，直接旁路
-        if bool(pad_mask.all(dim=1).any()):
+        # (2) 动态裁短到本 batch 的最大有效长度（仅统计非 padding token）
+        valid_len = (~pad_mask).sum(dim=1)  # [B]
+        T_active = int(valid_len.max().item()) if valid_len.numel() > 0 else 0
+
+        # 若整个 batch 都没有有效文本，引导信息为空，直接旁路
+        if T_active == 0:
             return visual_features
 
-        # (3) 动态裁短到本 batch 的最大有效长度
-        valid_len = (~pad_mask).sum(dim=1)  # [B]
-        T_active = int(valid_len.max().item())
         if T_active < text_b.size(1):
             text_b = text_b[:, :T_active, :]
             pad_mask = pad_mask[:, :T_active]
@@ -182,17 +191,33 @@ class SemanticAlignmentModule(nn.Module):
         v_full = self.v_proj(text_b)  # [B, T_active, Cv]
 
         Hh, Dh = self.num_heads, self.head_dim
-        q = q_full.view(B, -1, Hh, Dh)
-        k = k_full.view(B, -1, Hh, Dh)
-        v = v_full.view(B, -1, Hh, Dh)
+        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, N, Dh]
+        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
+        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
 
-        # (5) 标准缩放 + mask 再 softmax
-        sim = torch.einsum('bnhd,bthd->bnht', q, k) / math.sqrt(self.d_k)
-        sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
+        all_pad = pad_mask.all(dim=1)  # [B]
+        active_idx = (~all_pad).nonzero(as_tuple=False).squeeze(1)
 
-        attn = torch.softmax(sim, dim=-1)
-        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)
-        aligned = aligned_h.reshape(B, -1, Hh * Dh)
+        # 先构造输出张量，默认直接拷贝输入（对应没有文本的样本）
+        y = x.clone()
 
-        y = x + (self.gamma * self.gamma_scale) * aligned
-        return y.view(B, H, W, Cv)
+        if active_idx.numel() > 0:
+            q_act = q.index_select(0, active_idx)
+            k_act = k.index_select(0, active_idx)
+            v_act = v.index_select(0, active_idx)
+            pad_act = pad_mask.index_select(0, active_idx)
+
+            # (5) 标准缩放 + mask 再 softmax（与旧 SSA 逻辑保持一致）
+            attn_logits = torch.matmul(q_act, k_act.transpose(-2, -1)) * self.ssa_scale
+            attn_logits = attn_logits.masked_fill(pad_act.unsqueeze(1).unsqueeze(2), float('-inf'))
+            attn = torch.softmax(attn_logits, dim=-1)
+
+            aligned = torch.matmul(attn, v_act)  # [B_active, Hh, N, Dh]
+            aligned = aligned.permute(0, 2, 1, 3).reshape(active_idx.numel(), -1, Hh * Dh)
+            aligned = self.out_proj(aligned)
+
+            y_active = x.index_select(0, active_idx) + (self.gamma * self.gamma_scale) * aligned
+            y.index_copy_(0, active_idx, y_active)
+
+        y = y.view(B, H, W, Cv)
+        return y
