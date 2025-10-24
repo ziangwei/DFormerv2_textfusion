@@ -23,7 +23,7 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
     --text-source imglabels \
     --text-encoder jinaclip \
-    --sam-enc-stages "" \
+    --sam-enc-stages 1,2 \
     --sam-dec-stages 1,2,3 \
     --no-sliding \
     --no-compile \

@@ -220,6 +220,18 @@ with Engine(custom_parser=parser) as engine:
             触发 RGBXDataset 的 classbank/captions/imglabels 缓存构建。
             其他 rank 只需 barrier 后直接读缓存。
             """
+            if not getattr(cfg, "enable_text_guidance", False):
+                logger.info("[Text prebuild] skipped: text guidance disabled.")
+                return
+
+            # 没有可用的文本资产就没有预构建的必要
+            if not any(
+                getattr(cfg, _key, None)
+                for _key in ("label_txt_path", "caption_json_path", "image_labels_json_path")
+            ):
+                logger.info("[Text prebuild] skipped: no text assets configured.")
+                return
+
             try:
                 from utils.dataloader.RGBXDataset import RGBXDataset
                 data_setting = {
@@ -252,8 +264,17 @@ with Engine(custom_parser=parser) as engine:
                     "max_image_labels": getattr(cfg, "max_image_labels", 0),
                 }
                 # 只实例化，不用 loader；触发 __init__ -> _prepare_text_guidance_assets() -> *_encode_*()
-                _ = RGBXDataset(data_setting, "train", preprocess=None)
-                logger.info("[Text prebuild] text caches are ready (classbank/captions/imglabels).")
+                dataset = RGBXDataset(data_setting, "train", preprocess=None)
+                built_parts = []
+                if getattr(dataset, "enable_text_guidance", False):
+                    if getattr(dataset, "_use_label_text", False) and dataset.class_text_features is not None and dataset.class_text_features.numel() > 0:
+                        built_parts.append("labels")
+                    if getattr(dataset, "_use_caption_text", False) and isinstance(dataset.caption_text_features, dict) and len(dataset.caption_text_features) > 0:
+                        built_parts.append("captions")
+                    if getattr(dataset, "_use_imglabel_text", False) and isinstance(dataset.imglabel_text_features, dict) and len(dataset.imglabel_text_features) > 0:
+                        built_parts.append("imglabels")
+                summary = ", ".join(built_parts) if built_parts else "none"
+                logger.info(f"[Text prebuild] text caches are ready for: {summary}.")
             except Exception as _e:
                 logger.warning(f"[Text prebuild] skipped: {_e}")
 

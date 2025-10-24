@@ -153,19 +153,21 @@ class RGBXDataset(data.Dataset):
         self.labels_txt_path = setting.get("label_txt_path", None)
         self.image_labels_json_path = setting.get("image_labels_json_path", None)
 
-        from utils.prompt_utils import build_prompt_groups_from_labels, encode_prompts
+        # === 文本源开关 ===
+        source = (self.text_source or "both").lower()
+        self._use_label_text = source in ("labels", "both")
+        self._use_caption_text = source in ("captions", "both")
+        self._use_imglabel_text = source == "imglabels"
+        # caption Top-K 需要 classbank 做相似度
+        self._need_classbank = self._use_label_text or (self._use_caption_text and self.caption_topk > 0)
 
-        if self.labels_txt_path is not None:
-            labels = [ln.strip() for ln in open(self.labels_txt_path, 'r', encoding='utf-8').read().splitlines() if ln.strip()]
-            groups = build_prompt_groups_from_labels(labels, L=len(labels),
-                                                     template_set=self.text_template_set,
-                                                     max_templates_per_label=self.max_templates_per_label)
-            self.classbank = encode_prompts(groups,
-                                            encoder=self.text_encoder,
-                                            encoder_name=self.text_encoder_name,
-                                            target_dim=self.text_feature_dim).cpu()  # [C,D]
-        else:
-            self.classbank = None
+        self.classbank = None
+        if self._need_classbank:
+            try:
+                self.classbank = self._encode_class_labels()
+            except Exception as exc:
+                logger.error(f"Failed to precompute classbank: {exc}")
+                self.classbank = None
 
         self.class_text_features = None
         self.caption_text_features = {}
@@ -190,32 +192,64 @@ class RGBXDataset(data.Dataset):
 
     def _prepare_text_guidance_assets(self):
         """Load and encode textual assets for guidance."""
-        try:
-            self.class_text_features = self.classbank if getattr(self, "classbank", None) is not None else self._encode_class_labels()
-        except Exception as exc:
-            logger.error(f"Failed to encode class label prompts: {exc}")
+        built_sources = []
+
+        # --- 类别文本（labels） ---
+        if self._use_label_text:
+            try:
+                if self.classbank is not None:
+                    self.class_text_features = self.classbank
+                else:
+                    self.class_text_features = self._encode_class_labels()
+                if self.class_text_features is not None and self.class_text_features.numel() > 0:
+                    built_sources.append("labels")
+            except Exception as exc:
+                logger.error(f"Failed to encode class label prompts: {exc}")
+                self.class_text_features = None
+        else:
             self.class_text_features = None
 
-        try:
-            self.caption_text_features = self._encode_caption_descriptions()
-        except Exception as exc:
-            logger.error(f"Failed to encode caption descriptions: {exc}")
+        # --- Caption 文本 ---
+        caption_model_used = False
+        if self._use_caption_text:
+            try:
+                self.caption_text_features = self._encode_caption_descriptions()
+                caption_model_used = True
+                if isinstance(self.caption_text_features, dict) and len(self.caption_text_features) > 0:
+                    built_sources.append("captions")
+            except Exception as exc:
+                logger.error(f"Failed to encode caption descriptions: {exc}")
+                self.caption_text_features = {}
+            finally:
+                if caption_model_used:
+                    unload_clip_model()
+        else:
             self.caption_text_features = {}
-        finally:
-            unload_clip_model()
-
-        # 新增：每图标签文本
-
-        try:
-            self.imglabel_text_features = self._encode_image_labels()
-        except Exception as exc:
-            logger.error(f"Failed to encode image-level label texts: {exc}")
+        # --- 每图标签文本（image labels） ---
+        imglabel_model_used = False
+        if self._use_imglabel_text:
+            try:
+                self.imglabel_text_features = self._encode_image_labels()
+                imglabel_model_used = True
+                if isinstance(self.imglabel_text_features, dict) and len(self.imglabel_text_features) > 0:
+                    built_sources.append("imglabels")
+            except Exception as exc:
+                logger.error(f"Failed to encode image-level label texts: {exc}")
+                self.imglabel_text_features = {}
+            finally:
+                if imglabel_model_used:
+                    unload_clip_model()
+        else:
             self.imglabel_text_features = {}
-        finally:
-            unload_clip_model()
+            self._imglabel_tokens = 0
 
         if self.class_text_features is None:
             self.class_text_features = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
+
+        if built_sources:
+            logger.info(f"[Text guidance] built caches for: {', '.join(built_sources)}")
+        else:
+            logger.info("[Text guidance] no text caches were constructed for current source setting.")
 
     # ---------------- 新增：按图的标签文本 ----------------
 
@@ -242,6 +276,16 @@ class RGBXDataset(data.Dataset):
         json_mtime = int(os.path.getmtime(self.image_labels_json_path))
         # 非主进程尝试直接读缓存
 
+        dist_module = None
+        dist_ready = False
+        try:
+            import torch.distributed as dist_module  # type: ignore
+
+            dist_ready = dist_module.is_available() and dist_module.is_initialized()
+        except Exception:
+            dist_module = None
+            dist_ready = False
+
         # 若存在缓存且与 JSON 时间戳匹配，则直接载入（避免重复编码）
         if os.path.isfile(cache_pt):
             try:
@@ -253,25 +297,6 @@ class RGBXDataset(data.Dataset):
                         return feats
             except Exception:
                 pass
-
-        if not self.is_master():
-            # 等待主进程重新编码并刷新缓存
-            try:
-                import torch.distributed as dist
-                if dist.is_available() and dist.is_initialized():
-                    dist.barrier()
-            except Exception:
-                pass
-            if os.path.isfile(cache_pt):
-                try:
-                    payload = torch.load(cache_pt, map_location="cpu")
-                    if payload.get("json_mtime") == json_mtime:
-                        self._imglabel_tokens = payload.get("pad_len", None)
-                        feats = payload.get("feats", {})
-                        if feats:
-                            return feats
-                except Exception:
-                    pass
 
         # 读取 JSON
 
@@ -340,21 +365,15 @@ class RGBXDataset(data.Dataset):
 
         # 主进程写缓存，其它进程 barrier 后读取
 
-        try:
-            if self.is_master():
+        if self.is_master():
+            try:
                 torch.save({
                     "pad_len": pad_len,
                     "feats": out,
                     "json_mtime": json_mtime,
                 }, cache_pt)
-                try:
-                    import torch.distributed as dist
-                    if dist.is_available() and dist.is_initialized():
-                        dist.barrier()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+            except Exception as exc:
+                logger.warning(f"Saving image label cache failed: {exc}")
 
         return out
 
