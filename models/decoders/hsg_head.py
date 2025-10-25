@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
 from mmseg.ops import resize
-
+from collections.abc import Mapping, Sequence
 from .decode_head import BaseDecodeHead
 from .ham_head import Hamburger
 from ..blocks.semantic_alignment import SemanticAlignmentModule
@@ -38,6 +38,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                  sam_use_topk=True,
                  sam_top_m=5,
                  backbone_num_heads=(4, 4, 8, 16),
+                 sam_dec_repeats=1,  # 默认单次 SAM；配置里传 int/list/dict 即可改次数
                  **kwargs):
         super().__init__(in_channels=in_channels,
                          in_index=in_index,
@@ -62,8 +63,10 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
             global_idx = self.in_index[local_i] if isinstance(self.in_index, (list, tuple)) else local_i
             enabled = (global_idx in global_enable)
             self.dec_sam_enabled.append(enabled)
-            if enabled:
-                self.dec_sam_layers.append(
+            repeat = self._resolve_repeat_count(sam_dec_repeats, global_idx, local_i) if enabled else 0
+            repeat = max(int(repeat), 0)
+            if enabled and repeat > 0:
+                stage_layers = [
                     SemanticAlignmentModule(
                         query_dim=Cin,
                         text_dim=text_dim,
@@ -74,9 +77,11 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                         alpha_init=0.05,
                         attn_drop=0.0, proj_drop=0.0, ffn_drop=0.0,
                     )
-                )
+                    for _ in range(repeat)
+                ]
+                self.dec_sam_layers.append(nn.ModuleList(stage_layers))
             else:
-                self.dec_sam_layers.append(None)
+                self.dec_sam_layers.append(nn.ModuleList())
 
         # === Ham 风格短路径（与 LightHamHead 一致） ===
         # 多层上采样 → concat 后的 1x1 压到 ham_channels
@@ -96,8 +101,16 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         )
 
     # --------- 辅助：安全地对单层特征应用 SAM（BCHW <-> BHWC） ----------
-    def _apply_sam_safe(self, x_bchw, sam_layer, text_features):
-        if (sam_layer is None) or (text_features is None):
+    def _apply_sam_safe(self, x_bchw, sam_layers, text_features):
+        if (text_features is None) or (sam_layers is None) or len(sam_layers) == 0:
+            return x_bchw
+
+        for sam_layer in sam_layers:
+            x_bchw = self._apply_single_sam(x_bchw, sam_layer, text_features)
+        return x_bchw
+
+    def _apply_single_sam(self, x_bchw, sam_layer, text_features):
+        if sam_layer is None:
             return x_bchw
 
         # 若整批文本均无有效 token（全 0），直接旁路，避免 softmax(-inf) → NaN
@@ -123,6 +136,21 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         y_nhwc = sam_layer(x_nhwc, text_features)  # NHWC
         y_bchw = y_nhwc.permute(0, 3, 1, 2).contiguous()
         return y_bchw
+
+    def _resolve_repeat_count(self, repeat_cfg, global_idx, local_idx):
+        """解析当前 stage 应重复的 SAM 次数。"""
+
+        if isinstance(repeat_cfg, Mapping):
+            if global_idx in repeat_cfg:
+                return repeat_cfg[global_idx]
+            if local_idx in repeat_cfg:
+                return repeat_cfg[local_idx]
+        elif isinstance(repeat_cfg, Sequence) and not isinstance(repeat_cfg, (str, bytes)):
+            if len(repeat_cfg) == len(self.in_channels):
+                return repeat_cfg[local_idx]
+            if len(repeat_cfg) > 0:
+                return repeat_cfg[min(local_idx, len(repeat_cfg) - 1)]
+        return repeat_cfg
 
     # ----------------------------- 前向 -----------------------------
     def forward(self, inputs, text_features=None):

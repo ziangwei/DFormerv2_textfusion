@@ -12,7 +12,6 @@ export HF_HOME=${CACHE_DIR}
 
 python generate_tags_internvl3.py \
   --model_id OpenGVLab/InternVL3-38B \
-  --num_tags 5 \
   --batch_size 1 \
   --max_new_tokens 64
 

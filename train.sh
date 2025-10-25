@@ -1,7 +1,7 @@
 GPUS=2
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29528} #158
+PORT=${PORT:-29558} #158
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
 CACHE_DIR="/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache"
@@ -23,7 +23,7 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --config=local_configs.NYUDepthv2.DFormerv2_S --gpus=$GPUS \
     --text-source imglabels \
     --text-encoder clip \
-    --sam-enc-stages 1,2 \
+    --sam-enc-stages "" \
     --sam-dec-stages 1,2,3 \
     --no-sliding \
     --no-compile \

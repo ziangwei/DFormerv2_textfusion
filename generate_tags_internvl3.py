@@ -3,7 +3,7 @@
 
 import os, re, json, argparse, logging, glob, time
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from itertools import islice
 
 import torch
@@ -111,7 +111,7 @@ def normalize_label(s: str) -> str:
     s = re.sub(r"[\s_-]+", " ", s)
     return NORM_MAP.get(s, s)
 
-def extract_labels(text: str, allowed: List[str], topk: int) -> List[str]:
+def extract_labels(text: str, allowed: List[str], topk: Optional[int] = None) -> List[str]:
     text = (text or "").strip()
     # 1) 优先找 JSON
     m = re.search(r"\{.*\}", text, flags=re.S)
@@ -127,7 +127,7 @@ def extract_labels(text: str, allowed: List[str], topk: int) -> List[str]:
                 for x in labs:
                     if x not in seen:
                         out.append(x); seen.add(x)
-                return out[:topk]
+                return out if topk is None else out[:topk]
         except Exception:
             pass
     # 2) 回退：对每个allowed标签做宽松“词边界/子串”匹配（优先完整词）
@@ -149,16 +149,16 @@ def extract_labels(text: str, allowed: List[str], topk: int) -> List[str]:
             idx = low.find(lab.replace(" ", ""))
         return idx if idx >= 0 else 10**9
     cand = sorted(list(dict.fromkeys(cand)), key=first_pos)
-    return cand[:topk]
+    return cand if topk is None else cand[:topk]
 
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_id", type=str, default="OpenGVLab/InternVL3-38B")
     ap.add_argument("--dataset_dir", type=str, default=str(Path("datasets/NYUDepthv2").resolve()))
     ap.add_argument("--image_folder", type=str, default="RGB")
-    ap.add_argument("--output_file", type=str, default="topk_labels_internvl3.json",
+    ap.add_argument("--output_file", type=str, default="topk_labels2_internvl3.json",
                     help="相对dataset_dir的路径，或绝对路径")
-    ap.add_argument("--num_tags", type=int, default=5, choices=[5,6,8])
+    # ap.add_argument("--num_tags", type=int, default=5, choices=[5,6,8])
     ap.add_argument("--batch_size", type=int, default=1, help="先从1稳起，避免OOM")
     ap.add_argument("--max_new_tokens", type=int, default=64)
     ap.add_argument("--max_tiles", type=int, default=8, help="每图最多tile数，降低OOM风险")
@@ -220,7 +220,7 @@ def main():
     prompt_tpl = (
         f"You are a precise indoor-scene annotator for NYUv2.\n"
         f"Allowed labels (37): {allowed_list}\n"
-        f"Task: pick TOP-{args.num_tags} labels that most likely appear in the image.\n"
+        f"Task: list every label from the allowed set that most likely appears in the image.\n"
         f"Rules:\n"
         f"1) Use ONLY labels from the allowed list (lowercase).\n"
         f"2) Return JSON: {{\"labels\": [\"label1\", ...]}} only.\n"
@@ -257,21 +257,13 @@ def main():
                 )
         except Exception as e:
             logging.error(f"batch_chat failed on {rel_list[0]}: {e}")
-            # 失败兜底：全部给空 -> 用常见类别填充
+            # 失败兜底：全部给空，后续直接记录为空列表
             responses = [""] * len(rel_list)
 
         # 解析 -> 映射到ID -> 存入字典
         for rel, resp in zip(rel_list, responses):
-            labs = extract_labels(resp, [normalize_label(x) for x in NYU37], args.num_tags)
-            # 补齐到K：常见/保守
-            if len(labs) < args.num_tags:
-                COMMON = ["wall","floor","ceiling","table","chair","sofa","bed","door","window","cabinet","lamp"]
-                for c in COMMON:
-                    if c in CLS2ID and c not in labs:
-                        labs.append(c)
-                    if len(labs) >= args.num_tags:
-                        break
-            ids = [CLS2ID[l] for l in labs[:args.num_tags]]
+            labs = extract_labels(resp, [normalize_label(x) for x in NYU37], topk=None)
+            ids = [CLS2ID[l] for l in labs]
             index[rel] = ids
 
         # 每批次持久化，稳一点

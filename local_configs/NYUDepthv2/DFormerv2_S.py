@@ -20,18 +20,19 @@ C.text_source = "imglabels"
 # 选择文本编码器：clip / jinaclip
 C.text_encoder = "clip"
 # 每张图最多取前 K 个标签，与旧版管线保持一致
-C.max_image_labels = 5
+C.max_image_labels = 10
 # 具体模型名（留空走默认：clip→openai/clip-vit-base-patch16；jinaclip→jinaai/jina-clip-v2）
 C.text_encoder_name = None
 # 标签与描述数据
 C.label_txt_path = "datasets/NYUDepthv2/nyu40_labels.txt"
 C.caption_json_path = "datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json"
 C.image_labels_json_path = "datasets/NYUDepthv2/topk_labels_text_internvl3.json"
+# C.image_labels_json_path = "datasets/NYUDepthv2/top5_labels_per_image.json"
 # 模板与数量（对“类名→多模板短句”的扩写）
 C.text_template_set = "clip"           # clip / none
 C.max_templates_per_label = 3
 # 描述最多切几句送进模型（上限，进一步可用 caption_topk 再筛）
-C.max_caption_sentences = 8
+C.max_caption_sentences = 10
 # 单条描述的 Top-K 预筛（0 表示不开）
 C.caption_topk = 6
 # 句子 Top-K 选择策略：class_sim / firstk / lenk

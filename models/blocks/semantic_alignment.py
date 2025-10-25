@@ -170,23 +170,10 @@ class SemanticAlignmentModule(nn.Module):
         x = visual_features.view(B, H * W, Cv)
         q_full = self.q_proj(x)
 
-        # (1) 统一成 (B,T,Ct)
+        # 统一成 (B,T,Ct)
         text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B, T, Ct]
         pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
 
-        # (2) 动态裁短到本 batch 的最大有效长度（仅统计非 padding token）
-        valid_len = (~pad_mask).sum(dim=1)  # [B]
-        T_active = int(valid_len.max().item()) if valid_len.numel() > 0 else 0
-
-        # 若整个 batch 都没有有效文本，引导信息为空，直接旁路
-        if T_active == 0:
-            return visual_features
-
-        if T_active < text_b.size(1):
-            text_b = text_b[:, :T_active, :]
-            pad_mask = pad_mask[:, :T_active]
-
-        # (4) 线性投影（此时 T 仅为 T_active）
         k_full = self.k_proj(text_b)  # [B, T_active, Cv]
         v_full = self.v_proj(text_b)  # [B, T_active, Cv]
 
@@ -196,28 +183,25 @@ class SemanticAlignmentModule(nn.Module):
         v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
 
         all_pad = pad_mask.all(dim=1)  # [B]
-        active_idx = (~all_pad).nonzero(as_tuple=False).squeeze(1)
+        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # [B, Hh, N, T]
 
-        # 先构造输出张量，默认直接拷贝输入（对应没有文本的样本）
-        y = x.clone()
+        # Mask掉padding token
+        if pad_mask.any():
+            attn_logits = attn_logits.masked_fill(
+                pad_mask.unsqueeze(1).unsqueeze(2),  # [B, 1, 1, T]
+                float('-inf')
+            )
 
-        if active_idx.numel() > 0:
-            q_act = q.index_select(0, active_idx)
-            k_act = k.index_select(0, active_idx)
-            v_act = v.index_select(0, active_idx)
-            pad_act = pad_mask.index_select(0, active_idx)
+        attn = torch.softmax(attn_logits, dim=-1)  # [B, Hh, N, T]
 
-            # (5) 标准缩放 + mask 再 softmax（与旧 SSA 逻辑保持一致）
-            attn_logits = torch.matmul(q_act, k_act.transpose(-2, -1)) * self.ssa_scale
-            attn_logits = attn_logits.masked_fill(pad_act.unsqueeze(1).unsqueeze(2), float('-inf'))
-            attn = torch.softmax(attn_logits, dim=-1)
+        aligned = torch.matmul(attn, v)  # [B, Hh, N, Dh]
+        aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)  # [B, N, Cv]
+        aligned = self.out_proj(aligned)
 
-            aligned = torch.matmul(attn, v_act)  # [B_active, Hh, N, Dh]
-            aligned = aligned.permute(0, 2, 1, 3).reshape(active_idx.numel(), -1, Hh * Dh)
-            aligned = self.out_proj(aligned)
+        if all_pad.any():
+            aligned = aligned * (~all_pad).view(B, 1, 1).float()
 
-            y_active = x.index_select(0, active_idx) + (self.gamma * self.gamma_scale) * aligned
-            y.index_copy_(0, active_idx, y_active)
-
+        # ★ 残差连接：与SSA保持一致的gamma初始化 ★
+        y = x + (self.gamma * self.gamma_scale) * aligned
         y = y.view(B, H, W, Cv)
         return y

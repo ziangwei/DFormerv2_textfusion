@@ -10,5 +10,5 @@
 
 #python check.py
 python ids2text_nyu37.py \
-  --in datasets/NYUDepthv2/topk_labels_internvl3.json \
-  --out datasets/NYUDepthv2/topk_labels_text_internvl3.json
+  --in datasets/NYUDepthv2/topk_labels2_internvl3.json \
+  --out datasets/NYUDepthv2/topk_labels2_text_internvl3.json
