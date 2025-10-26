@@ -39,6 +39,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                  sam_top_m=5,
                  backbone_num_heads=(4, 4, 8, 16),
                  sam_dec_repeats=1,  # 默认单次 SAM；配置里传 int/list/dict 即可改次数
+                 dec_use_ssa: bool = True,
                  **kwargs):
         super().__init__(in_channels=in_channels,
                          in_index=in_index,
@@ -59,6 +60,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         # 构造一个“本地层 i 是否启用”的表
         self.dec_sam_enabled = []
         self.dec_sam_layers = nn.ModuleList()
+        self.dec_use_ssa = bool(dec_use_ssa)
         for local_i, Cin in enumerate(self.in_channels):
             global_idx = self.in_index[local_i] if isinstance(self.in_index, (list, tuple)) else local_i
             enabled = (global_idx in global_enable)
@@ -133,7 +135,8 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
             pass
 
         x_nhwc = x_bchw.permute(0, 2, 3, 1).contiguous()
-        y_nhwc = sam_layer(x_nhwc, text_features)  # NHWC
+        y_nhwc = sam_layer.forward_ssa(x_nhwc, text_features) if self.dec_use_ssa \
+            else sam_layer(x_nhwc, text_features)
         y_bchw = y_nhwc.permute(0, 3, 1, 2).contiguous()
         return y_bchw
 

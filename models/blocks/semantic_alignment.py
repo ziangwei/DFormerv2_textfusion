@@ -80,6 +80,13 @@ class SemanticAlignmentModule(nn.Module):
         self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
         self.register_buffer("ssa_scale", torch.tensor(self.head_dim ** -0.5, dtype=torch.float))
 
+        self.ssr_top_m_cap = 8  # 每图最多保留的标签数（剪枝上限）
+        self.pixel_topk = 2  # 每像素在标签维上的Top-k（1或2）
+        self.keep_mass = 0.90  # 动态保留：覆盖到90%“token分布质量”
+        self.enable_null = True  # 是否拼接一个可学习的null文本token
+        self.gamma_entropy = True  # 是否用熵调节注入强度
+        self.null_text = nn.Parameter(torch.zeros(1, 1, self.k_proj.in_features))
+
         # 初始化
         nn.init.xavier_uniform_(self.q_proj.weight);  nn.init.zeros_(self.q_proj.bias)
         nn.init.xavier_uniform_(self.k_proj.weight);  nn.init.zeros_(self.k_proj.bias)
@@ -160,48 +167,82 @@ class SemanticAlignmentModule(nn.Module):
 
     # ---------- Encoder/Superpower 侧：多头 SSA-lite（无Top-K/无FFN/无额外LN） ----------
     def forward_ssa(self, visual_features, text_features):
-        """Encoder/Superpower: 轻量版多头注意力
-
-        Args:
-            visual_features: (B, H, W, Cv) 的视觉特征
-            text_features:   支持 (B,T,Ct) / (T,Ct) / (B,Ct)
-        """
         B, H, W, Cv = visual_features.shape
         x = visual_features.view(B, H * W, Cv)
         q_full = self.q_proj(x)
 
-        # 统一成 (B,T,Ct)
-        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B, T, Ct]
-        pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
+        # 统一文本维度，并（可选）拼接null token
+        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B,T,Ct]
+        if self.enable_null:
+            null = self.null_text.to(text_b.dtype).expand(B, -1, -1)  # [B,1,Ct]
+            text_b = torch.cat([text_b, null], dim=1)  # [B,T+1,Ct]
+        pad_mask = self._make_text_pad_mask(text_b)  # [B,T(+1)]
 
-        k_full = self.k_proj(text_b)  # [B, T_active, Cv]
-        v_full = self.v_proj(text_b)  # [B, T_active, Cv]
-
+        # 投影到Cv并拆头
+        k_full = self.k_proj(text_b);
+        v_full = self.v_proj(text_b)  # [B,T',Cv]
         Hh, Dh = self.num_heads, self.head_dim
-        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, N, Dh]
-        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
-        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
+        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B,Hh,N,Dh]
+        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B,Hh,T',Dh]
+        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B,Hh,T',Dh]
 
-        all_pad = pad_mask.all(dim=1)  # [B]
-        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # [B, Hh, N, T]
-
-        # Mask掉padding token
+        # 1) 自评分（基于第一趟 logits，不softmax）
+        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # [B,Hh,N,T']
         if pad_mask.any():
-            attn_logits = attn_logits.masked_fill(
-                pad_mask.unsqueeze(1).unsqueeze(2),  # [B, 1, 1, T]
-                float('-inf')
-            )
+            attn_logits = attn_logits.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
-        attn = torch.softmax(attn_logits, dim=-1)  # [B, Hh, N, T]
+        token_score = attn_logits.amax(dim=2).mean(dim=1)  # [B,T']  max_N then mean_heads
+        # 动态“保质量”Top-M：以softmax(token_score)为质量分布，累计到keep_mass为止，且<=cap
+        prob = torch.softmax(token_score, dim=-1)
+        sorted_prob, sorted_idx = prob.sort(dim=-1, descending=True)
+        cum = torch.cumsum(sorted_prob, dim=-1)
+        # 选到第一个使 cum>=keep_mass 的位置，再与上限cap取min
+        mass_M = (cum >= self.keep_mass).float().argmax(dim=-1) + 1  # [B]
+        M_cap = min(self.ssr_top_m_cap, prob.size(-1))
+        M_sel = torch.clamp(mass_M, min=1, max=M_cap)  # [B]
+        # 逐batch拿各自Top-M索引（按概率排序），然后在T'维gather
+        gather_idx = []
+        for b in range(B):
+            m = int(M_sel[b].item())
+            gather_idx.append(sorted_idx[b, :m])
+        maxM = max(int(m.item()) for m in M_sel)
+        # pad到相同长度便于堆叠
+        gather_idx = [torch.cat([idx, idx.new_full((maxM - idx.numel(),), idx[0].item())]) for idx in gather_idx]
+        gather_idx = torch.stack(gather_idx, dim=0)  # [B,maxM]
 
-        aligned = torch.matmul(attn, v)  # [B, Hh, N, Dh]
-        aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)  # [B, N, Cv]
+        # 重新索引K/V（保留Top-M），并重算logits
+        k2 = k.gather(dim=2, index=gather_idx.view(B, 1, maxM, 1).expand(B, Hh, maxM, Dh))
+        v2 = v.gather(dim=2, index=gather_idx.view(B, 1, maxM, 1).expand(B, Hh, maxM, Dh))
+
+        logits2 = torch.matmul(q, k2.transpose(-2, -1)) * self.ssa_scale  # [B,Hh,N,maxM]
+
+        # 2) 像素级Top-k（在标签维稀疏）
+        if (self.pixel_topk is not None) and (self.pixel_topk >= 1) and (self.pixel_topk < maxM):
+            topv, topi = torch.topk(logits2, k=self.pixel_topk, dim=-1)  # [B,Hh,N,k]
+            mask = torch.zeros_like(logits2).scatter_(-1, topi, 1.0)
+            logits2 = logits2.masked_fill(mask.eq(0), float('-inf'))
+
+        attn = torch.softmax(logits2, dim=-1)  # [B,Hh,N,maxM]
+
+        # --- 熵感知 γ（不确定时少注入）---
+        if self.gamma_entropy:
+            eps = 1e-6
+            p = torch.clamp(attn, min=eps)  # [B,Hh,N,M]
+            entropy = -(p * torch.log(p)).sum(dim=-1) / math.log(attn.size(-1) + 1e-12)  # [B,Hh,N]
+            concentration = 1.0 - entropy  # [B,Hh,N]
+            c = concentration.mean(dim=1, keepdim=True)  # [B,1,N]
+        else:
+            c = None
+
+        # 聚合
+        aligned = torch.matmul(attn, v2)  # [B,Hh,N,Dh] 或 v
+        aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)  # [B,N,Cv]
         aligned = self.out_proj(aligned)
 
-        if all_pad.any():
-            aligned = aligned * (~all_pad).view(B, 1, 1).float()
+        if c is not None:
+            aligned = aligned * c.permute(0, 2, 1)  # [B,N,1] → 广播到 Cv
 
-        # ★ 残差连接：与SSA保持一致的gamma初始化 ★
         y = x + (self.gamma * self.gamma_scale) * aligned
-        y = y.view(B, H, W, Cv)
-        return y
+
+        _B, _H, _W, _Cv = visual_features.shape
+        return y.view(_B, _H, _W, _Cv)

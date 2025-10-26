@@ -66,20 +66,16 @@ class EncoderDecoder(nn.Module):
             logger.info("Using Hierarchical Semantic-Guided Decoder")
             from .decoders.hsg_head import HierarchicalSemanticGuidedHead
             chs = list(self.channels)
-            self.decode_head = HierarchicalSemanticGuidedHead(
-                in_channels=chs[1:],
-                in_index=[1, 2, 3],
-                input_transform=("multiple_select" if len(chs) > 1 else None),
-                channels=getattr(cfg, "decoder_embed_dim", 512),
-                num_classes=cfg.num_classes,
-                norm_cfg=norm_cfg,
-                text_dim=getattr(cfg, "text_feature_dim", 512),
-                # decoder 侧的层级控制与 Top-K 策略
-                sam_dec_stages=getattr(cfg, "sam_dec_stages", [0, 1, 2, 3]),
-                sam_use_topk=getattr(cfg, "sam_use_topk", True),
-                sam_top_m=getattr(cfg, "sam_top_m", 5),
-                backbone_num_heads=getattr(self.backbone, "num_heads", [4, 4, 8, 16]),  # 动态透传 S/B/L 的头数
-            )
+            self.decode_head = HierarchicalSemanticGuidedHead(in_channels=chs[1:], in_index=[1, 2, 3], input_transform=(
+                "multiple_select" if len(chs) > 1 else None), channels=getattr(cfg, "decoder_embed_dim", 512),
+                                                              num_classes=cfg.num_classes, norm_cfg=norm_cfg,
+                                                              text_dim=getattr(cfg, "text_feature_dim", 512),
+                                                              sam_dec_stages=getattr(cfg, "sam_dec_stages",
+                                                                                     [0, 1, 2, 3]),
+                                                              sam_use_topk=getattr(cfg, "sam_use_topk", True),
+                                                              sam_top_m=getattr(cfg, "sam_top_m", 5),
+                                                              backbone_num_heads=getattr(self.backbone, "num_heads",
+                                                                                         [4, 4, 8, 16]))
             if cfg.aux_rate != 0:
                 from .decoders.fcnhead import FCNHead
                 self.aux_index = 2
