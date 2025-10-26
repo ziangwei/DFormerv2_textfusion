@@ -9,6 +9,12 @@
 #SBATCH --time=00:15:00               # 任务最长运行时长
 
 #python check.py
-python ids2text_nyu37.py \
-  --in datasets/NYUDepthv2/topk_labels2_internvl3.json \
-  --out datasets/NYUDepthv2/topk_labels2_text_internvl3.json
+#python ids2text_nyu37.py \
+#  --in datasets/NYUDepthv2/topk_labels5_internvl3.json \
+#  --out datasets/NYUDepthv2/topk_labels5_text_internvl3.json
+
+python compare_json_overlap.py \
+    datasets/NYUDepthv2/topk_labels4_text_internvl3.json \
+    datasets/NYUDepthv2/top5_labels_per_image.json
+
+#
