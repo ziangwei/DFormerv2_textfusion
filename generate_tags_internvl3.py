@@ -35,6 +35,9 @@ NORM_MAP = {
     "bookshelf": "bookshelf",
     "book shelf": "bookshelf",
     "white board": "whiteboard",
+    "refridgerator": "refrigerator",  # 常见拼写错误
+    "book": "books",
+    "cloth": "clothes",
 }
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -218,13 +221,16 @@ def main():
     # 固定提示词（InternVL3 使用 batch_chat，不一定需要 <image> 标记）
     allowed_list = ", ".join(NYU37)
     prompt_tpl = (
-        f"You are a precise indoor-scene annotator for NYUv2.\n"
-        f"Allowed labels (37): {allowed_list}\n"
-        f"Task: list every label from the allowed set that most likely appears in the image.\n"
-        f"Rules:\n"
-        f"1) Use ONLY labels from the allowed list (lowercase).\n"
-        f"2) Return JSON: {{\"labels\": [\"label1\", ...]}} only.\n"
-        f"3) No duplicates.\n"
+        f"You are a visual recognition expert specializing in indoor scene analysis.\n"
+        f"Allowed labels (37): {allowed_list}\n\n"
+        f"Follow these steps carefully:\n"
+        f"Use ONLY labels from the allowed list; output canonical names exactly as written."
+        f"Order matters: the list must be sorted by estimated area dominance."
+        f"Prefer large structural surfaces first , then fill remaining slots with clearly visible distinctive items.\n"
+        f"If at least 5 labels are clearly visible, you MUST output exactly 5."
+        f"If fewer are clearly visible, output as many as are clearly visible (≥1). "
+        f"When unsure between synonyms, choose the closest canonical label from the allowed list.\n"
+        f"Do NOT include objects that are not visible. Do NOT invent labels not in the allowed list.\n"
     )
 
     # 主循环

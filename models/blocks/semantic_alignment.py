@@ -53,6 +53,11 @@ class SemanticAlignmentModule(nn.Module):
         # 多头聚合后再做一次线性投影，保持与旧 SSA 逻辑一致
         self.out_proj = nn.Linear(query_dim, query_dim)
 
+        # --- Null absorb token (for SSA-lite) ---
+        self.enable_null = True
+        self.null_text = nn.Parameter(torch.zeros(text_dim))  # shape: [Ct]
+        nn.init.normal_(self.null_text, mean=0.0, std=1e-3)
+
         # === 门控（decoder 侧使用；encoder 侧用 gamma） ===
         if gate_channels:
             self.gate = nn.Sequential(nn.Linear(query_dim, query_dim), nn.Sigmoid())
@@ -79,13 +84,6 @@ class SemanticAlignmentModule(nn.Module):
         self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))       # encoder/superpower (SSA-lite)
         self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
         self.register_buffer("ssa_scale", torch.tensor(self.head_dim ** -0.5, dtype=torch.float))
-
-        self.ssr_top_m_cap = 8  # 每图最多保留的标签数（剪枝上限）
-        self.pixel_topk = 2  # 每像素在标签维上的Top-k（1或2）
-        self.keep_mass = 0.90  # 动态保留：覆盖到90%“token分布质量”
-        self.enable_null = True  # 是否拼接一个可学习的null文本token
-        self.gamma_entropy = True  # 是否用熵调节注入强度
-        self.null_text = nn.Parameter(torch.zeros(1, 1, self.k_proj.in_features))
 
         # 初始化
         nn.init.xavier_uniform_(self.q_proj.weight);  nn.init.zeros_(self.q_proj.bias)
@@ -167,137 +165,58 @@ class SemanticAlignmentModule(nn.Module):
 
     # ---------- Encoder/Superpower 侧：多头 SSA-lite（无Top-K/无FFN/无额外LN） ----------
     def forward_ssa(self, visual_features, text_features):
-        """
-        Encoder/Superpower：多头 SSA-lite（稳定注入版）
-        - 三路打分混合（峰值 / LSE / Top-ρ%）→ SSR“保质量”Top-M（含 null）
-        - 像素级 Top-k（标签维）→ 稀疏注意
-        - Null 吸收（K 保留，V=0） + 熵感知 × (1 - null_mass) 门控 γ
-        - pad 全遮蔽旁路，数值安全
+        """Encoder/Superpower: 轻量版多头注意力
+
         Args:
-            visual_features: (B,H,W,Cv)
-            text_features:   (B,T,Ct) / (T,Ct) / (B,Ct)
+            visual_features: (B, H, W, Cv) 的视觉特征
+            text_features:   支持 (B,T,Ct) / (T,Ct) / (B,Ct)
         """
-        import torch, math
         B, H, W, Cv = visual_features.shape
-        N = H * W
-        x = visual_features.reshape(B, N, Cv)  # (B,N,Cv)
-        q_full = self.q_proj(x)  # (B,N,Cv)
+        x = visual_features.view(B, H * W, Cv)
+        q_full = self.q_proj(x)
 
-        # ---- 文本准备：批维对齐 +（可选）拼接 null ----
-        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # (B,T,Ct)
-        if self.enable_null:
-            null = self.null_text.to(text_b.dtype).expand(B, 1, -1)  # (B,1,Ct)
-            text_b = torch.cat([text_b, null], dim=1)  # (B,T+1,Ct)
-        pad_mask = self._make_text_pad_mask(text_b)  # (B,T')
-        if self.enable_null:
-            pad_mask[:, -1] = False  # null 永不算 pad
+        # 统一成 (B,T,Ct)
+        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B, T, Ct]
+        pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
 
-        # 若整批全 pad（极端），旁路返回以避免 softmax(-inf)->NaN
-        if bool(pad_mask.all()):
-            return visual_features
+        # --- Append a null token at the end; never treated as pad ---
+        if getattr(self, "enable_null", False):
+            null_tok = self.null_text.to(text_b.dtype).view(1, 1, -1).expand(B, 1, -1)  # [B,1,Ct]
+            text_b = torch.cat([text_b, null_tok], dim=1)  # [B,T+1,Ct]
+            pad_mask = F.pad(pad_mask, (0, 1), value=False)  # last=Null → not pad
 
-        # ---- 投影到 Cv 并拆头 ----
-        k_full = self.k_proj(text_b)  # (B,T',Cv)
-        v_full = self.v_proj(text_b)  # (B,T',Cv)
+        k_full = self.k_proj(text_b)  # [B, T_active, Cv]
+        v_full = self.v_proj(text_b)  # [B, T_active, Cv]
+
         Hh, Dh = self.num_heads, self.head_dim
-        q = q_full.view(B, N, Hh, Dh).permute(0, 2, 1, 3)  # (B,Hh,N,Dh)
-        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # (B,Hh,T',Dh)
-        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # (B,Hh,T',Dh)
+        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, N, Dh]
+        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
+        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
 
-        # ---- 第1趟：自评分 logits（不 softmax）----
-        logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # (B,Hh,N,T')
+        # --- Null's value is zero so it contributes no features ---
+        if getattr(self, "enable_null", False):
+            v[:, :, -1, :] = 0.0  # last token is the appended null
+
+        all_pad = pad_mask.all(dim=1)  # [B]
+        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # [B, Hh, N, T]
+
+        # Mask掉padding token
         if pad_mask.any():
-            logits = logits.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
+            attn_logits = attn_logits.masked_fill(
+                pad_mask.unsqueeze(1).unsqueeze(2),  # [B, 1, 1, T]
+                float('-inf')
+            )
 
-        # ---- 三路 token 打分（仅对 T' 维），混合以兼顾“峰值/面积/稳健” ----
-        # 1) 峰值：对 N 取 max，再对头均值（小目标召回强）
-        score_peak = logits.amax(dim=2).mean(dim=1)  # (B,T')
-        # 2) LSE：兼顾强度与像素数，向面积友好过渡
-        tau = 1.0
-        score_lse = torch.logsumexp(logits / tau, dim=2).mean(dim=1)  # (B,T')
-        # 3) Top-ρ% 均值：只看最像的一小撮像素（抑制噪声）
-        rho = 0.02
-        P = max(1, int(rho * N))
-        topv, _ = torch.topk(logits, k=P, dim=2)  # (B,Hh,P,T')
-        score_topρ = topv.mean(dim=2).mean(dim=1)  # (B,T')
+        attn = torch.softmax(attn_logits, dim=-1)  # [B, Hh, N, T]
 
-        # 混合（可按需微调权重）
-        λ1, λ2, λ3 = 0.6, 0.3, 0.1
-        token_score = λ1 * score_peak + λ2 * score_lse + λ3 * score_topρ  # (B,T')
-
-        # ---- “保质量”Top-M（动态）：softmax(token_score) 累计覆盖 keep_mass，且 ≤ cap ----
-        prob = torch.softmax(token_score, dim=-1)  # (B,T')
-        sorted_prob, sorted_idx = prob.sort(dim=-1, descending=True)
-        cum = torch.cumsum(sorted_prob, dim=-1)
-        mass_M = (cum < self.keep_mass).sum(dim=-1) + 1  # (B,)
-        M_cap = min(self.ssr_top_m_cap, prob.size(-1))
-        M_sel = torch.clamp(mass_M, min=1, max=M_cap)  # (B,)
-
-        # 收集每个样本的 Top-M 索引，强制包含 null，并 pad 到相同 M 便于 batch gather
-        gather_idx = []
-        maxM = int(M_sel.max().item())
-        null_id = text_b.size(1) - 1 if self.enable_null else -1
-        for b in range(B):
-            m = int(M_sel[b].item())
-            idx_b = sorted_idx[b, :m]
-            if self.enable_null and (null_id >= 0) and (idx_b != null_id).all():
-                if m == 0:
-                    idx_b = sorted_idx[b, :1]
-                    m = 1
-                idx_b = torch.cat([idx_b[:-1], idx_b.new_tensor([null_id])], dim=0)
-            if m < maxM:
-                idx_b = torch.cat([idx_b, idx_b.new_full((maxM - m,), idx_b[0].item())], dim=0)
-            gather_idx.append(idx_b)
-        gather_idx = torch.stack(gather_idx, dim=0)  # (B,maxM)
-
-        # ---- 第2趟：仅对 Top-M 重算注意力 ----
-        k2 = k.gather(dim=2, index=gather_idx.view(B, 1, maxM, 1).expand(B, Hh, maxM, Dh))  # (B,Hh,M,Dh)
-        v2 = v.gather(dim=2, index=gather_idx.view(B, 1, maxM, 1).expand(B, Hh, maxM, Dh))  # (B,Hh,M,Dh)
-
-        # Null 吸收：保留 null 的 K，但将其 V 置 0（无增益，只吸注意力）
-        if self.enable_null:
-            is_null = gather_idx.eq(null_id)  # (B,M)
-            is_null_h = is_null.view(B, 1, maxM, 1).expand(B, Hh, maxM, Dh)  # (B,Hh,M,Dh)
-            v2 = torch.where(is_null_h, torch.zeros_like(v2), v2)
-
-        logits2 = torch.matmul(q, k2.transpose(-2, -1)) * self.ssa_scale  # (B,Hh,N,M)
-
-        # 像素级 Top-k 稀疏（标签维）
-        if (self.pixel_topk is not None) and (self.pixel_topk >= 1) and (self.pixel_topk < maxM):
-            topv2, topi2 = torch.topk(logits2, k=self.pixel_topk, dim=-1)  # (B,Hh,N,k)
-            mask = torch.zeros_like(logits2).scatter_(-1, topi2, 1.0)
-            logits2 = logits2.masked_fill(mask.eq(0), float('-inf'))
-
-        attn = torch.softmax(logits2, dim=-1)  # (B,Hh,N,M)
-
-        # ---- γ 门控：熵感知 × (1 - null_mass) ----
-        c = None
-        if getattr(self, "gamma_entropy", True):
-            eps = 1e-6
-            p = torch.clamp(attn, min=eps)
-            entropy = -(p * torch.log(p)).sum(dim=-1) / math.log(attn.size(-1) + 1e-12)  # (B,Hh,N)∈[0,1]
-            concentration = 1.0 - entropy  # 越确定越大
-            c = concentration.mean(dim=1, keepdim=True)  # (B,1,N)
-
-        if self.enable_null:
-            # 计算 null 的注意力质量；质量越大说明图像不支持文本 → 减弱注入
-            is_null_exp = is_null.view(B, 1, 1, maxM).expand(B, Hh, N, maxM)  # (B,Hh,N,M)
-            null_mass = (attn * is_null_exp).sum(dim=-1, keepdim=True)  # (B,Hh,N,1)
-            null_mass = null_mass.mean(dim=1, keepdim=True)  # (B,1,N,1)
-        else:
-            null_mass = 0.0
-
-        # ---- 聚合并注入 ----
-        aligned_h = torch.matmul(attn, v2)  # (B,Hh,N,Dh)
-        aligned = aligned_h.permute(0, 2, 1, 3).reshape(B, N, Hh * Dh)  # (B,N,Cv)
+        aligned = torch.matmul(attn, v)  # [B, Hh, N, Dh]
+        aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)  # [B, N, Cv]
         aligned = self.out_proj(aligned)
 
-        # 组合 γ：基础 γ × 比例尺 × 熵浓度 × (1 - null_mass)
-        gamma_eff = self.gamma * self.gamma_scale
-        if c is not None:
-            gamma_eff = gamma_eff * c.permute(0, 2, 1)  # (B,N,1)
-        if isinstance(null_mass, torch.Tensor):
-            gamma_eff = gamma_eff * (1.0 - null_mass.squeeze(-1).permute(0, 2, 1))  # (B,N,1)
+        if all_pad.any():
+            aligned = aligned * (~all_pad).view(B, 1, 1).float()
 
-        y = x + gamma_eff * aligned  # (B,N,Cv)
-        return y.reshape(B, H, W, Cv)
+        # ★ 残差连接：与SSA保持一致的gamma初始化 ★
+        y = x + (self.gamma * self.gamma_scale) * aligned
+        y = y.view(B, H, W, Cv)
+        return y
