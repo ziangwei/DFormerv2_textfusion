@@ -39,7 +39,7 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                  sam_top_m=5,
                  backbone_num_heads=(4, 4, 8, 16),
                  sam_dec_repeats=1,  # 默认单次 SAM；配置里传 int/list/dict 即可改次数
-                 dec_use_ssa: bool = True,
+                 dec_use_ssa: bool = False,
                  **kwargs):
         super().__init__(in_channels=in_channels,
                          in_index=in_index,
