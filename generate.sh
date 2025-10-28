@@ -17,3 +17,14 @@ python generate_tags_internvl3.py \
 
 
 echo "标签生成完成！"
+
+
+
+## 跑整个 NYUDv2 的 RGB 目录；输出文件名与 batch 大小可传参
+#python generate_tags_qwen3vl.py \
+#  --dataset_dir datasets/NYUDepthv2 \
+#  --image_folder RGB \
+#  --output_file datasets/NYUDepthv2/image_labels_vlm.json \
+#  --batch_size 4 \
+#  --max_new_tokens 64 \
+#  --max_labels 5

@@ -10,6 +10,23 @@ from collections import OrderedDict
 from ..blocks.semantic_alignment import SemanticAlignmentModule
 
 
+class _NoOpSAM(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward_ssa(self, x, text_features=None):
+        return x
+
+
+class _NoOpStageSAM(nn.Module):
+    """export-only 路径下需要的 stage 级 SAM 占位（调用 forward(x, text)）"""
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, text_features=None):
+        return x
+
+
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -436,43 +453,54 @@ class dformerv2(nn.Module):
             )
             self.layers.append(layer)
 
-        # 每个 stage 的 encoder-SAM
+        # ★ 只有在 superpower=False（export-only）时才需要 stage 级 SAM
         self.encoder_sam_stages = nn.ModuleList()
-        for i in range(self.num_layers):
-            self.encoder_sam_stages.append(
-                SemanticAlignmentModule(
-                    query_dim=embed_dims[i],
-                    text_dim=text_dim,
-                    use_topk=sam_use_topk,
-                    top_m=sam_top_m,
-                    num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
-                    gamma_scale=sam_enc_gamma_scale,
-                )
-            )
+        if not self.superpower:
+            for i in range(self.num_layers):
+                if i in self._sam_enc_enabled:
+                    self.encoder_sam_stages.append(
+                        SemanticAlignmentModule(
+                            query_dim=embed_dims[i],
+                            text_dim=text_dim,
+                            use_topk=sam_use_topk,
+                            top_m=sam_top_m,
+                            num_heads=self.num_heads[i],
+                            gamma_scale=sam_enc_gamma_scale,
+                        )
+                    )
+                else:
+                    self.encoder_sam_stages.append(_NoOpStageSAM())
+        # superpower=True 时 forward 根本不会用到 encoder_sam_stages，因此无需构建
 
-        # 冻结未启用的 encoder SAM，避免 no-grad 噪声
-        for i, m in enumerate(self.encoder_sam_stages):
-            if i not in self._sam_enc_enabled:
-                for p in m.parameters():
-                    p.requires_grad = False
-
+        # ★ 仅在首/中/尾 3 个 block 放 SAM，其它用无参 NoOp 占位
         self.encoder_sam_blocks = nn.ModuleList()
         for i in range(self.num_layers):
+            depth_i = depths[i]
             if self.superpower and (i in self._sam_enc_enabled):
-                depth_i = depths[i]
-                ml = nn.ModuleList([
-                    SemanticAlignmentModule(
-                        query_dim=embed_dims[i], text_dim=text_dim,
-                        use_topk=sam_use_topk, top_m=sam_top_m,
-                        num_heads=self.num_heads[i],  # 同一 stage 的头数
-                        gamma_scale=sam_enc_gamma_scale,
-                    )
-                    for _ in range(depth_i)
-                ])
-                self.encoder_sam_blocks.append(ml)
+                key3 = {0, depth_i // 2, depth_i - 1} if depth_i >= 3 else set(range(depth_i))
+                stage_ml = nn.ModuleList()
+                # 简单的 gamma 递减初始化（早高后低），不改前向签名
+                gamma_sched = torch.linspace(0.8, 0.2, steps=depth_i)
+
+                for b in range(depth_i):
+                    if b in key3:
+                        mod = SemanticAlignmentModule(
+                            query_dim=embed_dims[i],
+                            text_dim=text_dim,
+                            use_topk=sam_use_topk,
+                            top_m=sam_top_m,
+                            num_heads=self.num_heads[i],
+                            gamma_scale=sam_enc_gamma_scale,
+                        )
+                        with torch.no_grad():
+                            mod.gamma.copy_(gamma_sched[b].to(mod.gamma))
+                        stage_ml.append(mod)
+                    else:
+                        stage_ml.append(_NoOpSAM())  # 无参占位
+                self.encoder_sam_blocks.append(stage_ml)
             else:
-                # 占位，保持索引对齐；不占参数
-                self.encoder_sam_blocks.append(nn.ModuleList())
+                # 该 stage 未启用也要给等长占位，保证 BasicLayer 内索引安全
+                self.encoder_sam_blocks.append(nn.ModuleList([_NoOpSAM() for _ in range(depth_i)]))
 
         self.extra_norms = nn.ModuleList()
         for i in range(len(embed_dims) - 1):

@@ -26,8 +26,10 @@ C.text_encoder_name = None
 # 标签与描述数据
 C.label_txt_path = "datasets/NYUDepthv2/nyu40_labels.txt"
 C.caption_json_path = "datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json"
-C.image_labels_json_path = "datasets/NYUDepthv2/topk_labels5_text_internvl3.json"
+C.image_labels_json_path = "datasets/NYUDepthv2/topk_labels2_text_internvl3.json"
 # C.image_labels_json_path = "datasets/NYUDepthv2/top5_labels_per_image.json"
+# C.image_labels_json_path = "datasets/NYUDepthv2/image_labels_vlm.json"
+
 # 模板与数量（对“类名→多模板短句”的扩写）
 C.text_template_set = "clip"           # clip / none
 C.max_templates_per_label = 3
