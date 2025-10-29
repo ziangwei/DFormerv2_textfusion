@@ -330,8 +330,14 @@ class RGBD_Block(nn.Module):
 
         # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
         if superpower and (sam_b is not None) and (text_features is not None):
-            # 使用我们在 semantic_alignment 里新增的 forward_ssa（无 top-k / 无 FFN / 单标量门控）
-            out = sam_b.forward_ssa(out, text_features)
+            # 🔧 提取geo_mask传给forward_ssa
+            if split_or_not:
+                mask_h, mask_w = geo_prior[1]
+                geo_mask = torch.diagonal(mask_h.mean(dim=1), dim1=-2, dim2=-1)  # [B, H*W]
+            else:
+                geo_mask = torch.diagonal(geo_prior[1].mean(dim=1), dim1=-2, dim2=-1)
+
+            out = sam_b.forward_ssa(out, text_features, geo_mask)  # 🔧 传geo_mask
 
         # 残差1
         if self.layerscale:
