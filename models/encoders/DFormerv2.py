@@ -472,18 +472,20 @@ class dformerv2(nn.Module):
                     self.encoder_sam_stages.append(_NoOpStageSAM())
         # superpower=True 时 forward 根本不会用到 encoder_sam_stages，因此无需构建
 
-        # ★ 仅在首/中/尾 3 个 block 放 SAM，其它用无参 NoOp 占位
+        # ★ 每两个 Block 放一个 SAM（偶数位），并强制包含最后一个 Block；其余用 NoOp
         self.encoder_sam_blocks = nn.ModuleList()
         for i in range(self.num_layers):
             depth_i = depths[i]
             if self.superpower and (i in self._sam_enc_enabled):
-                key3 = {0, depth_i // 2, depth_i - 1} if depth_i >= 3 else set(range(depth_i))
-                stage_ml = nn.ModuleList()
-                # 简单的 gamma 递减初始化（早高后低），不改前向签名
-                gamma_sched = torch.linspace(0.8, 0.2, steps=depth_i)
+                # 选取集合：偶数位 {0,2,4,...}；并确保包含最后一层 depth_i-1
+                keyset = set(range(0, depth_i, 2))
+                if depth_i > 0:
+                    keyset.add(depth_i - 1)
 
+                stage_ml = nn.ModuleList()
+                gamma_sched = torch.linspace(0.9, 0.5, steps=depth_i)  # 轻微递减，可保留你原来的也行
                 for b in range(depth_i):
-                    if b in key3:
+                    if b in keyset:
                         mod = SemanticAlignmentModule(
                             query_dim=embed_dims[i],
                             text_dim=text_dim,
@@ -496,10 +498,9 @@ class dformerv2(nn.Module):
                             mod.gamma.copy_(gamma_sched[b].to(mod.gamma))
                         stage_ml.append(mod)
                     else:
-                        stage_ml.append(_NoOpSAM())  # 无参占位
+                        stage_ml.append(_NoOpSAM())
                 self.encoder_sam_blocks.append(stage_ml)
             else:
-                # 该 stage 未启用也要给等长占位，保证 BasicLayer 内索引安全
                 self.encoder_sam_blocks.append(nn.ModuleList([_NoOpSAM() for _ in range(depth_i)]))
 
         self.extra_norms = nn.ModuleList()
