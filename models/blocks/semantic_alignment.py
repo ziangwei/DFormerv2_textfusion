@@ -64,6 +64,16 @@ class SemanticAlignmentModule(nn.Module):
         self.k_proj  = nn.Linear(text_dim,  query_dim)   # (B,T,Ct)->(B,T,Cv)
         self.v_proj  = nn.Linear(text_dim,  query_dim)   # (B,T,Ct)->(B,T,Cv)
 
+        # ★ 文本预处理 MLP（轻量非线性，残差式，初始等价恒等）
+        self.use_text_prep = True
+        text_mid = int(round(text_dim * 2.0))  # 经验：×2 足够
+        self.text_prep = nn.Sequential(
+            nn.LayerNorm(text_dim),
+            nn.Linear(text_dim, text_mid), nn.GELU(),
+            nn.Linear(text_mid, text_dim)
+        )
+        self.text_prep_eta = nn.Parameter(torch.tensor(0.0))  # 初始 0，不改变行为
+
         # 多头聚合后再做一次线性投影
         self.out_proj = nn.Linear(query_dim, query_dim)
 
@@ -209,12 +219,17 @@ class SemanticAlignmentModule(nn.Module):
         q_full = self.q_proj(x)                                # (B,N,Cv)
 
         # 文本 → K/V（到 Cv 空间）
-        text_b = self._ensure_batched_text(text_features, B)   # (B,T,Ct)
-        # 训练期 Token Drop（decoder forward 也启用）
+        text_b = self._ensure_batched_text(text_features, B)
+        # 训练期 Token Drop（先丢，再建 pad_mask，避免 MLP 的 bias 让“全0”变非零）
         text_b = self._token_dropout(text_b, self.token_keep_prob, keep_last_if_null=False)
-        k_full = self.k_proj(text_b)                           # (B,T,Cv)
-        v_full = self.v_proj(text_b)                           # (B,T,Cv)
-        pad_mask = self._make_text_pad_mask(text_b)            # (B,T)
+        pad_mask = self._make_text_pad_mask(text_b)  # ← 先定 pad，再做非线性
+
+        # ★ 文本非线性预处理（残差门控，初始不改变）
+        if self.use_text_prep:
+            text_b = text_b + self.text_prep_eta * self.text_prep(text_b)
+
+        k_full = self.k_proj(text_b)
+        v_full = self.v_proj(text_b)
 
         # 多头拆分
         Hh, Dh = self.num_heads, self.head_dim
@@ -283,6 +298,10 @@ class SemanticAlignmentModule(nn.Module):
             text_b = self._token_dropout(text_b, self.token_keep_prob, keep_last_if_null=True)
         else:
             text_b = self._token_dropout(text_b, self.token_keep_prob, keep_last_if_null=False)
+
+        # ★ 文本非线性预处理（对 Null 同样适用；后续我们把 v 的 Null 置 0，不影响聚合）
+        if self.use_text_prep:
+            text_b = text_b + self.text_prep_eta * self.text_prep(text_b)
 
         k_full = self.k_proj(text_b)  # [B, T_active, Cv]
         v_full = self.v_proj(text_b)  # [B, T_active, Cv]
