@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from .decode_head import BaseDecodeHead
 from .ham_head import Hamburger
 from ..blocks.semantic_alignment import SemanticAlignmentModule
-
+import torch.nn.functional as F  # 🔧 新增：用于 F.interpolate 上采样geo_mask
+import math                       # 🔧 新增：用于 math.sqrt 计算特征图尺寸
 
 class SAMStack(nn.Module):
     """把同一层的若干个 SAM 串起来；无层时等价 Identity。"""
@@ -15,14 +16,28 @@ class SAMStack(nn.Module):
         super().__init__()
         self.layers = nn.ModuleList(sam_layers or [])
 
-    def forward(self, f_chw: torch.Tensor, text_features=None) -> torch.Tensor:
+    def forward(self, f_chw, text_features=None,
+                geo_mask=None,  # 🔧 新增
+                return_attn=False):  # 🔧 新增
         if len(self.layers) == 0:
+            if return_attn:
+                return f_chw, None
             return f_chw
-        x = f_chw.permute(0, 2, 3, 1).contiguous()   # → NHWC
-        for sam in self.layers:
-            x = sam(x, text_features)                # decoder forward（Top-K 稀疏 + 置信旁路）
-        return x.permute(0, 3, 1, 2).contiguous()    # → NCHW
 
+        x = f_chw.permute(0, 2, 3, 1).contiguous()
+        attn_list = [] if return_attn else None
+
+        for sam in self.layers:
+            if return_attn:
+                x, attn_i = sam(x, text_features, geo_mask, return_attn=True)
+                attn_list.append(attn_i)
+            else:
+                x = sam(x, text_features, geo_mask, return_attn=False)
+
+        out = x.permute(0, 3, 1, 2).contiguous()
+        if return_attn:
+            return out, attn_list
+        return out
 
 class HierarchicalSemanticGuidedHead(BaseDecodeHead):
     """
@@ -115,14 +130,54 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         return int(repeat_cfg)
 
     # ----------------------------- 前向 -----------------------------
-    def forward(self, inputs, text_features=None):
+    def forward(self, inputs, text_features=None,
+                geo_priors=None,  # 🔧 新增：来自encoder的几何先验列表
+                return_attn=False):  # 🔧 新增：是否返回attention maps
         feats = self._transform_inputs(inputs)
+
+        attn_maps = [] if return_attn else None  # 🔧 收集attention
 
         tgt_hw = feats[0].shape[2:]
         proc_feats = []
         for i, f in enumerate(feats):
-            # 一次性通过该层的 SAMStack（内部自处理 NHWC↔NCHW 和多层串联）
-            f = self.dec_sam_stacks[i](f, text_features)
+            # 🔧 步骤1: 获取并处理geo_mask
+            geo_mask_i = None
+            if geo_priors is not None and i < len(geo_priors):
+                geo_mask_raw = geo_priors[i]  # [B, H, N_in, N_in] 或其他形状
+
+                # 上采样到当前特征图大小
+                B, C, H_cur, W_cur = f.shape
+                N_cur = H_cur * W_cur
+
+                # 假设geo_mask_raw是 [B, num_heads, N_in, N_in]
+                # 简化：取对角线平均作为每个像素的几何置信度
+                if geo_mask_raw.dim() == 4:  # [B, H, N, N]
+                    # 取所有head的平均
+                    geo_mask_raw = geo_mask_raw.mean(dim=1)  # → [B, N_in, N_in]
+
+                if geo_mask_raw.dim() == 3:  # [B, N_in, N_in]
+                    # 方案A: 取对角线（每个像素自己的几何强度）
+                    geo_mask_i = torch.diagonal(geo_mask_raw, dim1=-2, dim2=-1)  # [B, N_in]
+
+                    # 插值到当前分辨率
+                    H_in = int(math.sqrt(geo_mask_i.size(1)))
+                    geo_mask_i = geo_mask_i.view(B, H_in, H_in)
+                    geo_mask_i = F.interpolate(
+                        geo_mask_i.unsqueeze(1),  # [B, 1, H_in, H_in]
+                        size=(H_cur, W_cur),
+                        mode='bilinear',
+                        align_corners=False
+                    ).squeeze(1)  # → [B, H_cur, W_cur]
+                    geo_mask_i = geo_mask_i.view(B, N_cur)  # → [B, N_cur]
+
+            # 🔧 步骤2: 通过SAMStack，传入geo_mask
+            if return_attn:
+                f, attn_i = self.dec_sam_stacks[i](
+                    f, text_features, geo_mask_i, return_attn=True
+                )
+                attn_maps.append(attn_i)
+            else:
+                f = self.dec_sam_stacks[i](f, text_features, geo_mask_i)
             f = resize(f, size=tgt_hw, mode="bilinear", align_corners=self.align_corners)
             proc_feats.append(f)
 
@@ -130,4 +185,9 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         x = self.squeeze(x)
         x = self.hamburger(x)
         x = self.align(x)
-        return self.cls_seg(x)
+        out = self.cls_seg(x)
+
+        # 🔧 可选返回attention maps
+        if return_attn:
+            return out, attn_maps
+        return out

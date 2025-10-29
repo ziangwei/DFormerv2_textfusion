@@ -559,13 +559,14 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e, text_features=None):
+    def forward(self, x, x_e, text_features=None, export_geo_priors=False):
         # rgb
         x = self.patch_embed(x)
         # depth
         x_e = x_e[:, 0, :, :].unsqueeze(1)
 
         outs = []
+        geo_priors = [] if export_geo_priors else None
         use_text_guidance = text_features is not None
         if use_text_guidance and text_features.dim() == 2:
             text_features = text_features.unsqueeze(0)
@@ -573,6 +574,29 @@ class dformerv2(nn.Module):
             text_features = text_features.to(device=x.device, dtype=x.dtype)
 
         for i in range(self.num_layers):
+            if export_geo_priors:
+                # 从该stage的第一个block的Geo模块获取
+                with torch.no_grad():  # 不需要梯度
+                    geo_gen = self.layers[i].blocks[0].Geo
+                    H, W = x.shape[1], x.shape[2]
+                    split_or_not = (i != 3)  # stage 0-2分解，stage 3全局
+
+                    # 调用GeoPriorGen生成geo_prior
+                    geo_prior = geo_gen((H, W), x_e, split_or_not=split_or_not)
+                    # geo_prior = ((sin, cos), mask)，我们只要mask部分
+
+                    if split_or_not:
+                        # 分解模式：mask是 (mask_h, mask_w)
+                        mask_h, mask_w = geo_prior[1]  # [B, H, H, W], [B, H, W, W]
+                        # 合成为 [B, H*W, H*W] 的完整mask（简化处理）
+                        # 这里简化：直接用mask_h作为代表（或者做平均）
+                        geo_mask = mask_h.mean(dim=1)  # [B, H, W] 平均所有head
+                    else:
+                        # 全局模式：mask是 [B, H, H*W, H*W]
+                        geo_mask = geo_prior[1].mean(dim=1)  # [B, H*W, H*W]
+
+                    geo_priors.append(geo_mask)
+
             if self.superpower:
                 # 逐 block：仅当该 stage 启用时传入对应 ModuleList；否则传空
                 sam_blocks = self.encoder_sam_blocks[i] if (
@@ -605,6 +629,8 @@ class dformerv2(nn.Module):
                 out = x_out.permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
 
+        if export_geo_priors:
+            return tuple(outs), geo_priors  # 🔧 返回 (features, geo_masks)
         return tuple(outs)
 
     def train(self, mode=True):

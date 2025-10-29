@@ -122,9 +122,12 @@ class SemanticAlignmentModule(nn.Module):
         return conf_h.mean(dim=1, keepdim=False)                      # [B,N,1]
 
     # ---------- Decoder ----------
-    def forward(self, visual_features: torch.Tensor, text_features: torch.Tensor):
+    def forward(self, visual_features: torch.Tensor, text_features: torch.Tensor,
+                geo_mask=None,  # 🔧 新增：几何先验掩码 [B, N, N] 或 [B, N]
+                return_attn=False):  # 🔧 新增：是否返回attention map
         B, H, W, Cv = visual_features.shape
-        x = self.norm1(visual_features).view(B, H * W, Cv)               # (B,N,Cv)
+        N = H * W
+        x = self.norm1(visual_features).view(B, N, Cv)
         q_full = self.q_proj(x)
 
         # 文本
@@ -142,6 +145,20 @@ class SemanticAlignmentModule(nn.Module):
         # logits
         scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
         sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale               # (B,N,H,T)
+
+        if geo_mask is not None:
+            # geo_mask可能是 [B, N, N]（像素间几何相似度）或 [B, N]（像素级置信度）
+            if geo_mask.dim() == 2:  # [B, N]
+                geo_mask = geo_mask.unsqueeze(-1)  # → [B, N, 1]
+            elif geo_mask.dim() == 3 and geo_mask.size(-1) == N:  # [B, N, N]
+                # 简化为每个像素的平均几何置信度
+                geo_mask = geo_mask.mean(dim=-1, keepdim=True)  # → [B, N, 1]
+
+            # 调制sim: 让几何不合理的像素降低其text attention强度
+            # sim: [B, N, H, T], geo_mask: [B, N, 1] → broadcast
+            geo_mask = geo_mask.clamp(min=0.1, max=1.0)  # 避免完全置零
+            sim = sim * geo_mask.unsqueeze(1)  # [B, N, 1] → [B, N, H, 1]
+
         if pad_mask.any():
             sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
@@ -178,10 +195,19 @@ class SemanticAlignmentModule(nn.Module):
         y = (x + self.alpha * gate * aligned) if self.add_residual else (self.alpha * aligned)
         y = self.norm2(y)
         y = y + self.ffn(y)
+
+        # 🔧 可选返回attention map
+        if return_attn:
+            # attn: [B, N, H, T] → 返回平均后的 [B, N, T] 便于可视化
+            attn_vis = attn.mean(dim=2)  # 平均所有heads
+            return y.view(B, H, W, Cv), attn_vis
+
         return y.view(B, H, W, Cv)
 
     # ---------- Encoder ----------
-    def forward_ssa(self, visual_features: torch.Tensor, text_features: torch.Tensor):
+    def forward_ssa(self, visual_features, text_features,
+                    geo_mask=None,  # 🔧 新增
+                    return_attn=False):  # 🔧 新增
         B, H, W, Cv = visual_features.shape
         x = visual_features.view(B, H * W, Cv)
         q_full = self.q_proj(x)
@@ -198,6 +224,16 @@ class SemanticAlignmentModule(nn.Module):
 
         # Top-K 稀疏注意力（与 decoder 一致）
         attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale   # (B,H,N,T)
+
+        if geo_mask is not None:
+            # 同样的处理逻辑
+            if geo_mask.dim() == 2:
+                geo_mask = geo_mask.unsqueeze(-1)
+            elif geo_mask.dim() == 3:
+                geo_mask = geo_mask.mean(dim=-1, keepdim=True)
+            geo_mask = geo_mask.clamp(min=0.1, max=1.0)
+            attn_logits = attn_logits * geo_mask.unsqueeze(1)  # [B, H, N, T]
+
         if pad_mask.any():
             attn_logits = attn_logits.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
         if self.use_topk and (self.top_m is not None) and (self.top_m < attn_logits.size(-1)):
@@ -224,4 +260,8 @@ class SemanticAlignmentModule(nn.Module):
         aligned = aligned * bypass
 
         y = x + (self.gamma * self.gamma_scale) * aligned
+
+        if return_attn:
+            attn_vis = attn.mean(dim=1)  # [B, H, N, T] → [B, N, T]
+            return y.view(B, H, W, Cv), attn_vis
         return y.view(B, H, W, Cv)

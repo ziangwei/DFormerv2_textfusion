@@ -178,19 +178,24 @@ class EncoderDecoder(nn.Module):
 
     def encode_decode(self, rgb, modal_x, text_features=None):
         orisize = rgb.shape
+        # 🔧 Encoder: 导出geo_priors
         if self.enable_text_guidance:
-            x = self.backbone(rgb, modal_x, text_features)
+            x = self.backbone(rgb, modal_x, text_features, export_geo_priors=True)
         else:
             x = self.backbone(rgb, modal_x)
 
-        if len(x) == 2:
-            x = x[0]
+        # 🔧 处理返回值
+        geo_priors = None
+        if isinstance(x, tuple) and len(x) == 2:
+            x, geo_priors = x  # 解包
+
         if isinstance(x, (list, tuple)):
             feats = list(x)
             x = tuple(feats)
 
+        # 🔧 Decoder: 传入geo_priors
         if self.enable_text_guidance:
-            out = self.decode_head.forward(x, text_features)
+            out = self.decode_head.forward(x, text_features, geo_priors)
         else:
             out = self.decode_head.forward(x)
 
