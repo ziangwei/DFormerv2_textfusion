@@ -166,6 +166,31 @@ class SemanticAlignmentModule(nn.Module):
         scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
         sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale  # (B, N, H, T)
 
+        geo_gate_flat = None
+        geo_context = None
+        if isinstance(geo_mask, dict) and {"depth", "gate", "beta"} <= set(geo_mask.keys()):
+            depth = geo_mask["depth"]  # [B,1,H,W]
+            gate_map = geo_mask["gate"].clamp(0.3, 1.0)  # [B,1,H,W]
+            beta_m = geo_mask["beta"].clamp_min(0.0)
+            geo_context = (depth, gate_map, beta_m)
+            geo_gate_flat = gate_map.flatten(1).unsqueeze(-1).to(sim.dtype)  # [B,N,1]
+            gate_bias = torch.log(gate_map.flatten(1).unsqueeze(-1).unsqueeze(-1).clamp_min(1e-6).to(sim.dtype))
+            sim = sim + gate_bias
+        elif isinstance(geo_mask, torch.Tensor) and geo_mask.dim() in {2, 4}:
+            if geo_mask.dim() == 4:
+                gate_map = geo_mask.clamp(0.3, 1.0)
+                geo_gate_flat = gate_map.flatten(1).unsqueeze(-1).to(sim.dtype)
+                gate_bias = torch.log(
+                    gate_map.flatten(1).unsqueeze(-1).unsqueeze(-1).clamp_min(1e-6).to(sim.dtype)
+                )
+            else:
+                gate_map = geo_mask.clamp(0.3, 1.0)
+                geo_gate_flat = gate_map.unsqueeze(-1).to(sim.dtype)
+                gate_bias = torch.log(
+                    gate_map.unsqueeze(-1).unsqueeze(-1).clamp_min(1e-6).to(sim.dtype)
+                )
+            sim = sim + gate_bias
+
         if pad_mask.any():
             sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
@@ -204,29 +229,21 @@ class SemanticAlignmentModule(nn.Module):
         beta_txt = self.beta_base + delta_beta  # [B,1]
 
         # --- 几何分支 ---
-        if isinstance(geo_mask, dict) and {"depth", "gate", "beta"} <= set(geo_mask.keys()):
-            depth = geo_mask["depth"]  # [B,1,H,W] 已按本层尺度
-            gate = geo_mask["gate"].clamp(0.3, 1.0)  # [B,1,H,W]
-            beta_m = geo_mask["beta"]  # [B,1,H,W]
+        if geo_context is not None:
+            depth, gate_map, beta_m = geo_context
 
             B, _, Hs, Ws = depth.shape
             N_cur = Hs * Ws
-            if (Hs, Ws) != (int(N_cur ** 0.5), int(N_cur ** 0.5)):  # 仅提示：N=H*W
+            if (Hs, Ws) != (int(N_cur ** 0.5), int(N_cur ** 0.5)):
                 pass
 
-            # 1) 像素门（可学习 gate）
-            g = gate.flatten(1).unsqueeze(-1).unsqueeze(-1)  # [B,N,1,1]
-            attn_nhT = attn_nhT * g
-            # 盖掉 pad token 再归一化（保持每像素 ∑_T=1）
-            if 'pad_mask' in locals() and pad_mask is not None:
-                attn_nhT = attn_nhT.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), 0.0)
-            attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
-
-            # 2) 小图才做 pairwise（用文本调制 beta 与 DGN beta 融合）
+            # 小图才做 pairwise（用文本调制 beta 与 DGN beta 融合）
             if N_cur <= self.max_pairwise_n:
                 dvec = depth.reshape(B, -1).unsqueeze(-1)  # [B,N,1]
                 ddiff = (dvec - dvec.transpose(1, 2)).abs()  # [B,N,N]
-                beta_eff = (beta_txt.view(B, 1, 1) + beta_m.mean(dim=(2, 3), keepdim=True)).clamp(min=1.0)  # [B,1,1]
+                beta_flat = beta_m.reshape(B, -1)
+                beta_pair = 0.5 * (beta_flat.unsqueeze(-1) + beta_flat.unsqueeze(-2))  # [B,N,N]
+                beta_eff = (beta_txt.view(B, 1, 1) + beta_pair).clamp(min=1.0)
                 geo_w = torch.exp(-beta_eff * ddiff).to(attn_nhT.dtype)
                 geo_w = geo_w / (geo_w.sum(dim=-1, keepdim=True) + 1e-6)
 
@@ -251,18 +268,20 @@ class SemanticAlignmentModule(nn.Module):
 
         # 置信度 → 旁路掩码
         conf_bn1 = self._conf_from_attn(attn, heads_first=False)
-        bypass = (conf_bn1 >= self.conf_thresh).to(attn.dtype)
+        conf_scale = self.conf_thresh + (1.0 - self.conf_thresh) * conf_bn1.clamp(0.0, 1.0)
 
         # 聚合
         aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)
         aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))
         aligned = self.out_proj(aligned)
 
-        # 旁路
-        aligned = aligned * bypass
+        # 置信软门控
+        aligned = aligned * conf_scale.to(aligned.dtype)
 
         # 残差 + FFN
         gate = self.gate(x)
+        if geo_gate_flat is not None:
+            gate = gate * geo_gate_flat.to(gate.dtype)
         y = (x + self.alpha * gate * aligned) if self.add_residual else (self.alpha * aligned)
         y = self.norm2(y)
         y = y + self.ffn(y)
@@ -294,6 +313,20 @@ class SemanticAlignmentModule(nn.Module):
 
         # Top-K 稀疏注意力
         attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # (B, H, N, T)
+
+        geo_gate_flat = None
+        if isinstance(geo_mask, dict) and "gate" in geo_mask:
+            gate_map = geo_mask["gate"].clamp(0.4, 1.0)
+            geo_gate_flat = gate_map.flatten(1).unsqueeze(-1).to(attn_logits.dtype)
+            gate_bias = torch.log(
+                gate_map.flatten(1).unsqueeze(1).unsqueeze(-1).clamp_min(1e-6).to(attn_logits.dtype)
+            )
+            attn_logits = attn_logits + gate_bias
+        elif isinstance(geo_mask, torch.Tensor) and geo_mask.dim() == 2 and geo_mask.size(1) == q.size(2):
+            gate_map = geo_mask.clamp(0.4, 1.0)
+            geo_gate_flat = gate_map.unsqueeze(-1).to(attn_logits.dtype)
+            gate_bias = torch.log(gate_map.unsqueeze(1).unsqueeze(-1).clamp_min(1e-6).to(attn_logits.dtype))
+            attn_logits = attn_logits + gate_bias
 
 
         if pad_mask.any():
@@ -327,16 +360,6 @@ class SemanticAlignmentModule(nn.Module):
 
         alpha_txt = (self.alpha_base + delta_alpha).clamp(0.05, 0.35)  # Encoder更保守
 
-        # 几何门控（dict 或 [B,N]）
-        if isinstance(geo_mask, dict) and "gate" in geo_mask:
-            g = geo_mask["gate"].clamp(0.4, 1.0).flatten(1).unsqueeze(-1).unsqueeze(-1)  # 更高地板，防过抑制
-            attn_nhT = attn_nhT * g
-            attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
-        elif isinstance(geo_mask, torch.Tensor) and geo_mask.dim() == 2 and geo_mask.size(1) == attn_nhT.size(1):
-            g = geo_mask.clamp(0.4, 1.0).unsqueeze(-1).unsqueeze(-1)
-            attn_nhT = attn_nhT * g
-            attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
-
         # 回到 [B,Hh,N,T] 继续后续 Vz 聚合；将 alpha_txt 用作残差注入强度（乘在你的增量上）
         attn = attn_nhT.permute(0, 2, 1, 3).contiguous()
         # 后续：delta_feat = (attn @ Vz) * alpha_txt[...,0,0,0]  或在你的残差处乘 alpha_txt
@@ -346,13 +369,15 @@ class SemanticAlignmentModule(nn.Module):
             attn[all_pad] = 0
 
         conf_bn1 = self._conf_from_attn(attn, heads_first=True)
-        bypass = (conf_bn1 >= self.conf_thresh).to(attn.dtype)
+        conf_scale = self.conf_thresh + (1.0 - self.conf_thresh) * conf_bn1.clamp(0.0, 1.0)
 
         aligned = torch.matmul(attn, v)  # (B, H, N, Dh)
         aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)
         aligned = self.out_proj(aligned)
 
-        aligned = aligned * bypass
+        aligned = aligned * conf_scale.to(aligned.dtype)
+        if geo_gate_flat is not None:
+            aligned = aligned * geo_gate_flat.to(aligned.dtype)
 
         y = x + (self.gamma * self.gamma_scale) * aligned
 
