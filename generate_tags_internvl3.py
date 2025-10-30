@@ -309,11 +309,12 @@ def main():
                 responses = model.batch_chat(
                     tok,
                     msgs,
-                    role="user",
-                    temperature=0.0,
-                    max_new_tokens=args.max_new_tokens,
-                    repetition_penalty=1.05,
-                    generation_config=dict(max_new_tokens=args.max_new_tokens, do_sample=False),
+                    generation_config=dict(
+                        max_new_tokens=args.max_new_tokens,
+                        do_sample=False,
+                        temperature=0.0,
+                        repetition_penalty=1.05
+                    ),
                 )
         except Exception as e:
             logging.error(f"batch_chat failed on {rel_list[0]}: {e}")

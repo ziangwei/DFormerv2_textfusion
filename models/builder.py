@@ -178,28 +178,19 @@ class EncoderDecoder(nn.Module):
 
     def encode_decode(self, rgb, modal_x, text_features=None):
         orisize = rgb.shape
-        # 🔧 Encoder: 导出geo_priors
         if self.enable_text_guidance:
-            x = self.backbone(rgb, modal_x, text_features, export_geo_priors=True)
+            x = self.backbone(rgb, modal_x, text_features)
         else:
             x = self.backbone(rgb, modal_x)
 
-        # 🔧 处理返回值
-        geo_priors = None
-        if isinstance(x, tuple) and len(x) == 2:
-            x, geo_priors = x  # 解包
-
+        if len(x) == 2:
+            x = x[0]
         if isinstance(x, (list, tuple)):
             feats = list(x)
             x = tuple(feats)
 
         if self.enable_text_guidance:
-            # 检查decoder是否支持text_features和geo_priors参数
-            from .decoders.hsg_head import HierarchicalSemanticGuidedHead
-            if isinstance(self.decode_head, HierarchicalSemanticGuidedHead):
-                out = self.decode_head.forward(x, text_features, geo_priors)
-            else:
-                out = self.decode_head.forward(x)
+            out = self.decode_head.forward(x, text_features)
         else:
             out = self.decode_head.forward(x)
 
