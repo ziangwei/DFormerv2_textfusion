@@ -193,9 +193,13 @@ class EncoderDecoder(nn.Module):
             feats = list(x)
             x = tuple(feats)
 
-        # 🔧 Decoder: 传入geo_priors
         if self.enable_text_guidance:
-            out = self.decode_head.forward(x, text_features, geo_priors)
+            # 检查decoder是否支持text_features和geo_priors参数
+            from .decoders.hsg_head import HierarchicalSemanticGuidedHead
+            if isinstance(self.decode_head, HierarchicalSemanticGuidedHead):
+                out = self.decode_head.forward(x, text_features, geo_priors)
+            else:
+                out = self.decode_head.forward(x)
         else:
             out = self.decode_head.forward(x)
 

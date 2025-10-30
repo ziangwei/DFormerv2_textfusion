@@ -14,7 +14,10 @@ class _NoOpSAM(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward_ssa(self, x, text_features=None):
+    def forward_ssa(self, x, text_features=None, geo_mask=None, return_attn=False):
+        """接受所有参数但什么都不做"""
+        if return_attn:
+            return x, None
         return x
 
 
@@ -330,14 +333,14 @@ class RGBD_Block(nn.Module):
 
         # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
         if superpower and (sam_b is not None) and (text_features is not None):
-            # 🔧 提取geo_mask传给forward_ssa
-            if split_or_not:
-                mask_h, mask_w = geo_prior[1]
-                geo_mask = torch.diagonal(mask_h.mean(dim=1), dim1=-2, dim2=-1)  # [B, H*W]
-            else:
-                geo_mask = torch.diagonal(geo_prior[1].mean(dim=1), dim1=-2, dim2=-1)
+            # 🔧 不要从 geo_prior 提取，直接用特征图本身
+            b, h, w, d = out.size()  # out 是 GSA 输出的特征
 
-            out = sam_b.forward_ssa(out, text_features, geo_mask)  # 🔧 传geo_mask
+            # 方案A：传入当前分辨率的深度图
+            depth_resized = F.interpolate(x_e, size=(h, w), mode='bilinear', align_corners=False)
+            geo_mask = depth_resized  # [B, 1, H, W]
+
+            out = sam_b.forward_ssa(out, text_features, geo_mask)
 
         # 残差1
         if self.layerscale:
@@ -581,27 +584,12 @@ class dformerv2(nn.Module):
 
         for i in range(self.num_layers):
             if export_geo_priors:
-                # 从该stage的第一个block的Geo模块获取
-                with torch.no_grad():  # 不需要梯度
-                    geo_gen = self.layers[i].blocks[0].Geo
+                with torch.no_grad():
                     H, W = x.shape[1], x.shape[2]
-                    split_or_not = (i != 3)  # stage 0-2分解，stage 3全局
 
-                    # 调用GeoPriorGen生成geo_prior
-                    geo_prior = geo_gen((H, W), x_e, split_or_not=split_or_not)
-                    # geo_prior = ((sin, cos), mask)，我们只要mask部分
-
-                    if split_or_not:
-                        # 分解模式：mask是 (mask_h, mask_w)
-                        mask_h, mask_w = geo_prior[1]  # [B, H, H, W], [B, H, W, W]
-                        # 合成为 [B, H*W, H*W] 的完整mask（简化处理）
-                        # 这里简化：直接用mask_h作为代表（或者做平均）
-                        geo_mask = mask_h.mean(dim=1)  # [B, H, W] 平均所有head
-                    else:
-                        # 全局模式：mask是 [B, H, H*W, H*W]
-                        geo_mask = geo_prior[1].mean(dim=1)  # [B, H*W, H*W]
-
-                    geo_priors.append(geo_mask)
+                    # 🔧 简化：只导出深度图，让 SAM 自己计算亲和度
+                    depth_resized = F.interpolate(x_e, size=(H, W), mode='bilinear', align_corners=False)
+                    geo_priors.append(depth_resized)  # [B, 1, H, W]
 
             if self.superpower:
                 # 逐 block：仅当该 stage 启用时传入对应 ModuleList；否则传空

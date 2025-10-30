@@ -24,7 +24,7 @@ class SemanticAlignmentModule(nn.Module):
         proj_drop: float = 0.0,
         ffn_drop: float = 0.0,
         add_residual: bool = True,
-        gate_channels: bool = False,
+        gate_channels: bool = True,
         alpha_init: float = 0.1,
         clamp_logit: float = 2.0,
         num_heads: int = 1,
@@ -80,6 +80,14 @@ class SemanticAlignmentModule(nn.Module):
             nn.Dropout(ffn_drop),
         )
 
+        self.use_geo_consistency = True
+        self.geo_mlp = nn.Sequential(
+            nn.Conv2d(1, 16, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 1, 1),
+            nn.Sigmoid()
+        )
+
         # 残差缩放
         self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
         self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))        # encoder
@@ -89,6 +97,18 @@ class SemanticAlignmentModule(nn.Module):
         # init
         for m in [self.q_proj, self.k_proj, self.v_proj, self.out_proj]:
             nn.init.xavier_uniform_(m.weight); nn.init.zeros_(m.bias)
+
+        try:
+            from torch.nn import LazyLinear
+            self.text_scale = LazyLinear(2)  # 输出 [Δalpha, Δbeta]
+        except Exception:
+            self.text_scale = None  # 老版本 PyTorch 兜底
+
+        # --- 几何融合与温度的基线 ---
+        self.alpha_base = 0.25  # 几何融合基线（attn 与 attn_geo 的混合系数基线）
+        self.beta_base = 5.0  # pairwise 深度亲和的基线温度
+        self.max_pairwise_n = getattr(self, "max_pairwise_n", 1600)  # 小图阈值，防 OOM
+
 
     # ---------- utils ----------
     @staticmethod
@@ -123,46 +143,33 @@ class SemanticAlignmentModule(nn.Module):
 
     # ---------- Decoder ----------
     def forward(self, visual_features: torch.Tensor, text_features: torch.Tensor,
-                geo_mask=None,  # 🔧 新增：几何先验掩码 [B, N, N] 或 [B, N]
-                return_attn=False):  # 🔧 新增：是否返回attention map
+                geo_mask=None,  # 支持 [B, N] 或 [B, N, N]
+                return_attn=False):
         B, H, W, Cv = visual_features.shape
         N = H * W
         x = self.norm1(visual_features).view(B, N, Cv)
         q_full = self.q_proj(x)
 
         # 文本
-        text_b = self._ensure_batched_text(text_features, B)             # (B,T,Ct)
-        pad_mask = self._make_text_pad_mask(text_b)                      # (B,T)
-        k_full = self.k_proj(text_b)                                     # (B,T,Cv)
-        v_full = self.v_proj(text_b)                                     # (B,T,Cv)
+        text_b = self._ensure_batched_text(text_features, B)
+        pad_mask = self._make_text_pad_mask(text_b)
+        k_full = self.k_proj(text_b)
+        v_full = self.v_proj(text_b)
 
         # 多头
         Hh, Dh = self.num_heads, self.head_dim
-        q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)    # (B,N,H,Dh)
-        k = F.normalize(k_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)    # (B,T,H,Dh)
-        v = v_full.view(B, -1, Hh, Dh)                                    # (B,T,H,Dh)
+        q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)
+        k = F.normalize(k_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)
+        v = v_full.view(B, -1, Hh, Dh)
 
         # logits
         scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
-        sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale               # (B,N,H,T)
-
-        if geo_mask is not None:
-            # geo_mask可能是 [B, N, N]（像素间几何相似度）或 [B, N]（像素级置信度）
-            if geo_mask.dim() == 2:  # [B, N]
-                geo_mask = geo_mask.unsqueeze(-1)  # → [B, N, 1]
-            elif geo_mask.dim() == 3 and geo_mask.size(-1) == N:  # [B, N, N]
-                # 简化为每个像素的平均几何置信度
-                geo_mask = geo_mask.mean(dim=-1, keepdim=True)  # → [B, N, 1]
-
-            # 调制sim: 让几何不合理的像素降低其text attention强度
-            # sim: [B, N, H, T], geo_mask: [B, N, 1] → broadcast
-            geo_mask = geo_mask.clamp(min=0.1, max=1.0)  # 避免完全置零
-            sim = sim * geo_mask.unsqueeze(1)  # [B, N, 1] → [B, N, H, 1]
+        sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale  # (B, N, H, T)
 
         if pad_mask.any():
             sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
 
-        # 稀疏注意力：Top-K（预 softmax；仅当 K < T）
+        # Top-K 稀疏注意力
         if self.use_topk and (self.top_m is not None) and (self.top_m < sim.size(-1)):
             topv, topi = torch.topk(sim, k=self.top_m, dim=-1)
             mask = torch.zeros_like(sim).scatter_(-1, topi, 1.0)
@@ -173,41 +180,104 @@ class SemanticAlignmentModule(nn.Module):
         attn = self.attn_drop(attn)
         attn = attn / attn.sum(-1, keepdim=True).clamp_min(1e-6)
 
+        # === attn: [B, Hh, N, T] 先标准化到 [B, N, Hh, T] ===
+        attn_nhT = attn.permute(0, 2, 1, 3).contiguous()  # [B,N,Hh,T]
+
+        # --- 文本条件调制：从 text_features 得到 Δalpha/Δbeta ---
+        if text_features is not None:
+            if text_features.dim() == 2:  # (T,Ct) -> (B,T,Ct)
+                B = attn_nhT.size(0)
+                text_features = text_features.unsqueeze(0).expand(B, -1, -1)
+            t_pool = text_features.mean(dim=1)  # [B,Ct]
+            if self.text_scale is not None:
+                delta = self.text_scale(t_pool)  # [B,2]
+                delta_alpha = torch.tanh(delta[:, 0:1]) * 0.10  # +/-0.1
+                delta_beta = F.softplus(delta[:, 1:2]) * 0.50  # +[0,0.5]
+            else:
+                delta_alpha = attn_nhT.new_zeros(attn_nhT.size(0), 1)
+                delta_beta = attn_nhT.new_zeros(attn_nhT.size(0), 1)
+        else:
+            delta_alpha = attn_nhT.new_zeros(attn_nhT.size(0), 1)
+            delta_beta = attn_nhT.new_zeros(attn_nhT.size(0), 1)
+
+        alpha_txt = (self.alpha_base + delta_alpha).clamp(0.05, 0.40)  # [B,1]
+        beta_txt = self.beta_base + delta_beta  # [B,1]
+
+        # --- 几何分支 ---
+        if isinstance(geo_mask, dict) and {"depth", "gate", "beta"} <= set(geo_mask.keys()):
+            depth = geo_mask["depth"]  # [B,1,H,W] 已按本层尺度
+            gate = geo_mask["gate"].clamp(0.3, 1.0)  # [B,1,H,W]
+            beta_m = geo_mask["beta"]  # [B,1,H,W]
+
+            B, _, Hs, Ws = depth.shape
+            N_cur = Hs * Ws
+            if (Hs, Ws) != (int(N_cur ** 0.5), int(N_cur ** 0.5)):  # 仅提示：N=H*W
+                pass
+
+            # 1) 像素门（可学习 gate）
+            g = gate.flatten(1).unsqueeze(-1).unsqueeze(-1)  # [B,N,1,1]
+            attn_nhT = attn_nhT * g
+            # 盖掉 pad token 再归一化（保持每像素 ∑_T=1）
+            if 'pad_mask' in locals() and pad_mask is not None:
+                attn_nhT = attn_nhT.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), 0.0)
+            attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
+
+            # 2) 小图才做 pairwise（用文本调制 beta 与 DGN beta 融合）
+            if N_cur <= self.max_pairwise_n:
+                dvec = depth.reshape(B, -1).unsqueeze(-1)  # [B,N,1]
+                ddiff = (dvec - dvec.transpose(1, 2)).abs()  # [B,N,N]
+                beta_eff = (beta_txt.view(B, 1, 1) + beta_m.mean(dim=(2, 3), keepdim=True)).clamp(min=1.0)  # [B,1,1]
+                geo_w = torch.exp(-beta_eff * ddiff).to(attn_nhT.dtype)
+                geo_w = geo_w / (geo_w.sum(dim=-1, keepdim=True) + 1e-6)
+
+                Bn, Nn, Hh, Tt = attn_nhT.shape
+                attn_flat = attn_nhT.reshape(Bn, Nn, Hh * Tt)  # [B,N,H*T]
+                attn_geo = torch.bmm(geo_w, attn_flat).view(Bn, Nn, Hh, Tt)
+
+                a = alpha_txt.view(B, 1, 1, 1)  # [B,1,1,1]
+                attn_nhT = (1 - a) * attn_nhT + a * attn_geo
+                # 融合后再次盖 pad + 归一化
+                if 'pad_mask' in locals() and pad_mask is not None:
+                    attn_nhT = attn_nhT.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), 0.0)
+                attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
+
+        # 回到 [B,Hh,N,T]
+        attn = attn_nhT.permute(0, 2, 1, 3).contiguous()
+
         # all-pad 兜底
         all_pad = pad_mask.all(dim=1)
         if all_pad.any():
             attn[all_pad] = 0
 
-        # 置信度（像素级）→ 旁路掩码
-        conf_bn1 = self._conf_from_attn(attn, heads_first=False)         # (B,N,1)
-        bypass = (conf_bn1 >= self.conf_thresh).to(attn.dtype)           # (B,N,1)
+        # 置信度 → 旁路掩码
+        conf_bn1 = self._conf_from_attn(attn, heads_first=False)
+        bypass = (conf_bn1 >= self.conf_thresh).to(attn.dtype)
 
         # 聚合
-        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)             # (B,N,H,Dh)
-        aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))      # (B,N,Cv)
+        aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)
+        aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))
         aligned = self.out_proj(aligned)
 
-        # 旁路：低置信像素不注入增益
+        # 旁路
         aligned = aligned * bypass
 
         # 残差 + FFN
-        gate = self.gate(x)                                              # (B,N,1) or (B,N,Cv)
+        gate = self.gate(x)
         y = (x + self.alpha * gate * aligned) if self.add_residual else (self.alpha * aligned)
         y = self.norm2(y)
         y = y + self.ffn(y)
 
-        # 🔧 可选返回attention map
         if return_attn:
-            # attn: [B, N, H, T] → 返回平均后的 [B, N, T] 便于可视化
-            attn_vis = attn.mean(dim=2)  # 平均所有heads
+            attn_vis = attn.mean(dim=2)
             return y.view(B, H, W, Cv), attn_vis
 
         return y.view(B, H, W, Cv)
 
     # ---------- Encoder ----------
+    # semantic_alignment.py Line ~153
     def forward_ssa(self, visual_features, text_features,
-                    geo_mask=None,  # 🔧 新增
-                    return_attn=False):  # 🔧 新增
+                    geo_mask=None,  # 现在可以是 [B, N] 或 [B, N, N]
+                    return_attn=False):
         B, H, W, Cv = visual_features.shape
         x = visual_features.view(B, H * W, Cv)
         q_full = self.q_proj(x)
@@ -218,50 +288,75 @@ class SemanticAlignmentModule(nn.Module):
         v_full = self.v_proj(text_b)
 
         Hh, Dh = self.num_heads, self.head_dim
-        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)     # (B,H,N,Dh)
-        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)     # (B,H,T,Dh)
-        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)     # (B,H,T,Dh)
+        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # (B, H, N, Dh)
+        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # (B, H, T, Dh)
+        v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # (B, H, T, Dh)
 
-        # Top-K 稀疏注意力（与 decoder 一致）
-        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale   # (B,H,N,T)
+        # Top-K 稀疏注意力
+        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.ssa_scale  # (B, H, N, T)
 
-        if geo_mask is not None:
-            # 同样的处理逻辑
-            if geo_mask.dim() == 2:
-                geo_mask = geo_mask.unsqueeze(-1)
-            elif geo_mask.dim() == 3:
-                geo_mask = geo_mask.mean(dim=-1, keepdim=True)
-            geo_mask = geo_mask.clamp(min=0.1, max=1.0)
-            attn_logits = attn_logits * geo_mask.unsqueeze(1)  # [B, H, N, T]
 
         if pad_mask.any():
             attn_logits = attn_logits.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
+
         if self.use_topk and (self.top_m is not None) and (self.top_m < attn_logits.size(-1)):
             topv, topi = torch.topk(attn_logits, k=self.top_m, dim=-1)
             mask = torch.zeros_like(attn_logits).scatter_(-1, topi, 1.0)
             attn_logits = attn_logits.masked_fill(mask.eq(0), float('-inf'))
 
-        attn = torch.softmax(attn_logits, dim=-1)                           # (B,H,N,T)
+        attn = torch.softmax(attn_logits, dim=-1)
         attn = self.attn_drop(attn)
         attn = attn / attn.sum(-1, keepdim=True).clamp_min(1e-6)
+
+        # attn: [B, Hh, N, T] -> [B,N,Hh,T]
+        attn_nhT = attn.permute(0, 2, 1, 3).contiguous()
+
+        # 文本调制 alpha（只影响注入强度，不做 pairwise）
+        if text_features is not None:
+            if text_features.dim() == 2:
+                B = attn_nhT.size(0)
+                text_features = text_features.unsqueeze(0).expand(B, -1, -1)
+            t_pool = text_features.mean(dim=1)
+            if self.text_scale is not None:
+                delta = self.text_scale(t_pool)
+                delta_alpha = torch.tanh(delta[:, 0:1]) * 0.10
+            else:
+                delta_alpha = attn_nhT.new_zeros(attn_nhT.size(0), 1)
+        else:
+            delta_alpha = attn_nhT.new_zeros(attn_nhT.size(0), 1)
+
+        alpha_txt = (self.alpha_base + delta_alpha).clamp(0.05, 0.35)  # Encoder更保守
+
+        # 几何门控（dict 或 [B,N]）
+        if isinstance(geo_mask, dict) and "gate" in geo_mask:
+            g = geo_mask["gate"].clamp(0.4, 1.0).flatten(1).unsqueeze(-1).unsqueeze(-1)  # 更高地板，防过抑制
+            attn_nhT = attn_nhT * g
+            attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
+        elif isinstance(geo_mask, torch.Tensor) and geo_mask.dim() == 2 and geo_mask.size(1) == attn_nhT.size(1):
+            g = geo_mask.clamp(0.4, 1.0).unsqueeze(-1).unsqueeze(-1)
+            attn_nhT = attn_nhT * g
+            attn_nhT = attn_nhT / (attn_nhT.sum(dim=-1, keepdim=True) + 1e-6)
+
+        # 回到 [B,Hh,N,T] 继续后续 Vz 聚合；将 alpha_txt 用作残差注入强度（乘在你的增量上）
+        attn = attn_nhT.permute(0, 2, 1, 3).contiguous()
+        # 后续：delta_feat = (attn @ Vz) * alpha_txt[...,0,0,0]  或在你的残差处乘 alpha_txt
 
         all_pad = pad_mask.all(dim=1)
         if all_pad.any():
             attn[all_pad] = 0
 
-        conf_bn1 = self._conf_from_attn(attn, heads_first=True)             # (B,N,1)
-        bypass = (conf_bn1 >= self.conf_thresh).to(attn.dtype)              # (B,N,1)
+        conf_bn1 = self._conf_from_attn(attn, heads_first=True)
+        bypass = (conf_bn1 >= self.conf_thresh).to(attn.dtype)
 
-        aligned = torch.matmul(attn, v)                                      # (B,H,N,Dh)
-        aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)        # (B,N,Cv)
+        aligned = torch.matmul(attn, v)  # (B, H, N, Dh)
+        aligned = aligned.permute(0, 2, 1, 3).reshape(B, -1, Hh * Dh)
         aligned = self.out_proj(aligned)
 
-        # 旁路
         aligned = aligned * bypass
 
         y = x + (self.gamma * self.gamma_scale) * aligned
 
         if return_attn:
-            attn_vis = attn.mean(dim=1)  # [B, H, N, T] → [B, N, T]
+            attn_vis = attn.mean(dim=1)
             return y.view(B, H, W, Cv), attn_vis
         return y.view(B, H, W, Cv)

@@ -10,6 +10,16 @@ from ..blocks.semantic_alignment import SemanticAlignmentModule
 import torch.nn.functional as F  # 🔧 新增：用于 F.interpolate 上采样geo_mask
 import math                       # 🔧 新增：用于 math.sqrt 计算特征图尺寸
 
+
+def sobel_xy(depth: torch.Tensor):
+    # depth: [B,1,H,W]
+    kx = depth.new_tensor([[[[-1.,0.,1.],[-2.,0.,2.],[-1.,0.,1.]]]])
+    ky = depth.new_tensor([[[[-1.,-2.,-1.],[0.,0.,0.],[1.,2.,1.]]]])
+    dx = F.conv2d(depth, kx, padding=1)
+    dy = F.conv2d(depth, ky, padding=1)
+    return dx, dy
+
+
 class SAMStack(nn.Module):
     """把同一层的若干个 SAM 串起来；无层时等价 Identity。"""
     def __init__(self, sam_layers=None):
@@ -38,6 +48,7 @@ class SAMStack(nn.Module):
         if return_attn:
             return out, attn_list
         return out
+
 
 class HierarchicalSemanticGuidedHead(BaseDecodeHead):
     """
@@ -72,6 +83,12 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         self.ham_channels = channels
         self.text_dim = text_dim
         self.backbone_num_heads = list(backbone_num_heads)
+
+        self.dgn = nn.Sequential(
+            nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, 3, padding=1), nn.ReLU(inplace=True),
+            nn.Conv2d(16, 2, 1)  # [:,0:1] -> gate_logit, [:,1:2] -> beta_logit
+        )
 
         # === 为每个输入特征层构建一个 SAMStack（可能为空） ===
         # builder 里传参：sam_dec_stages、sam_use_topk、sam_top_m，与此一致。:contentReference[oaicite:1]{index=1}
@@ -140,44 +157,36 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
         tgt_hw = feats[0].shape[2:]
         proc_feats = []
         for i, f in enumerate(feats):
-            # 🔧 步骤1: 获取并处理geo_mask
+            # 🔧 处理 geo_mask
             geo_mask_i = None
-            if geo_priors is not None and i < len(geo_priors):
-                geo_mask_raw = geo_priors[i]  # [B, H, N_in, N_in] 或其他形状
+            global_idx = self.in_index[i] if isinstance(self.in_index, (list, tuple)) else i
+            if geo_priors is not None:
+                try:
+                    geo_raw = geo_priors[global_idx]  # 优先按全局 stage 取
+                    if isinstance(geo_raw, torch.Tensor) and geo_raw.dim() == 4 and geo_raw.shape[1] == 1:
+                        depth_i = F.interpolate(geo_raw, size=f.shape[-2:], mode='bilinear',
+                                                align_corners=self.align_corners).to(f.dtype)
+                        # 深度 + 梯度 -> DGN（可学习 gate/beta）
+                        dx, dy = sobel_xy(depth_i)
+                        d_in = torch.cat([depth_i, dx.abs(), dy.abs()], dim=1)  # [B,3,Hs,Ws]
+                        d_out = self.dgn(d_in)  # [B,2,Hs,Ws]
+                        gate = torch.sigmoid(d_out[:, 0:1])  # [B,1,Hs,Ws] ∈ (0,1)
+                        beta = F.softplus(d_out[:, 1:2]) + 1.0  # [B,1,Hs,Ws] > 0
+                        geo_mask_i = {"depth": depth_i, "gate": gate, "beta": beta}  # 传 dict
+                    else:
+                        geo_mask_i = geo_raw  # 兼容 [B,N]/[B,N,N]
+                except Exception:
+                    geo_mask_i = None
+            else:
+                geo_mask_i = None
 
-                # 上采样到当前特征图大小
-                B, C, H_cur, W_cur = f.shape
-                N_cur = H_cur * W_cur
-
-                # 假设geo_mask_raw是 [B, num_heads, N_in, N_in]
-                # 简化：取对角线平均作为每个像素的几何置信度
-                if geo_mask_raw.dim() == 4:  # [B, H, N, N]
-                    # 取所有head的平均
-                    geo_mask_raw = geo_mask_raw.mean(dim=1)  # → [B, N_in, N_in]
-
-                if geo_mask_raw.dim() == 3:  # [B, N_in, N_in]
-                    # 方案A: 取对角线（每个像素自己的几何强度）
-                    geo_mask_i = torch.diagonal(geo_mask_raw, dim1=-2, dim2=-1)  # [B, N_in]
-
-                    # 插值到当前分辨率
-                    H_in = int(math.sqrt(geo_mask_i.size(1)))
-                    geo_mask_i = geo_mask_i.view(B, H_in, H_in)
-                    geo_mask_i = F.interpolate(
-                        geo_mask_i.unsqueeze(1),  # [B, 1, H_in, H_in]
-                        size=(H_cur, W_cur),
-                        mode='bilinear',
-                        align_corners=False
-                    ).squeeze(1)  # → [B, H_cur, W_cur]
-                    geo_mask_i = geo_mask_i.view(B, N_cur)  # → [B, N_cur]
-
-            # 🔧 步骤2: 通过SAMStack，传入geo_mask
+            # 🔧 传给 SAMStack
             if return_attn:
-                f, attn_i = self.dec_sam_stacks[i](
-                    f, text_features, geo_mask_i, return_attn=True
-                )
+                f, attn_i = self.dec_sam_stacks[i](f, text_features, geo_mask_i, return_attn=True)
                 attn_maps.append(attn_i)
             else:
                 f = self.dec_sam_stacks[i](f, text_features, geo_mask_i)
+
             f = resize(f, size=tgt_hw, mode="bilinear", align_corners=self.align_corners)
             proc_feats.append(f)
 
