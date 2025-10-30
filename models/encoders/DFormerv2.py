@@ -10,26 +10,6 @@ from collections import OrderedDict
 from ..blocks.semantic_alignment import SemanticAlignmentModule
 
 
-class _NoOpSAM(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward_ssa(self, x, text_features=None, geo_mask=None, return_attn=False):
-        """接受所有参数但什么都不做"""
-        if return_attn:
-            return x, None
-        return x
-
-
-class _NoOpStageSAM(nn.Module):
-    """export-only 路径下需要的 stage 级 SAM 占位（调用 forward(x, text)）"""
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x, text_features=None):
-        return x
-
-
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -333,14 +313,8 @@ class RGBD_Block(nn.Module):
 
         # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
         if superpower and (sam_b is not None) and (text_features is not None):
-            # 🔧 不要从 geo_prior 提取，直接用特征图本身
-            b, h, w, d = out.size()  # out 是 GSA 输出的特征
-
-            # 方案A：传入当前分辨率的深度图
-            depth_resized = F.interpolate(x_e, size=(h, w), mode='bilinear', align_corners=False)
-            geo_mask = depth_resized  # [B, 1, H, W]
-
-            out = sam_b.forward_ssa(out, text_features, geo_mask)
+            # 使用我们在 semantic_alignment 里新增的 forward_ssa（无 top-k / 无 FFN / 单标量门控）
+            out = sam_b.forward_ssa(out, text_features)
 
         # 残差1
         if self.layerscale:
@@ -462,55 +436,43 @@ class dformerv2(nn.Module):
             )
             self.layers.append(layer)
 
-        # ★ 只有在 superpower=False（export-only）时才需要 stage 级 SAM
+        # 每个 stage 的 encoder-SAM
         self.encoder_sam_stages = nn.ModuleList()
-        if not self.superpower:
-            for i in range(self.num_layers):
-                if i in self._sam_enc_enabled:
-                    self.encoder_sam_stages.append(
-                        SemanticAlignmentModule(
-                            query_dim=embed_dims[i],
-                            text_dim=text_dim,
-                            use_topk=sam_use_topk,
-                            top_m=sam_top_m,
-                            num_heads=self.num_heads[i],
-                            gamma_scale=sam_enc_gamma_scale,
-                        )
-                    )
-                else:
-                    self.encoder_sam_stages.append(_NoOpStageSAM())
-        # superpower=True 时 forward 根本不会用到 encoder_sam_stages，因此无需构建
+        for i in range(self.num_layers):
+            self.encoder_sam_stages.append(
+                SemanticAlignmentModule(
+                    query_dim=embed_dims[i],
+                    text_dim=text_dim,
+                    use_topk=sam_use_topk,
+                    top_m=sam_top_m,
+                    num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
+                    gamma_scale=sam_enc_gamma_scale,
+                )
+            )
 
-        # ★ 每两个 Block 放一个 SAM（偶数位），并强制包含最后一个 Block；其余用 NoOp
+        # 冻结未启用的 encoder SAM，避免 no-grad 噪声
+        for i, m in enumerate(self.encoder_sam_stages):
+            if i not in self._sam_enc_enabled:
+                for p in m.parameters():
+                    p.requires_grad = False
+
         self.encoder_sam_blocks = nn.ModuleList()
         for i in range(self.num_layers):
-            depth_i = depths[i]
             if self.superpower and (i in self._sam_enc_enabled):
-                # 选取集合：偶数位 {0,2,4,...}；并确保包含最后一层 depth_i-1
-                keyset = set(range(0, depth_i, 2))
-                if depth_i > 0:
-                    keyset.add(depth_i - 1)
-
-                stage_ml = nn.ModuleList()
-                gamma_sched = torch.linspace(0.9, 0.5, steps=depth_i)  # 轻微递减，可保留你原来的也行
-                for b in range(depth_i):
-                    if b in keyset:
-                        mod = SemanticAlignmentModule(
-                            query_dim=embed_dims[i],
-                            text_dim=text_dim,
-                            use_topk=sam_use_topk,
-                            top_m=sam_top_m,
-                            num_heads=self.num_heads[i],
-                            gamma_scale=sam_enc_gamma_scale,
-                        )
-                        with torch.no_grad():
-                            mod.gamma.copy_(gamma_sched[b].to(mod.gamma))
-                        stage_ml.append(mod)
-                    else:
-                        stage_ml.append(_NoOpSAM())
-                self.encoder_sam_blocks.append(stage_ml)
+                depth_i = depths[i]
+                ml = nn.ModuleList([
+                    SemanticAlignmentModule(
+                        query_dim=embed_dims[i], text_dim=text_dim,
+                        use_topk=sam_use_topk, top_m=sam_top_m,
+                        num_heads=self.num_heads[i],  # 同一 stage 的头数
+                        gamma_scale=sam_enc_gamma_scale,
+                    )
+                    for _ in range(depth_i)
+                ])
+                self.encoder_sam_blocks.append(ml)
             else:
-                self.encoder_sam_blocks.append(nn.ModuleList([_NoOpSAM() for _ in range(depth_i)]))
+                # 占位，保持索引对齐；不占参数
+                self.encoder_sam_blocks.append(nn.ModuleList())
 
         self.extra_norms = nn.ModuleList()
         for i in range(len(embed_dims) - 1):
@@ -568,14 +530,13 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e, text_features=None, export_geo_priors=False):
+    def forward(self, x, x_e, text_features=None):
         # rgb
         x = self.patch_embed(x)
         # depth
         x_e = x_e[:, 0, :, :].unsqueeze(1)
 
         outs = []
-        geo_priors = [] if export_geo_priors else None
         use_text_guidance = text_features is not None
         if use_text_guidance and text_features.dim() == 2:
             text_features = text_features.unsqueeze(0)
@@ -583,14 +544,6 @@ class dformerv2(nn.Module):
             text_features = text_features.to(device=x.device, dtype=x.dtype)
 
         for i in range(self.num_layers):
-            if export_geo_priors:
-                with torch.no_grad():
-                    H, W = x.shape[1], x.shape[2]
-
-                    # 🔧 简化：只导出深度图，让 SAM 自己计算亲和度
-                    depth_resized = F.interpolate(x_e, size=(H, W), mode='bilinear', align_corners=False)
-                    geo_priors.append(depth_resized)  # [B, 1, H, W]
-
             if self.superpower:
                 # 逐 block：仅当该 stage 启用时传入对应 ModuleList；否则传空
                 sam_blocks = self.encoder_sam_blocks[i] if (
@@ -623,8 +576,6 @@ class dformerv2(nn.Module):
                 out = x_out.permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
 
-        if export_geo_priors:
-            return tuple(outs), geo_priors  # 🔧 返回 (features, geo_masks)
         return tuple(outs)
 
     def train(self, mode=True):

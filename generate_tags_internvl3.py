@@ -273,15 +273,18 @@ def main():
     # 固定提示词（InternVL3 使用 batch_chat）
     allowed_list = ", ".join(LABELS_CANON)
     prompt_tpl = (
-        f"You are a visual recognition expert specializing in indoor scene analysis.\n"
-        f"You need to provide me with the labels corresponding to the most prominent elements in the image."
-        f"Allowed labels ({len(LABELS_CANON)}): {allowed_list}\n\n"
-        f"Follow these rules strictly:\n"
-        f"1) Use ONLY labels from the allowed list; output canonical names exactly as written.\n"
-        f"2) Order matters: sort by estimated area dominance (largest first).\n"
-        f"3) Prefer large structural surfaces first, then distinctive items.\n"
-        f"4) If at least 5 labels are clearly visible, output exactly 5; otherwise output as many as are clearly visible (≥1).\n"
-        f"5) Do NOT invent labels not in the allowed list.\n"
+        f"You are given one image and a FIXED label vocabulary.\n"
+        f"Goal: return ONLY a JSON array of STRING labels (no code block, no prose).\n"
+        f"Include UP TO {8} labels that correspond to the LARGEST and MOST OBVIOUS regions in the image.\n\n"
+        f"Selection rules:\n"
+        f"- Include only labels that are obvious and clearly visible.\n"
+        f"- Match with high confidence (clearly identifiable and reliable).\n"
+        f"- Prioritize labels occupying the largest pixel areas.\n"
+        f"- Prefer large structural surfaces first, then distinct objects.\n"
+        f"- Use EXACT spelling from the vocabulary; DO NOT invent new labels.\n"
+        f"- DO NOT output numeric IDs, indexes, or class numbers.\n\n"
+        f"Vocabulary:\n{allowed_list}\n\n"
+        f"Output format example:\n[\"wall\", \"floor\", \"table\", \"sofa\", \"window\"]"
     )
 
     def batch_to_msgs(img_batch: List[str]) -> List[Dict]:

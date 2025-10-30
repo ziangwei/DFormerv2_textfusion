@@ -27,7 +27,7 @@ VOCABS: Dict[str, Sequence[str]] = {
         "wall","floor","cabinet","bed","chair","sofa","table","door","window","bookshelf",
         "picture","counter","blinds","desk","shelves","curtain","dresser","pillow","mirror","floor mat",
         "clothes","ceiling","books","refrigerator","television","paper","towel","shower curtain","box","whiteboard",
-        "person","night stand","toilet","sink","lamp","bathtub","bag","other structure","other furniture","other prop"
+        "person","night stand","toilet","sink","lamp","bathtub","bag"
     ],
     # Placeholder for future dataset port (leave empty for now)
     "SUNRGBD_PORT": []
@@ -35,16 +35,13 @@ VOCABS: Dict[str, Sequence[str]] = {
 
 PROMPT_TEMPLATE = (
     "You are given one image and a FIXED label vocabulary.\n"
-    "Goal: return ONLY a JSON array of strings (no code block, no prose) with up to {max_labels} labels "
-    "that together cover the LARGEST visible areas of the image.\n\n"
+    "Goal: return ONLY a JSON array of strings (no code block, no prose) "
+    "with UP TO {max_labels} labels that correspond to the LARGEST and MOST OBVIOUS regions in the image.\n"
     "Selection rules:\n"
-    "- Prioritize labels that occupy the most pixels (large, contiguous regions).\n"
-    "- Ignore tiny or peripheral items (roughly <3% of the image area) and thin details.\n"
-    "- If a small object lies on a large surface (e.g., a small window on a big wall), prefer the large region unless the smaller one is also large.\n"
-    "- When two options are similar in area, prefer the broader/scene-level label.\n"
+    "- Include only labels that are obvious and "
+    "  match with high confidence (clearly visible and reliable identifications).\n"
+    "- Prioritize labels that occupy the most pixels.\n"
     "- Use EXACT spelling from the vocabulary; do NOT invent new labels.\n"
-    "- If fewer than {max_labels} large-area labels exist, return fewer.\n"
-    "- Sort the labels by estimated area in DESCENDING order.\n\n"
     "Vocabulary:\n{vocab_block}\n\n"
     "Output format example:\n[\"wall\", \"floor\", \"table\", \"sofa\", \"window\"]"
 )
