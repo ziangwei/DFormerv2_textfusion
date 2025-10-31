@@ -48,18 +48,92 @@ parser.add_argument("--show_image", "-s", default=False, action="store_true")
 parser.add_argument("--save_path", default=None)
 parser.add_argument("--checkpoint_dir")
 parser.add_argument("--continue_fpath")
+
+# --- text guidance runtime switches ---
+parser.add_argument("--text-source", choices=["labels", "captions", "both", "imglabels"])
+parser.add_argument("--text-encoder", choices=["clip", "jinaclip"])
+parser.add_argument("--text-encoder-name", type=str)
+parser.add_argument("--text-feature-dim", type=int)
+parser.add_argument("--label-txt-path", type=str)
+parser.add_argument("--caption-json-path", type=str)
+parser.add_argument("--text-template-set", choices=["clip", "jinaclip", "none"])
+parser.add_argument("--max-templates-per-label", type=int)
+parser.add_argument("--max-caption-sentences", type=int)
+parser.add_argument("--caption-topk", type=int)
+parser.add_argument("--caption-topk-mode", choices=["class_sim", "firstk", "lenk"])
+parser.add_argument("--image-labels-json-path", type=str)
+
+# --- SAM per-stage switches ---
+parser.add_argument("--sam-enc-stages", type=str, help="Comma separated, e.g., 0,2")
+parser.add_argument("--sam-dec-stages", type=str, help="Comma separated, e.g., 1,3")
+parser.add_argument("--superpower", default=None, action=argparse.BooleanOptionalAction)
+
+
 # parser.add_argument('--save_path', '-p', default=None)
 logger = get_logger()
 
 # os.environ['MASTER_PORT'] = '169710'
 
+def _parse_stages(stage_string):
+    if stage_string is None:
+        return None
+    stage_string = str(stage_string).strip()
+    if not stage_string:
+        return []
+    result = []
+    for chunk in stage_string.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            result.append(int(chunk))
+        except ValueError:
+            continue
+    return result
+
+
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
     config = getattr(import_module(args.config), "C")
+    # Override text guidance settings if supplied by CLI.
+    if args.text_source is not None:
+        config.text_source = args.text_source
+    if args.text_encoder is not None:
+        config.text_encoder = args.text_encoder
+    if args.text_encoder_name is not None:
+        config.text_encoder_name = args.text_encoder_name
+    if args.text_feature_dim is not None:
+        config.text_feature_dim = int(args.text_feature_dim)
+    if args.label_txt_path is not None:
+        config.label_txt_path = args.label_txt_path
+    if args.caption_json_path is not None:
+        config.caption_json_path = args.caption_json_path
+    if args.text_template_set is not None:
+        config.text_template_set = args.text_template_set
+    if args.max_templates_per_label is not None:
+        config.max_templates_per_label = int(args.max_templates_per_label)
+    if args.max_caption_sentences is not None:
+        config.max_caption_sentences = int(args.max_caption_sentences)
+    if args.caption_topk is not None:
+        config.caption_topk = int(args.caption_topk)
+    if args.caption_topk_mode is not None:
+        config.caption_topk_mode = args.caption_topk_mode
+    if args.image_labels_json_path is not None:
+        config.image_labels_json_path = args.image_labels_json_path
+
+    enc_stages = _parse_stages(args.sam_enc_stages)
+    dec_stages = _parse_stages(args.sam_dec_stages)
+    if enc_stages is not None:
+        config.sam_enc_stages = enc_stages
+    if dec_stages is not None:
+        config.sam_dec_stages = dec_stages
+    if args.superpower is not None:
+        config.superpower = bool(args.superpower)
     config.pad = False  # Do not pad when inference
     if "x_modal" not in config:
         config["x_modal"] = "d"
     cudnn.benchmark = True
+
 
     val_loader, val_sampler = get_val_loader(engine, RGBXDataset, config, int(args.gpus))
     print(len(val_loader))
@@ -108,10 +182,22 @@ with Engine(custom_parser=parser) as engine:
         "x_root": config.x_root_folder,
         "x_format": config.x_format,
         "x_single_channel": config.x_is_single_channel,
-        "class_names": config.class_names,
-        "train_source": config.train_source,
-        "eval_source": config.eval_source,
-        "class_names": config.class_names,
+        "dataset_name": getattr(config, "dataset_name", None),
+        "backbone": getattr(config, "backbone", None),
+        "enable_text_guidance": getattr(config, "enable_text_guidance", False),
+        "label_txt_path": getattr(config, "label_txt_path", None),
+        "caption_json_path": getattr(config, "caption_json_path", None),
+        "image_labels_json_path": getattr(config, "image_labels_json_path", None),
+        "text_template_set": getattr(config, "text_template_set", "clip"),
+        "max_templates_per_label": getattr(config, "max_templates_per_label", 3),
+        "text_source": getattr(config, "text_source", "both"),
+        "text_encoder": getattr(config, "text_encoder", "jinaclip"),
+        "text_encoder_name": getattr(config, "text_encoder_name", None),
+        "text_feature_dim": getattr(config, "text_feature_dim", 512),
+        "max_caption_sentences": getattr(config, "max_caption_sentences", 8),
+        "caption_topk": getattr(config, "caption_topk", 0),
+        "caption_topk_mode": getattr(config, "caption_topk_mode", "class_sim"),
+        "max_image_labels": getattr(config, "max_image_labels", 0),
     }
     # val_pre = ValPre()
     # val_dataset = RGBXDataset(data_setting, 'val', val_pre)

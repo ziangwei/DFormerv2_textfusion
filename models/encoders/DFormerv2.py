@@ -290,7 +290,6 @@ class RGBD_Block(nn.Module):
         self.embed_dim = embed_dim
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=1e-6)
         self.layer_norm2 = nn.LayerNorm(self.embed_dim, eps=1e-6)
-        self.layer_norm_ssa = nn.LayerNorm(self.embed_dim, eps=1e-6)
         if split_or_not:
             self.Attention = Decomposed_GSA(embed_dim, num_heads)
         else:
@@ -315,7 +314,7 @@ class RGBD_Block(nn.Module):
         # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
         if superpower and (sam_b is not None) and (text_features is not None):
             # 使用 semantic_alignment.forward_ssa；先做独立 LN 再注入，训练更稳
-            out = sam_b.forward_ssa(self.layer_norm_ssa(out), text_features)
+            out = sam_b.forward_ssa(out, text_features)
 
         # 残差1
         if self.layerscale:
@@ -335,12 +334,14 @@ class RGBD_Block(nn.Module):
 class BasicLayer(nn.Module):
     def __init__(self, embed_dim, out_dim, depth, num_heads, init_value: float, heads_range: float,
                  ffn_dim=96.0, drop_path=0.0, norm_layer=nn.LayerNorm, split_or_not=False,
-                 downsample: PatchMerging = None, use_checkpoint=False, layerscale=False, layer_init_values=1e-5):
+                 downsample: PatchMerging = None, use_checkpoint=False, layerscale=False, layer_init_values=1e-5,
+                 SSA_HALF_MODE=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.depth = depth
         self.use_checkpoint = use_checkpoint
         self.split_or_not = split_or_not
+        self.SSA_HALF_MODE = SSA_HALF_MODE
         self.blocks = nn.ModuleList(
             [
                 RGBD_Block(
@@ -420,6 +421,7 @@ class dformerv2(nn.Module):
 
         self.patch_embed = PatchEmbed(in_chans=3, embed_dim=embed_dims[0], norm_layer=norm_layer if self.patch_norm else None)
         self.superpower = bool(superpower)
+        self.SSA_HALF_MODE = True
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         self.layers = nn.ModuleList()
@@ -439,6 +441,7 @@ class dformerv2(nn.Module):
                 use_checkpoint=use_checkpoint,
                 layerscale=layerscales[i_layer],
                 layer_init_values=layer_init_values,
+                SSA_HALF_MODE=self.SSA_HALF_MODE,
             )
             self.layers.append(layer)
 
@@ -456,7 +459,6 @@ class dformerv2(nn.Module):
             for i in range(self.num_layers)
         ]
         self.encoder_sam_stage_modules = nn.ModuleDict()
-        self.SSA_HALF_MODE = False
         self.encoder_sam_blocks = nn.ModuleList()
         for i in range(self.num_layers):
             if self.superpower and (i in self._sam_enc_enabled):

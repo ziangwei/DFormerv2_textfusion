@@ -15,10 +15,14 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --nproc_per_node=$GPUS \
     --master_port=$PORT \
     utils/infer.py \
-    --config=local_configs.NYUDepthv2.DFormer_Large \
-    --continue_fpath=checkpoints/trained/NYUv2_DFormer_Large.pth \
+    --config=local_configs.NYUDepthv2.DFormer_Small \
+    --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251030-182749/epoch-330_miou_58.0.pth \
     --save_path "output/" \
-    --gpus=$GPUS
+    --gpus=$GPUS \
+    --text-source=imglabels \
+    --text-encoder=clip \
+    --sam-enc-stages=1,2,3 \
+    --sam-dec-stages=0,1,2,3
 
 # choose the dataset and DFormer for evaluating
 
