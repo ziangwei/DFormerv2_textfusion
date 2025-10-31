@@ -290,6 +290,7 @@ class RGBD_Block(nn.Module):
         self.embed_dim = embed_dim
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=1e-6)
         self.layer_norm2 = nn.LayerNorm(self.embed_dim, eps=1e-6)
+        self.layer_norm_ssa = nn.LayerNorm(self.embed_dim, eps=1e-6)
         if split_or_not:
             self.Attention = Decomposed_GSA(embed_dim, num_heads)
         else:
@@ -313,8 +314,8 @@ class RGBD_Block(nn.Module):
 
         # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
         if superpower and (sam_b is not None) and (text_features is not None):
-            # 使用我们在 semantic_alignment 里新增的 forward_ssa（无 top-k / 无 FFN / 单标量门控）
-            out = sam_b.forward_ssa(out, text_features)
+            # 使用 semantic_alignment.forward_ssa；先做独立 LN 再注入，训练更稳
+            out = sam_b.forward_ssa(self.layer_norm_ssa(out), text_features)
 
         # 残差1
         if self.layerscale:
@@ -354,15 +355,20 @@ class BasicLayer(nn.Module):
 
     def forward(self, x, x_e, text_features=None, sam_module=None, sam_blocks=None, superpower=False):
         for b_idx, blk in enumerate(self.blocks):
+            sam_block = None
+            if superpower and sam_blocks is not None and len(sam_blocks) > 0:
+                pair_idx = b_idx // 2 if self.SSA_HALF_MODE else b_idx
+                if pair_idx < len(sam_blocks):
+                    sam_block = sam_blocks[pair_idx]
             if self.use_checkpoint:
                 # 注意：把本 block 对应的 sam_b/text_features/superpower 一并传给 RGBD_Block.forward
                 x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not,
-                                          sam_b=(sam_blocks[b_idx] if (superpower and sam_blocks is not None and b_idx < len(sam_blocks)) else None),
+                                          sam_b=sam_block,
                                           text_features=text_features,
                                           superpower=superpower)
             else:
                 x = blk(x, x_e, split_or_not=self.split_or_not,
-                        sam_b=(sam_blocks[b_idx] if (superpower and sam_blocks is not None and b_idx < len(sam_blocks)) else None),
+                        sam_b=sam_block,
                         text_features=text_features,
                         superpower=superpower)
 
@@ -436,38 +442,36 @@ class dformerv2(nn.Module):
             )
             self.layers.append(layer)
 
-        # 每个 stage 的 encoder-SAM
-        self.encoder_sam_stages = nn.ModuleList()
-        for i in range(self.num_layers):
-            self.encoder_sam_stages.append(
-                SemanticAlignmentModule(
-                    query_dim=embed_dims[i],
-                    text_dim=text_dim,
-                    use_topk=sam_use_topk,
-                    top_m=sam_top_m,
-                    num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
-                    gamma_scale=sam_enc_gamma_scale,
-                )
+        # encoder stage SAM：延迟初始化，仅在实际使用时构建
+        self._encoder_sam_stage_specs = [
+            dict(
+                query_dim=embed_dims[i],
+                text_dim=text_dim,
+                use_topk=sam_use_topk,
+                top_m=sam_top_m,
+                num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
+                gamma_scale=sam_enc_gamma_scale,
             )
 
-        # 冻结未启用的 encoder SAM，避免 no-grad 噪声
-        for i, m in enumerate(self.encoder_sam_stages):
-            if i not in self._sam_enc_enabled:
-                for p in m.parameters():
-                    p.requires_grad = False
-
+            for i in range(self.num_layers)
+        ]
+        self.encoder_sam_stage_modules = nn.ModuleDict()
+        self.SSA_HALF_MODE = False
         self.encoder_sam_blocks = nn.ModuleList()
         for i in range(self.num_layers):
             if self.superpower and (i in self._sam_enc_enabled):
                 depth_i = depths[i]
+                num_units = (depth_i + 1) // 2 if self.SSA_HALF_MODE else depth_i
                 ml = nn.ModuleList([
                     SemanticAlignmentModule(
-                        query_dim=embed_dims[i], text_dim=text_dim,
-                        use_topk=sam_use_topk, top_m=sam_top_m,
+                        query_dim=embed_dims[i],
+                        text_dim=text_dim,
+                        use_topk=sam_use_topk,
+                        top_m=sam_top_m,
                         num_heads=self.num_heads[i],  # 同一 stage 的头数
                         gamma_scale=sam_enc_gamma_scale,
                     )
-                    for _ in range(depth_i)
+                    for _ in range(num_units)
                 ])
                 self.encoder_sam_blocks.append(ml)
             else:
@@ -530,6 +534,15 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
+    def _get_encoder_stage_sam(self, stage_idx: int):
+        if stage_idx not in self._sam_enc_enabled:
+            return None
+        key = str(stage_idx)
+        if key not in self.encoder_sam_stage_modules:
+            spec = self._encoder_sam_stage_specs[stage_idx]
+            self.encoder_sam_stage_modules[key] = SemanticAlignmentModule(**spec)
+        return self.encoder_sam_stage_modules[key]
+
     def forward(self, x, x_e, text_features=None):
         # rgb
         x = self.patch_embed(x)
@@ -566,8 +579,9 @@ class dformerv2(nn.Module):
 
                 # 2) 仅当启用并有文本时，对 x_out 做一次 SAM
                 if use_text_guidance and (i in self._sam_enc_enabled):
-                    sam_module = self.encoder_sam_stages[i]
-                    x_out = sam_module(x_out, text_features)
+                    sam_module = self._get_encoder_stage_sam(i)
+                    if sam_module is not None:
+                        x_out = sam_module(x_out, text_features)
 
             if i in self.out_indices:
                 if i != 0:

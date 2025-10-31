@@ -167,7 +167,7 @@ def load_image_tiles(image_file: str, input_size=448, max_num=8):
         transform = build_transform(input_size)
         tiles = dynamic_preprocess(img, image_size=input_size, max_num=max_num, use_thumbnail=True)
         pix = [transform(t) for t in tiles]
-        return torch.stack(pix)
+        return torch.stack(pix).to(torch.bfloat16).cuda()
     except Exception as e:
         logging.error(f"Image error {image_file}: {e}")
         return None
@@ -287,40 +287,57 @@ def main():
         f"Output format example:\n[\"wall\", \"floor\", \"table\", \"sofa\", \"window\"]"
     )
 
-    def batch_to_msgs(img_batch: List[str]) -> List[Dict]:
-        msgs=[]
-        for p in img_batch:
-            tiles = load_image_tiles(str(Path(args.dataset_dir) / p), input_size=448, max_num=args.max_tiles)
-            if tiles is None:
-                msgs.append({"role":"user","content":[{"type":"text","text":prompt_tpl}]})
-            else:
-                # InternVL3 自定义 multimodal 输入格式（trust_remote_code=True）
-                content = [{"type":"text","text":prompt_tpl}]
-                for t in tiles:
-                    content.append({"type":"image","image":t})
-                msgs.append({"role":"user","content":content})
-        return msgs
+    def prepare_batch_data(img_batch: List[str], dataset_dir: Path, prompt: str, max_tiles: int) -> Tuple[
+        torch.Tensor, List[str], List[int]]:
+        """准备批量推理数据"""
+        pixel_values_list = []
+        num_patches_list = []
+        questions = []
 
-    # 推理
-    for rel_list in tqdm(list(batched(to_process, args.batch_size)), total=(len(to_process)+args.batch_size-1)//args.batch_size):
+        for p in img_batch:
+            tiles = load_image_tiles(str(dataset_dir / p), input_size=448, max_num=max_tiles)
+            if tiles is None:
+                # 如果图片加载失败，使用空的 tensor（已经是 bfloat16 和 cuda）
+                tiles = torch.zeros(1, 3, 448, 448, dtype=torch.bfloat16).cuda()
+
+            pixel_values_list.append(tiles)
+            num_patches_list.append(tiles.size(0))
+            questions.append(prompt)
+
+        # 拼接所有图片的 tiles
+        pixel_values = torch.cat(pixel_values_list, dim=0)
+
+        return pixel_values, questions, num_patches_list
+
+        # 推理
+    for rel_list in tqdm(list(batched(to_process, args.batch_size)),
+                         total=(len(to_process) + args.batch_size - 1) // args.batch_size):
         try:
-            msgs = batch_to_msgs(rel_list)
+            # 准备批量数据
+            pixel_values, questions, num_patches_list = prepare_batch_data(
+                rel_list,
+                Path(args.dataset_dir),
+                prompt_tpl,
+                args.max_tiles
+            )
+
+            # 批量推理
             with torch.no_grad():
                 responses = model.batch_chat(
                     tok,
-                    msgs,
+                    pixel_values,
+                    questions,
                     generation_config=dict(
                         max_new_tokens=args.max_new_tokens,
                         do_sample=False,
-                        temperature=0.0,
-                        repetition_penalty=1.05
                     ),
+                    num_patches_list=num_patches_list
                 )
         except Exception as e:
             logging.error(f"batch_chat failed on {rel_list[0]}: {e}")
             responses = [""] * len(rel_list)
 
-        # 解析 -> 直接写“文本标签”（不再映射 id）
+        # 解析 -> 直接写"文本标签"（不再映射id）
         for rel, resp in zip(rel_list, responses):
             labs_norm = extract_labels(resp, LABELS_MATCH, topk=None)
             labs = [MATCH2CANON.get(x, x) for x in labs_norm]
