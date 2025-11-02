@@ -116,6 +116,8 @@ def make_batched_inputs(
         add_generation_prompt=True,
         return_dict=True,
         return_tensors="pt",
+        padding=True,         # ★ 关键：对batch做padding
+        truncation=False,
     )
     for k, v in list(inputs.items()):
         if hasattr(v, "to"):
@@ -185,13 +187,10 @@ def main():
                 temperature=0.0,
             )
 
-        # Trim per-sample: remove the prompt part from each sequence
-        input_ids = inputs["input_ids"]
-        trimmed = []
-        for j in range(len(batch_paths)):
-            j_len = input_ids[j].shape[0]
-            trimmed.append(gen_ids[j, j_len:])
+        attn = inputs["attention_mask"]  # (B, L)
+        prompt_lens = attn.sum(dim=1).tolist()  # 每个样本真实长度（不含padding）
 
+        trimmed = [gen_ids[j, int(prompt_lens[j]):] for j in range(len(batch_paths))]
         texts = processor.batch_decode(trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
 
         # Parse and sanitize
