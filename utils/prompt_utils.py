@@ -337,3 +337,4 @@ def prepare_eval_prompts(eval_txt_path: str,
     switch_prompt_set(register_set_name)
     unload_clip_model()
     return {"filenames": fnames, "embeds": prompt_embeds, "D": prompt_embeds.shape[-1], "set_name": register_set_name}
+

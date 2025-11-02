@@ -74,6 +74,10 @@ class SemanticAlignmentModule(nn.Module):
         self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
         self.register_buffer("ssa_scale", torch.tensor(self.head_dim ** -0.5, dtype=torch.float))
 
+        self.save_attention = False  # 新增：控制是否保存attention
+        self.last_attention_map = None  # 新增：保存最后一次的attention
+        self.last_spatial_shape = None
+
         # 初始化
         nn.init.xavier_uniform_(self.q_proj.weight);  nn.init.zeros_(self.q_proj.bias)
         nn.init.xavier_uniform_(self.k_proj.weight);  nn.init.zeros_(self.k_proj.bias)
@@ -140,6 +144,9 @@ class SemanticAlignmentModule(nn.Module):
         attn = F.softmax(sim, dim=-1)
         attn = self.attn_drop(attn)
 
+        if self.save_attention:
+            self.last_attention_map = attn.detach()  # (B,N,H,T)
+            self.last_spatial_shape = (H, W)
         # 聚合回 Cv（多头拼接）
         aligned_h = torch.einsum('bnht,bthd->bnhd', attn, v)             # (B,N,H,Dh)
         aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))      # (B,N,Cv)
@@ -204,6 +211,17 @@ class SemanticAlignmentModule(nn.Module):
             attn_logits = torch.matmul(q_act, k_act.transpose(-2, -1)) * self.ssa_scale
             attn_logits = attn_logits.masked_fill(pad_act.unsqueeze(1).unsqueeze(2), float('-inf'))
             attn = torch.softmax(attn_logits, dim=-1)
+
+            if self.save_attention:
+                # attn: [B_active, Hh, N, T]
+                # 需要恢复到完整 batch 大小
+                full_attn = torch.zeros(B, Hh, q.size(2), attn.size(-1),
+                                        device=attn.device, dtype=attn.dtype)
+                full_attn.index_copy_(0, active_idx, attn)
+
+                # 转换为 (B, N, H, T) 格式，与 decoder 保持一致
+                self.last_attention_map = full_attn.permute(0, 2, 1, 3).detach()
+                self.last_spatial_shape = (H, W)
 
             aligned = torch.matmul(attn, v_act)  # [B_active, Hh, N, Dh]
             aligned = aligned.permute(0, 2, 1, 3).reshape(active_idx.numel(), -1, Hh * Dh)
