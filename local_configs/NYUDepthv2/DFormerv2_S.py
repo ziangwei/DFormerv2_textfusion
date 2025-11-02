@@ -47,9 +47,9 @@ C.caption_topk_mode = "class_sim"
 # SAM 分层开关（可通过命令行覆盖）
 # ==============================
 # Encoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
-C.sam_enc_stages = [0, 1, 2, 3]
-# Decoder 侧在哪些 stage 启用 SAM（按 0/1/2/3）
-C.sam_dec_stages = [0, 1, 2, 3]
+C.sam_enc_stages = [1, 2, 3]
+# Decoder 侧在哪些 stage 启用 SAM（按 1/2/3）
+C.sam_dec_stages = [1, 2, 3]
 
 # SAM 的像素级 Top-K（imglabels 建议关）
 C.sam_use_topk = (C.text_source != "imglabels")

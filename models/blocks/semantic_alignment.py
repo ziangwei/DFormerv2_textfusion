@@ -53,12 +53,6 @@ class SemanticAlignmentModule(nn.Module):
         # 多头聚合后再做一次线性投影，保持与旧 SSA 逻辑一致
         self.out_proj = nn.Linear(query_dim, query_dim)
 
-        # === 门控（decoder 侧使用；encoder 侧用 gamma） ===
-        if gate_channels:
-            self.gate = nn.Sequential(nn.Linear(query_dim, query_dim), nn.Sigmoid())
-        else:
-            self.gate = nn.Sequential(nn.Linear(query_dim, 1), nn.Sigmoid())
-
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -151,9 +145,8 @@ class SemanticAlignmentModule(nn.Module):
         aligned = self.proj_drop(aligned_h.reshape(B, -1, Hh * Dh))      # (B,N,Cv)
         aligned = self.out_proj(aligned)                                  # 线性映射（与 SSA 对齐）
 
-        # 残差 + 门控 + FFN（Pre-LN）
-        gate = self.gate(x)                                              # (B,N,1) 或 (B,N,Cv)
-        y = (x + self.alpha * gate * aligned) if self.add_residual else (self.alpha * aligned)
+        # 残差 + 门控 + FFN（Pre-LN）                                          # (B,N,1) 或 (B,N,Cv)
+        y = (x + self.alpha * aligned) if self.add_residual else (self.alpha * aligned)
         y = self.norm2(y)
         y = y + self.ffn(y)
         return y.view(B, H, W, Cv)

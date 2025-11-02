@@ -20,7 +20,6 @@ from transformers import AutoProcessor, Qwen3VLMoeForConditionalGeneration
 # ----------------------------
 # Dataset port & fixed vocabs
 # ----------------------------
-ACTIVE_DATASET_PORT = "NYUDv2_40"  # switch here later if needed (e.g., "SUNRGBD_PORT")
 
 VOCABS: Dict[str, Sequence[str]] = {
     "NYUDv2_40": [
@@ -30,7 +29,12 @@ VOCABS: Dict[str, Sequence[str]] = {
         "person","night stand","toilet","sink","lamp","bathtub","bag"
     ],
     # Placeholder for future dataset port (leave empty for now)
-    "SUNRGBD_PORT": []
+    "SUNRGBD_PORT": [
+        "wall","floor","cabinet","bed","chair","sofa","table","door","window","bookshelf",
+        "picture","counter","blinds","desk","shelves","curtain","dresser","pillow","mirror","floor_mat",
+        "clothes","ceiling","books","fridge","tv","paper","towel","shower_curtain","box","whiteboard",
+        "person","night_stand","toilet","sink","lamp","bathtub","bag"
+    ]
 }
 
 PROMPT_TEMPLATE = (
@@ -137,12 +141,15 @@ def parse_args():
     # NEW but aligned with your request: limit number of labels (also enforced in prompt)
     ap.add_argument("--max_labels", type=int, default=5,
                     help="Maximum number of labels per image (prompt + post-filter)")
+    ap.add_argument("--dataset_port", type=str, default="NYUDv2_40",
+                    choices=list(VOCABS.keys()),
+                    help="Which dataset vocabulary to use")
     return ap.parse_args()
 
 
 def main():
     args = parse_args()
-
+    ACTIVE_DATASET_PORT = args.dataset_port
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logging.info(f"Active dataset port: {ACTIVE_DATASET_PORT}")
 

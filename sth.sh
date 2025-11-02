@@ -23,9 +23,17 @@
 #    datasets/NYUDepthv2/image_labels_internvl3.json
 
 # 计算某json与真值标签的重合度
-python compare_json_overlap.py \
-    datasets/NYUDepthv2/out.json \
-    datasets/NYUDepthv2/top5_labels_per_image.json
+#python compare_json_overlap.py \
+#    datasets/NYUDepthv2/out.json \
+#    datasets/NYUDepthv2/top5_labels_per_image.json
 
 # 计算某json的标签平均数
 #python stats_labels.py datasets/NYUDepthv2/out.json
+
+# 画图
+python nyu_overlay.py \
+  --rgb datasets/NYUDepthv2/RGB/976.jpg \
+  --label datasets/NYUDepthv2/Label/976.png \
+  --colormap utils/nyucmap.npy \
+  --style paper-soft \
+  --out out/f2.png
