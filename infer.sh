@@ -17,7 +17,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     utils/infer.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S \
     --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251101-163830/epoch-302_miou_57.95.pth \
-    --save_path "output/" \
+    --save_path output/enc_stage0 \
     --gpus=$GPUS \
     --text-source=imglabels \
     --text-encoder=clip \
@@ -25,9 +25,12 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --sam-dec-stages=1,2,3 \
     --superpower \
     --save-attention \
-    --vis-stage dec_last \
-    --num-images 5 \
-    --attention-alpha 0.5
+    --vis-stage enc \
+    --vis-stage-idx 1 \
+    --num-images 3 \
+    --attention-alpha 0.5 \
+    --attention-threshold 0.3 \
+    --attention-smooth 2.0
 
 # choose the dataset and DFormer for evaluating
 

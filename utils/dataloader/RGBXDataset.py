@@ -13,6 +13,8 @@ from utils.prompt_utils import (
     split_into_sentences,
     select_caption_topk
 )
+
+
 def get_path(
         dataset_name,
         _rgb_path,
