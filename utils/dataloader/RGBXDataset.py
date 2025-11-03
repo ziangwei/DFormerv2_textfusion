@@ -5,6 +5,9 @@ import numpy as np
 import re
 import torch.utils.data as data
 import json
+from pathlib import Path
+import hashlib
+
 from models.builder import logger
 from utils.prompt_utils import (
     encode_prompts,
@@ -13,6 +16,71 @@ from utils.prompt_utils import (
     split_into_sentences,
     select_caption_topk
 )
+
+# === Project-level persistent text cache utilities ===
+def _project_root() -> Path:
+    """
+    以当前文件所在目录为基准推断项目根。
+    这里按你的仓库结构：.../DFormer/utils/dataloader/RGBXDataset.py -> 项目根是上上级的上级，即 parents[2]
+    如有需要可改为 parents[3] 等。
+    """
+    return Path(__file__).resolve().parents[2]
+
+def _stable_cache_root(custom_root: str | None = None) -> Path:
+    """
+    缓存根目录优先级：
+      1) 调用方传入的 custom_root
+      2) 环境变量 TEXT_EMBED_CACHE
+      3) <项目根>/datasets/.text_cache   <-- 默认放在 datasets/ 下（按你的要求）
+    支持相对路径：相对路径会以项目根为基准解析。
+    """
+    if custom_root:
+        p = Path(custom_root)
+        if not p.is_absolute():
+            p = _project_root() / p
+        root = p
+    else:
+        env = os.environ.get("TEXT_EMBED_CACHE", "")
+        root = Path(env) if env else _project_root() / "datasets" / ".text_cache"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+def _sha1_of_file(p: str, chunk: int = 1024 * 1024) -> str:
+    h = hashlib.sha1()
+    with open(p, "rb") as f:
+        while True:
+            b = f.read(chunk)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+def _text_cache_key(dataset_name: str,
+                    text_encoder: str,
+                    text_encoder_name: str | None,
+                    text_feature_dim: int,
+                    text_template_set: str,
+                    max_templates_per_label: int,
+                    caption_topk: int,
+                    caption_topk_mode: str,
+                    max_image_labels: int,
+                    src_labels_txt: str | None = None,
+                    src_captions_json: str | None = None,
+                    src_imglabels_json: str | None = None) -> str:
+    """
+    用“编码器/维度/模板配置 + 文本源内容哈希”生成稳定 key，保证跨多次训练命中同一缓存。
+    """
+    parts = [f"ds={dataset_name}", f"enc={text_encoder}", f"encn={text_encoder_name or 'none'}",
+             f"D={int(text_feature_dim)}", f"tmpl={text_template_set}", f"mtpl={int(max_templates_per_label)}",
+             f"capk={int(caption_topk)}", f"capm={caption_topk_mode or 'none'}", f"maximgk={int(max_image_labels)}",
+             f"labels={_sha1_of_file(src_labels_txt)}" if src_labels_txt and os.path.isfile(
+                 src_labels_txt) else "labels=none",
+             f"caps={_sha1_of_file(src_captions_json)}" if src_captions_json and os.path.isfile(
+                 src_captions_json) else "caps=none",
+             f"imglab={_sha1_of_file(src_imglabels_json)}" if src_imglabels_json and os.path.isfile(
+                 src_imglabels_json) else "imglab=none"]
+    return "__".join(parts)
+# === end utilities ===
 
 
 def get_path(
@@ -47,7 +115,6 @@ def get_path(
     elif dataset_name == "new_stanford":
         area = item_name.split(" ")[0]
         name = item_name.split(" ")[1]
-        # print(area,name)
         rgb_path = os.path.join(_rgb_path, area + "/image/" + name + _rgb_format)
         d_path = os.path.join(_x_path, area + "/hha/" + name + _x_format)
         gt_path = os.path.join(_gt_path, area + "/label/" + name + _gt_format)
@@ -62,7 +129,6 @@ def get_path(
         gt_path = os.path.join(
             _gt_path,
             item_name.split(" ")[1].replace("data_2d_semantics", "data_2d_semantics_trainID"),
-            # .replace("/train", ""),
         )
     elif dataset_name == "Scannet":
         rgb_path = os.path.join(
@@ -146,6 +212,7 @@ class RGBXDataset(data.Dataset):
         self.text_source = setting.get("text_source", "both")
         self.text_encoder = setting.get("text_encoder", "jinaclip")
         self.text_encoder_name = setting.get("text_encoder_name", None)
+        self.text_cache_root = setting.get('text_cache_root', None)  # 支持覆盖缓存根目录
         self.max_caption_sentences = int(setting.get("max_caption_sentences", 8))
         self.caption_topk = int(setting.get("caption_topk", 0))  # 0 表示不开句级Top-K
         self.caption_topk_mode = setting.get("caption_topk_mode", "class_sim")
@@ -173,9 +240,9 @@ class RGBXDataset(data.Dataset):
 
         self.class_text_features = None
         self.caption_text_features = {}
-        self.imglabel_text_features = {}  # 新增：{basename: Tensor[Ki, D]}
-        self._imglabel_tokens = None  # 新增：对齐长度（=全数据最大Ki；不做Top-K）
-        # 统一句子通道长度（便于 DataLoader 默认collate）：K = caption_topk(>0) 否则用 max_caption_sentences
+        self.imglabel_text_features = {}  # {basename: Tensor[Ki, D]}
+        self._imglabel_tokens = None      # 对齐长度（=全数据最大Ki；不做Top-K）
+        # 统一句子通道长度（K = caption_topk(>0) 否则用 max_caption_sentences）
         self._cap_tokens = self.caption_topk if self.caption_topk > 0 else self.max_caption_sentences
         self.caption_fallback = torch.zeros(self._cap_tokens, self.text_feature_dim, dtype=torch.float32)
 
@@ -227,6 +294,7 @@ class RGBXDataset(data.Dataset):
                     unload_clip_model()
         else:
             self.caption_text_features = {}
+
         # --- 每图标签文本（image labels） ---
         imglabel_model_used = False
         if self._use_imglabel_text:
@@ -253,61 +321,55 @@ class RGBXDataset(data.Dataset):
         else:
             logger.info("[Text guidance] no text caches were constructed for current source setting.")
 
-    # ---------------- 新增：按图的标签文本 ----------------
-
+    # ---------------- 按图的标签文本（imglabels） ----------------
     def _encode_image_labels(self):
         """
         读取 image_labels_json（key 为相对路径或文件名，value 为该图的标签文本列表），
         对每张图的标签进行编码，可选地截断到固定的 max_image_labels，
-        再将特征 pad/截断到统一长度后缓存到与 JSON 同目录的 .text_cache 下。
+        再将特征 pad/截断到统一长度后缓存到项目级缓存根（datasets/.text_cache）下。
         """
-
         out = {}
 
         if (not self.image_labels_json_path) or (not os.path.exists(self.image_labels_json_path)):
             return out
 
-        cache_dir = os.path.join(os.path.dirname(self.image_labels_json_path), ".text_cache")
-        os.makedirs(cache_dir, exist_ok=True)
-        cache_name = (
-            f"imglabels_{os.path.splitext(os.path.basename(self.image_labels_json_path))[0]}_"
-            f"dim{self.text_feature_dim}_tmpl{self.max_templates_per_label}_"
-            f"set{self.text_template_set}_maxk{self.max_image_labels}.pt"
+        cache_root = _stable_cache_root(getattr(self, "text_cache_root", None))
+        ckey = _text_cache_key(
+            dataset_name=self.dataset_name,
+            text_encoder=self.text_encoder,
+            text_encoder_name=self.text_encoder_name,
+            text_feature_dim=self.text_feature_dim,
+            text_template_set=self.text_template_set,
+            max_templates_per_label=self.max_templates_per_label,
+            caption_topk=self.caption_topk,
+            caption_topk_mode=self.caption_topk_mode,
+            max_image_labels=self.max_image_labels,
+            src_labels_txt=self.labels_txt_path,
+            src_captions_json=None,
+            src_imglabels_json=self.image_labels_json_path,
         )
-        cache_pt = os.path.join(cache_dir, cache_name)
-        json_mtime = int(os.path.getmtime(self.image_labels_json_path))
-        # 非主进程尝试直接读缓存
+        cache_dir = (cache_root / ckey / "imglabels")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_pt = cache_dir / "embeds.pt"
 
-        dist_module = None
-        dist_ready = False
-        try:
-            import torch.distributed as dist_module  # type: ignore
-
-            dist_ready = dist_module.is_available() and dist_module.is_initialized()
-        except Exception:
-            dist_module = None
-            dist_ready = False
-
-        # 若存在缓存且与 JSON 时间戳匹配，则直接载入（避免重复编码）
+        # 命中缓存：直接载入
         if os.path.isfile(cache_pt):
             try:
                 payload = torch.load(cache_pt, map_location="cpu")
-                if payload.get("json_mtime") == json_mtime:
-                    self._imglabel_tokens = payload.get("pad_len", None)
-                    feats = payload.get("feats", {})
-                    if feats:
-                        return feats
-            except Exception:
-                pass
+                self._imglabel_tokens = payload.get("pad_len", payload.get("K", None))
+                feats = payload.get("feats", {}) if isinstance(payload, dict) else payload
+                if feats:
+                    return feats
+            except Exception as e:
+                logger.warning(f"Load image-label cache failed: {e}; will recompute.")
 
         # 读取 JSON
-
         with open(self.image_labels_json_path, "r", encoding="utf-8") as f:
             mapping = json.load(f)  # {path_or_basename: [str,...]}
-        # 根据设置统计 pad 长度（limit>0 时固定为 limit）
+
+        # 统计 pad 长度（limit>0 时固定为 limit）
         limit = max(int(self.max_image_labels or 0), 0)
         max_len = 0
-        # 先收集标准化后的列表
         standardized = {}
 
         for k, lab_list in mapping.items():
@@ -321,26 +383,23 @@ class RGBXDataset(data.Dataset):
                     continue
                 s = s.lower()
                 if s not in seen:
-                    clean.append(s.lower()); seen.add(s)
+                    clean.append(s); seen.add(s)
 
             if not clean:
                 continue
             if limit > 0:
-                # 保持 JSON 中既有的相似度排序，仅截断到前 limit 个
-                clean = clean[:limit]
+                clean = clean[:limit]  # 保持原顺序，截断
             standardized[k] = clean
             if limit == 0:
                 max_len = max(max_len, len(clean))
 
         pad_len = limit if limit > 0 else max_len
-
         if pad_len == 0:
             self._imglabel_tokens = 0
             return out
 
         # 编码并对齐长度（pad 到 pad_len）
         for key, labels in standardized.items():
-            # 复用“每个 label 一个模板组 → 组内平均”得到 [K,D]
             groups = build_prompt_groups_from_labels(
                 labels,
                 L=len(labels),
@@ -353,27 +412,24 @@ class RGBXDataset(data.Dataset):
                 encoder_name=self.text_encoder_name,
                 target_dim=self.text_feature_dim,
             ).cpu().to(torch.float32)  # [Ki, D]
+
             if feats.shape[0] < pad_len:
                 pad = torch.zeros(pad_len - feats.shape[0], feats.shape[1], dtype=torch.float32)
                 feats = torch.cat([feats, pad], dim=0)
             elif feats.shape[0] > pad_len:
                 feats = feats[:pad_len]
+
             out[key] = feats
             base = os.path.basename(key)
             if base not in out:
-                out[base] = feats
+                out[base] = feats  # 同时支持 basename 命中
 
         self._imglabel_tokens = pad_len
 
-        # 主进程写缓存，其它进程 barrier 后读取
-
+        # 主进程写缓存
         if self.is_master():
             try:
-                torch.save({
-                    "pad_len": pad_len,
-                    "feats": out,
-                    "json_mtime": json_mtime,
-                }, cache_pt)
+                torch.save({"pad_len": pad_len, "feats": out}, cache_pt)
             except Exception as exc:
                 logger.warning(f"Saving image label cache failed: {exc}")
 
@@ -381,31 +437,25 @@ class RGBXDataset(data.Dataset):
 
     def _extract_image_label_text(self, entry):
         """标准化 image-level 标签条目，兼容多种 JSON 格式。"""
-
         if entry is None:
             return ""
-
         if isinstance(entry, str):
             return entry.strip()
-
         if isinstance(entry, dict):
             for key in ("label", "name", "text", "category", "class", "cls", "cls_name"):
                 val = entry.get(key)
                 if isinstance(val, str) and val.strip():
                     return val.strip()
-            # 兜底：如果字典里只有一个值，也尝试取出
             for val in entry.values():
                 if isinstance(val, str) and val.strip():
                     return val.strip()
             return ""
-
         if isinstance(entry, (list, tuple)) and entry:
             first = entry[0]
             if isinstance(first, str):
                 return first.strip()
             if isinstance(first, dict):
                 return self._extract_image_label_text(first)
-
         return str(entry).strip()
 
     def _encode_class_labels(self):
@@ -434,7 +484,6 @@ class RGBXDataset(data.Dataset):
         ).cpu().to(torch.float32)
         return text_feats
 
-
     def _encode_caption_descriptions(self):
         """
         将 caption JSON 统一编码成 {<rgb文件名>: Tensor[K, D]}。
@@ -449,26 +498,31 @@ class RGBXDataset(data.Dataset):
             logger.warning("Caption JSON path not provided or not found; only class prompts will be used.")
             return caption_dict
 
-        # 缓存文件位置：和 JSON 放一起的 .text_cache 目录
-        cache_dir = os.path.join(os.path.dirname(self.caption_json_path), ".text_cache")
-        os.makedirs(cache_dir, exist_ok=True)
-        cache_name = f"captions_{os.path.splitext(os.path.basename(self.caption_json_path))[0]}_" \
-                     f"dim{self.text_feature_dim}_topk{self.caption_topk}_{self.caption_topk_mode}.pt"
-        cache_pt = os.path.join(cache_dir, cache_name)
+        # 缓存：项目级根（datasets/.text_cache）+ 内容哈希 key
+        cache_root = _stable_cache_root(getattr(self, "text_cache_root", None))
+        ckey = _text_cache_key(
+            dataset_name=self.dataset_name,
+            text_encoder=self.text_encoder,
+            text_encoder_name=self.text_encoder_name,
+            text_feature_dim=self.text_feature_dim,
+            text_template_set=self.text_template_set,
+            max_templates_per_label=self.max_templates_per_label,
+            caption_topk=self.caption_topk,
+            caption_topk_mode=self.caption_topk_mode,
+            max_image_labels=self.max_image_labels,
+            src_labels_txt=self.labels_txt_path,
+            src_captions_json=self.caption_json_path,
+            src_imglabels_json=None,
+        )
+        cache_dir = (cache_root / ckey / "captions")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_pt = cache_dir / "embeds.pt"
 
-        # --- 新增：读取 JSON mtime，用于缓存一致性校验 ---
-        json_mtime = None
-        try:
-            json_mtime = int(os.path.getmtime(self.caption_json_path))
-        except Exception:
-            pass
-
-        # 任何 rank（包含 rank0）都先尝试命中缓存（若带 mtime 则校验）
+        # 命中缓存即返回
         if os.path.isfile(cache_pt):
             try:
                 payload = torch.load(cache_pt, map_location="cpu")
-                if ("json_mtime" not in payload) or (payload.get("json_mtime") == json_mtime):
-                    return payload["feats"] if isinstance(payload, dict) and "feats" in payload else payload
+                return payload["feats"] if isinstance(payload, dict) and "feats" in payload else payload
             except Exception as e:
                 logger.warning(f"Load caption cache failed: {e}; will recompute.")
 
@@ -480,14 +534,12 @@ class RGBXDataset(data.Dataset):
             logger.error(f"Failed to parse caption json {self.caption_json_path}: {exc}")
             return caption_dict
 
-        # 预取 classbank（给 Top-K 用），构造一个空张量占位
+        # 预取 classbank（给 Top-K 用）
         classbank = None
         if self.caption_topk > 0:
-            # 优先用在 __init__ 里已构建好的 self.classbank
             classbank = getattr(self, "classbank", None)
             if classbank is None and self.label_txt_path and os.path.exists(self.label_txt_path):
-                labels = [ln.strip() for ln in open(self.label_txt_path, "r", encoding="utf-8").read().splitlines() if
-                          ln.strip()]
+                labels = [ln.strip() for ln in open(self.label_txt_path, "r", encoding="utf-8").read().splitlines() if ln.strip()]
                 groups = build_prompt_groups_from_labels(
                     labels, L=len(labels),
                     template_set=self.text_template_set,
@@ -500,7 +552,7 @@ class RGBXDataset(data.Dataset):
                     target_dim=self.text_feature_dim,
                 ).cpu()  # [C, D]
 
-        # 主循环（逐条样本编码；_load_encoder 在 prompt_utils 里有全局缓存，不会重复建模）
+        # 主循环：切句 -> 编码 -> 对齐长度
         for entry in caption_entries:
             rgb_rel = entry.get("rgb_path")
             description = (entry.get("description") or "").strip()
@@ -510,10 +562,8 @@ class RGBXDataset(data.Dataset):
             key = os.path.basename(rgb_rel)
 
             if self.caption_topk > 0 and classbank is not None:
-                # 句级 Top-K：先切句 -> 编码每句 -> 与 classbank 做相似度 -> 选 K 句
                 sents = self._split_description(description)
                 if len(sents) == 0:
-                    # 回退到全 0，占位
                     caption_dict[key] = self.caption_fallback.clone()
                     continue
 
@@ -522,23 +572,20 @@ class RGBXDataset(data.Dataset):
                     encoder=self.text_encoder,
                     encoder_name=self.text_encoder_name,
                     target_dim=self.text_feature_dim,
-                )  # [N, D], on CPU by default
-                sent_feats = sent_feats.cpu()
+                ).cpu()
                 scores = (sent_feats @ classbank.T).amax(dim=1)  # [N]
                 topk = min(self.caption_topk, len(sents))
                 idx = torch.topk(scores, k=topk, dim=0).indices
-                feats = sent_feats[idx].cpu()
+                feats = sent_feats[idx].cpu().to(torch.float32)
 
-                # 对齐到固定 K（_cap_tokens==caption_topk），必要时填充/截断
                 if feats.shape[0] < self._cap_tokens:
                     pad = torch.zeros(self._cap_tokens - feats.shape[0], feats.shape[1], dtype=torch.float32)
                     feats = torch.cat([feats, pad], dim=0)
                 elif feats.shape[0] > self._cap_tokens:
                     feats = feats[: self._cap_tokens]
 
-                caption_dict[key] = feats.to(torch.float32)
+                caption_dict[key] = feats
             else:
-                # 非 Top-K：直接切句并编码，再对齐长度
                 sents = self._split_description(description)
                 if len(sents) == 0:
                     caption_dict[key] = self.caption_fallback.clone()
@@ -559,12 +606,14 @@ class RGBXDataset(data.Dataset):
 
                 caption_dict[key] = text_feats
 
+        # 写缓存
         try:
             if self.is_master():
-                torch.save({"feats": caption_dict, "json_mtime": json_mtime}, cache_pt)
+                torch.save({"feats": caption_dict}, cache_pt)
         except Exception as e:
             logger.warning(f"Save caption cache failed: {e}")
 
+        return caption_dict
 
     def _split_description(self, description: str):
         description = description.replace("\n", " ").strip()
@@ -623,7 +672,6 @@ class RGBXDataset(data.Dataset):
                     img_feats = self.imglabel_text_features[k]; break
 
             if img_feats is None:
-                # 未命中：用全零占位，长度按 _imglabel_tokens
                 pad_len = int(self._imglabel_tokens or 0)
                 if pad_len > 0:
                     img_feats = torch.zeros(pad_len, self.text_feature_dim, dtype=torch.float32)
@@ -669,7 +717,7 @@ class RGBXDataset(data.Dataset):
                 x_img = self._open_image(path_dict[modal + "_path"], cv2.IMREAD_GRAYSCALE)
                 if x_img is not None and len(x_img.shape) == 2:
                     x[modal] = cv2.merge([x_img, x_img, x_img])
-                else:  # Handle cases where depth image is not found or has wrong format
+                else:
                     x[modal] = np.zeros_like(rgb, dtype=np.uint8)
             else:
                 x[modal] = self._open_image(path_dict[modal + "_path"], "RGB")
@@ -717,19 +765,19 @@ class RGBXDataset(data.Dataset):
         assert isinstance(length, int)
         files_len = len(self._file_names)
         new_file_names = self._file_names * (length // files_len)
-
         rand_indices = torch.randperm(files_len).tolist()
         new_indices = rand_indices[: length % files_len]
-
         new_file_names += [self._file_names[i] for i in new_indices]
-
         return new_file_names
 
     def get_length(self):
         return self.__len__()
 
     @staticmethod
-    def _open_image(filepath, mode=cv2.IMREAD_COLOR, dtype=None):
+    def _open_image(filepath: str, mode: "int | str" = cv2.IMREAD_COLOR, dtype=None):
+        """
+        mode: 可以是 OpenCV 读旗标(int)，或 "RGB"/"BGR" 两种字符串。
+        """
         try:
             if mode == "RGB":
                 img = np.array(cv2.imread(filepath, cv2.IMREAD_UNCHANGED), dtype=dtype)
@@ -737,6 +785,7 @@ class RGBXDataset(data.Dataset):
             elif mode == "BGR":
                 img = np.array(cv2.imread(filepath, cv2.IMREAD_UNCHANGED), dtype=dtype)
             else:
+                # 其余情况按 OpenCV 旗标处理（int）
                 img = np.array(cv2.imread(filepath, mode), dtype=dtype)
             return img
         except Exception as e:
@@ -750,7 +799,6 @@ class RGBXDataset(data.Dataset):
     @classmethod
     def get_class_colors(*args):
         def uint82bin(n, count=8):
-            """returns the binary of integer n, count refers to amount of bits"""
             return "".join([str((n >> y) & 1) for y in range(count - 1, -1, -1)])
 
         N = 41

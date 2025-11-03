@@ -1,11 +1,11 @@
 import argparse
 import importlib
 import os
-import random
+import json
+import re
 import sys
 import time
 from importlib import import_module
-import pathlib
 
 import numpy as np
 import torch
@@ -18,8 +18,6 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import cv2
-import matplotlib.pyplot as plt
-from matplotlib import cm
 from scipy.ndimage import gaussian_filter
 
 from models.builder import EncoderDecoder as segmodel
@@ -28,8 +26,6 @@ from utils.dataloader.dataloader import ValPre, get_train_loader, get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.engine.engine import Engine
 from utils.engine.logger import get_logger
-from utils.init_func import group_weight, init_weight
-from utils.lr_policy import WarmUpPolyLR
 from utils.metric import compute_score, hist_info
 from utils.pyt_utils import all_reduce_tensor, ensure_dir, link_file, load_model, parse_devices
 from utils.val_mm import evaluate, evaluate_msf
@@ -78,10 +74,12 @@ parser.add_argument("--num-images", type=int, default=None,
                     help="Number of images to process for visualization (None=all)")
 parser.add_argument("--attention-alpha", type=float, default=0.5,
                     help="Alpha blending factor for overlay visualization (0-1)")
-parser.add_argument("--attention-threshold", type=float, default=0.3,
-                    help="Threshold for attention visualization (0-1, 0=no threshold)")
-parser.add_argument("--attention-smooth", type=float, default=2.0,
+parser.add_argument("--attention-threshold", type=float, default=0.0,
+                    help="Zero-out low responses in [0,1] after normalization (0=no threshold)")
+parser.add_argument("--attention-smooth", type=float, default=0.0,
                     help="Gaussian smoothing sigma for attention maps (0=no smoothing)")
+parser.add_argument("--max-token-vis", type=int, default=64,
+                    help="Max tokens to save per image to avoid explosion")
 
 logger = get_logger()
 
@@ -104,128 +102,119 @@ def _parse_stages(stage_string):
     return result
 
 
-def visualize_attention_maps_enhanced(attn_map, rgb_img, save_path, token_names=None,
-                                      alpha=0.5, threshold=0.3, smooth_sigma=2.0):
-    """
-    改进的attention可视化，包含平滑、阈值化、自适应alpha等特性
+def _slugify(text: str) -> str:
+    if text is None:
+        return "token"
+    text = str(text).strip()
+    text = re.sub(r"[^0-9A-Za-z\u4e00-\u9fa5._-]+", "_", text)  # 保留中英文、数字、._-
+    text = re.sub(r"_{2,}", "_", text)
+    return (text or "token")[:120]
 
-    Args:
-        attn_map: (H, W, T) - 已上采样到rgb尺寸的attention
-        rgb_img: (H, W, 3) - 原始RGB图像 [0,255] uint8
-        save_path: 保存路径前缀
-        token_names: list[str] - 每个token的名称
-        alpha: float - 基础叠加透明度
-        threshold: float - attention阈值 (0-1)
-        smooth_sigma: float - 高斯平滑sigma
-    """
-    H, W, T = attn_map.shape
-    colormap = cm.get_cmap('jet')
 
+def _normalize01(arr: np.ndarray) -> np.ndarray:
+    mn, mx = float(np.nanmin(arr)), float(np.nanmax(arr))
+    if mx - mn < 1e-8:
+        return np.zeros_like(arr, dtype=np.float32)
+    out = (arr - mn) / (mx - mn)
+    return out.astype(np.float32)
+
+
+def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
+                           alpha: float = 0.5, threshold: float = 0.0, smooth_sigma: float = 0.0):
+    """
+    attn: (H, W) in [0,1]
+    rgb : (H, W, 3) uint8 (RGB)
+    """
+    H, W = attn.shape
+    # 可选平滑
+    if smooth_sigma and smooth_sigma > 0.0:
+        attn = gaussian_filter(attn, sigma=float(smooth_sigma))
+        attn = _normalize01(attn)
+
+    # 阈值
+    if threshold and threshold > 0.0:
+        attn = np.where(attn >= threshold, attn, 0.0)
+
+    # 伪彩热图（OpenCV 用 BGR）
+    heat_u8 = (attn * 255.0).clip(0, 255).astype(np.uint8)
+    heat_color = cv2.applyColorMap(heat_u8, cv2.COLORMAP_JET)  # (H,W,3) BGR
+
+    # 保存 heatmap
+    os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
+    cv2.imwrite(out_prefix + "_heatmap.png", heat_color)
+
+    # 叠加到原图
+    rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    overlay = cv2.addWeighted(rgb_bgr, 1.0, heat_color, float(alpha), 0.0)
+    cv2.imwrite(out_prefix + "_overlay.png", overlay)
+
+
+def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
+                                      rgb_np: np.ndarray,
+                                      save_prefix: str,
+                                      token_names=None,
+                                      token_types=None,
+                                      alpha: float = 0.5,
+                                      threshold: float = 0.0,
+                                      smooth_sigma: float = 0.0,
+                                      max_tokens: int = 64):
+    """
+    attn_hwT: (H, W, T) torch or np
+    rgb_np  : (H, W, 3) uint8 RGB
+    """
+    if isinstance(attn_hwT, torch.Tensor):
+        attn_np = attn_hwT.detach().cpu().numpy()
+    else:
+        attn_np = np.asarray(attn_hwT)
+
+    if attn_np.ndim != 3:
+        logger.warning(f"Unexpected attention shape {attn_np.shape}, skip.")
+        return
+
+    H, W, T = attn_np.shape
+    # 构建最终 token 名称表（优先使用 batch meta）
+    pad_markers = {"", "<pad>", "[pad]", "pad", "<none>", "none"}
+    names = []
+    types = []
     for t in range(T):
-        attn_t = attn_map[:, :, t].cpu().numpy()  # (H, W)
+        nm = (token_names[t] if (token_names and t < len(token_names)) else f"token{t}") if token_names else f"token{t}"
+        tp = (token_types[t] if (token_types and t < len(token_types)) else "") if token_types else ""
+        if isinstance(nm, bytes):
+            nm = nm.decode("utf-8", errors="ignore")
+        if isinstance(tp, bytes):
+            tp = tp.decode("utf-8", errors="ignore")
+        names.append(nm)
+        types.append(tp)
 
-        # 归一化到[0,1]
-        attn_min = attn_t.min()
-        attn_max = attn_t.max()
-        if attn_max - attn_min > 1e-8:
-            attn_t_norm = (attn_t - attn_min) / (attn_max - attn_min)
-        else:
-            attn_t_norm = np.zeros_like(attn_t)
+    # 限制最多输出 max_tokens，优先选择“能量高”的
+    energy = []
+    for t in range(T):
+        a = attn_np[..., t]
+        a = _normalize01(a)
+        score = float(a.mean())
+        energy.append((score, t))
+    energy.sort(reverse=True)
+    selected = [t for _, t in energy[: min(T, max_tokens)]]
 
-        # ★ 改进1：平滑处理
-        if smooth_sigma > 0:
-            attn_t_smooth = gaussian_filter(attn_t_norm, sigma=smooth_sigma)
-        else:
-            attn_t_smooth = attn_t_norm
+    for t in selected:
+        nm = names[t].strip() if isinstance(names[t], str) else str(names[t])
+        if nm.lower() in pad_markers:
+            # 跳过 padding token
+            continue
+        tp = types[t].strip() if isinstance(types[t], str) else ""
+        tag = f"{_slugify(tp)}_{_slugify(nm)}" if tp else _slugify(nm)
 
-        # ★ 改进2：阈值化
-        if threshold > 0:
-            attn_t_thresh = attn_t_smooth.copy()
-            attn_t_thresh[attn_t_smooth < threshold] = 0
-            # 重新归一化阈值化后的attention
-            if attn_t_thresh.max() > 0:
-                attn_t_thresh = attn_t_thresh / attn_t_thresh.max()
-        else:
-            attn_t_thresh = attn_t_smooth
-
-        # 应用colormap
-        attn_colored_raw = (colormap(attn_t_norm)[:, :, :3] * 255).astype(np.uint8)
-        attn_colored_smooth = (colormap(attn_t_smooth)[:, :, :3] * 255).astype(np.uint8)
-        attn_colored_thresh = (colormap(attn_t_thresh)[:, :, :3] * 255).astype(np.uint8)
-
-        # ★ 改进3：自适应alpha（高attention区域更不透明）
-        alpha_map = np.clip(attn_t_thresh * 1.5, 0, 1)[:, :, np.newaxis]
-        overlay_adaptive = (alpha_map * attn_colored_thresh +
-                            (1 - alpha_map) * rgb_img).astype(np.uint8)
-
-        # 固定alpha叠加（用于对比）
-        overlay_fixed = (alpha * attn_colored_smooth +
-                         (1 - alpha) * rgb_img).astype(np.uint8)
-
-        # ★ 改进4：生成详细的可视化（5列布局）
-        token_name = token_names[t] if (token_names and t < len(token_names)) else f"token{t}"
-        filename = f"{save_path}_token{t:02d}_{token_name}.png"
-
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-
-        # 第一行
-        # 原图
-        axes[0, 0].imshow(rgb_img)
-        axes[0, 0].set_title(f"Original Image", fontsize=12, fontweight='bold')
-        axes[0, 0].axis('off')
-
-        # 原始attention热力图
-        im1 = axes[0, 1].imshow(attn_t_norm, cmap='jet', vmin=0, vmax=1)
-        axes[0, 1].set_title(f"Raw Attention\nmax={attn_t_norm.max():.3f}", fontsize=12)
-        axes[0, 1].axis('off')
-        plt.colorbar(im1, ax=axes[0, 1], fraction=0.046, pad=0.04)
-
-        # 平滑后的attention
-        im2 = axes[0, 2].imshow(attn_t_smooth, cmap='jet', vmin=0, vmax=1)
-        axes[0, 2].set_title(f"Smoothed (σ={smooth_sigma})", fontsize=12)
-        axes[0, 2].axis('off')
-        plt.colorbar(im2, ax=axes[0, 2], fraction=0.046, pad=0.04)
-
-        # 第二行
-        # 阈值化后的attention
-        im3 = axes[1, 0].imshow(attn_t_thresh, cmap='jet', vmin=0, vmax=1)
-        axes[1, 0].set_title(f"Thresholded (>{threshold})", fontsize=12)
-        axes[1, 0].axis('off')
-        plt.colorbar(im3, ax=axes[1, 0], fraction=0.046, pad=0.04)
-
-        # 固定alpha叠加
-        axes[1, 1].imshow(overlay_fixed)
-        axes[1, 1].set_title(f"Fixed Alpha={alpha}", fontsize=12)
-        axes[1, 1].axis('off')
-
-        # 自适应alpha叠加
-        axes[1, 2].imshow(overlay_adaptive)
-        axes[1, 2].set_title(f"Adaptive Alpha\n{token_name}", fontsize=12, fontweight='bold')
-        axes[1, 2].axis('off')
-
-        plt.suptitle(f"Attention Visualization: {token_name}", fontsize=14, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig(filename, dpi=150, bbox_inches='tight')
-        plt.close()
-
-        logger.info(f"✓ Saved: {filename}")
+        a = _normalize01(attn_np[..., t])
+        out_prefix = f"{save_prefix}__{tag}"
+        _save_single_token_map(
+            a, rgb_np, out_prefix,
+            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma
+        )
 
 
 def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, block_idx=-1):
     """
-    增强版attention提取，支持精确指定stage和block
-
-    Args:
-        model: 模型实例
-        vis_stage: "enc" 或 "dec"
-        stage_idx: stage索引 (encoder: 0-3, decoder: 0-2)
-        block_idx: block索引 (-1表示该stage的最后一个block)
-
-    Returns:
-        list of (attention_map, spatial_shape, stage_info):
-            attention_map: (B, N, H, T)
-            spatial_shape: (h, w)
-            stage_info: str描述信息
+    返回列表 [(attn(B,N,Hh,T), spatial_shape(h,w), stage_info), ...]
     """
     if hasattr(model, 'module'):
         actual_model = model.module
@@ -235,7 +224,6 @@ def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, b
     attention_data = []
 
     if vis_stage == "enc":
-        # Encoder attention
         backbone = actual_model.backbone
         if hasattr(backbone, 'encoder_sam_blocks'):
             if stage_idx >= len(backbone.encoder_sam_blocks):
@@ -248,24 +236,21 @@ def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, b
                 logger.warning(f"Encoder stage {stage_idx} has no SAM blocks!")
                 return [(None, None, "No SAM blocks")]
 
-            # 选择block
             if block_idx == -1:
-                block_idx = len(blocks) - 1
-            if block_idx >= len(blocks):
-                logger.warning(f"Block {block_idx} not found in stage {stage_idx}! Using last block.")
-                block_idx = len(blocks) - 1
+                pick = len(blocks) - 1
+            else:
+                pick = min(block_idx, len(blocks) - 1)
 
-            sam_block = blocks[block_idx]
+            sam_block = blocks[pick]
             if hasattr(sam_block, 'last_attention_map'):
                 attn = sam_block.last_attention_map
                 spatial_shape = getattr(sam_block, 'last_spatial_shape', None)
                 if attn is not None:
-                    stage_info = f"enc_stage{stage_idx}_block{block_idx}"
+                    stage_info = f"enc_stage{stage_idx}_block{pick}"
                     attention_data.append((attn, spatial_shape, stage_info))
-                    logger.info(f"✓ Extracted {stage_info}, shape={attn.shape}, spatial={spatial_shape}")
+                    logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
 
     elif vis_stage == "dec":
-        # Decoder attention
         decode_head = actual_model.decode_head
         if hasattr(decode_head, 'dec_sam_layers'):
             if stage_idx >= len(decode_head.dec_sam_layers):
@@ -284,7 +269,7 @@ def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, b
                 if attn is not None:
                     stage_info = f"dec_stage{stage_idx}"
                     attention_data.append((attn, spatial_shape, stage_info))
-                    logger.info(f"✓ Extracted {stage_info}, shape={attn.shape}, spatial={spatial_shape}")
+                    logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
 
     if not attention_data:
         return [(None, None, "No attention found")]
@@ -293,27 +278,24 @@ def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, b
 
 
 def load_class_names(config):
-    """加载类别名称"""
+    """尝试全局类别名称（仅作为元数据缺失时的后备）。"""
     token_names = None
-
-    # 尝试从label_txt_path加载
     if hasattr(config, 'label_txt_path') and config.label_txt_path:
         try:
-            with open(config.label_txt_path, 'r') as f:
-                token_names = [line.strip() for line in f.readlines()]
+            with open(config.label_txt_path, 'r', encoding="utf-8") as f:
+                token_names = [line.strip() for line in f if line.strip()]
             logger.info(f"✓ Loaded {len(token_names)} class names from {config.label_txt_path}")
         except Exception as e:
             logger.warning(f"Failed to load class names: {e}")
-
     return token_names
 
 
 @torch.no_grad()
 def evaluate_with_attention(model, dataloader, config, device, engine,
                             save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
-                            num_images=None, alpha=0.5, threshold=0.3, smooth_sigma=2.0):
+                            num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64):
     """
-    增强版attention可视化评估函数
+    注意力可视化 + 指标计算
     """
     from utils.metrics_new import Metrics
 
@@ -327,7 +309,6 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     logger.info(f"  Save Dir: {save_dir}")
     logger.info("=" * 100)
 
-    # 检查text guidance
     if not getattr(config, 'enable_text_guidance', False):
         logger.error("=" * 80)
         logger.error("ERROR: enable_text_guidance is False!")
@@ -339,16 +320,14 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     n_classes = config.num_classes
     metrics = Metrics(n_classes, config.background, device)
 
-    # 启用所有SAM的attention保存
+    # 开启 SAM 缓存注意力
     def enable_attention_save(m):
         if isinstance(m, SemanticAlignmentModule):
             m.save_attention = True
-
     model.apply(enable_attention_save)
 
-    # 加载类别名称
+    # 全局回退 token 名称
     global_token_names = load_class_names(config)
-
     processed_images = 0
 
     for idx, minibatch in enumerate(dataloader):
@@ -366,6 +345,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         labels = minibatch["label"]
         modal_xs = minibatch["modal_x"]
         text_feats = minibatch.get("text_features")
+        token_meta_batch = minibatch.get("text_token_meta")
 
         if len(images.shape) == 3:
             images = images.unsqueeze(0)
@@ -384,26 +364,23 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
             logger.warning("text_feats is None! Skipping this batch...")
             continue
 
-        # Forward pass
+        # Forward
         preds = model(images_gpu, modal_xs_gpu, text_features=text_feats)
 
-        # 提取attention maps
-        attn_data = extract_attention_from_model_enhanced(
-            model, vis_stage, stage_idx, block_idx
-        )
+        # 抽取注意力映射
+        attn_data = extract_attention_from_model_enhanced(model, vis_stage, stage_idx, block_idx)
 
-        # 更新metrics
+        # 更新指标
         metrics.update(preds.softmax(dim=1), labels_gpu)
 
-        # 可视化attention
+        # 可视化
         if save_dir and attn_data[0][0] is not None:
             B = images_gpu.shape[0]
-
             for b in range(B):
                 if num_images and processed_images >= num_images:
                     break
 
-                # 准备RGB图像
+                # 反规范化得到 RGB 原图（H,W,3）uint8
                 rgb_tensor = images[b]
                 rgb_np = rgb_tensor.permute(1, 2, 0).cpu().numpy()
                 mean = np.array(config.norm_mean).reshape(1, 1, 3)
@@ -412,48 +389,57 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 rgb_np = (rgb_np * 255).clip(0, 255).astype(np.uint8)
                 H_img, W_img = rgb_np.shape[:2]
 
-                # 获取文件名
+                # 文件名
                 if "fn" in minibatch and len(minibatch["fn"]) > b:
                     fn = minibatch["fn"][b]
                     fn = fn.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
+                    fn = re.sub(r"[\\/]+", "_", fn)
                 else:
                     fn = f"batch{idx:04d}_img{b}"
 
-                # 为每个attention map生成可视化
-                for map_idx, (attn_map, spatial_shape, stage_info) in enumerate(attn_data):
+                # 解析该图的 token 名称/类型（来自 dataset 的 text_token_meta）
+                meta_token_names, meta_token_types = None, None
+                if token_meta_batch is not None:
+                    raw_meta = token_meta_batch[b] if isinstance(token_meta_batch, (list, tuple)) else token_meta_batch
+                    if isinstance(raw_meta, (bytes, bytearray)):
+                        raw_meta = raw_meta.decode("utf-8", errors="ignore")
+                    if isinstance(raw_meta, str) and raw_meta:
+                        try:
+                            meta = json.loads(raw_meta)
+                            meta_token_names = meta.get("names") or None
+                            meta_token_types = meta.get("types") or None
+                        except Exception as exc:
+                            logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
+
+                for (attn_map, spatial_shape, stage_info) in attn_data:
                     if attn_map is None:
                         logger.warning(f"Attention map is None for {fn}, reason: {stage_info}")
                         continue
 
-                    # attn_map: (B, N, H_heads, T)
-                    if attn_map.dim() == 4:
-                        attn_single = attn_map[b].mean(dim=1)  # (N, T) - average over heads
-                        N, T = attn_single.shape
-                    elif attn_map.dim() == 3:
-                        attn_single = attn_map[b]  # (N, T)
-                        N, T = attn_single.shape
-                    else:
-                        logger.warning(f"Unsupported attention shape: {attn_map.shape}")
+                    # attn_map: (B, N, Hh, T) 或 (B, N, T)
+                    attn_single = attn_map[b]
+                    if attn_single.dim() == 3:
+                        # 平均掉 head 维： (N, Hh, T) -> (N, T)
+                        attn_single = attn_single.mean(dim=1)
+                    elif attn_single.dim() != 2:
+                        logger.warning(f"Unsupported attention shape: {tuple(attn_single.shape)}")
                         continue
 
-                    # 使用保存的空间形状或尝试推断
-                    if spatial_shape is not None:
-                        h_attn, w_attn = spatial_shape
-                        if h_attn * w_attn != N:
-                            logger.warning(f"Spatial shape mismatch: {h_attn}x{w_attn}!={N}, trying sqrt...")
-                            h_attn = int(np.sqrt(N))
-                            w_attn = h_attn
+                    N, T = attn_single.shape
+
+                    # 还原空间网格
+                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(spatial_shape) == 2:
+                        h_attn, w_attn = int(spatial_shape[0]), int(spatial_shape[1])
                     else:
                         h_attn = int(np.sqrt(N))
                         w_attn = h_attn
-
                     if h_attn * w_attn != N:
-                        logger.warning(f"Cannot reshape N={N}, skipping {fn}...")
+                        logger.warning(f"Spatial shape mismatch: {h_attn}x{w_attn}!={N}, skip {fn}.")
                         continue
 
                     attn_2d = attn_single.reshape(h_attn, w_attn, T)  # (H', W', T)
 
-                    # 上采样到原图尺寸
+                    # 上采样到图像大小
                     attn_resized = F.interpolate(
                         attn_2d.permute(2, 0, 1).unsqueeze(0),  # (1, T, H', W')
                         size=(H_img, W_img),
@@ -461,45 +447,51 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         align_corners=False
                     ).squeeze(0).permute(1, 2, 0)  # (H, W, T)
 
-                    # 保存路径
+                    # 选择名称来源：先用 per-image meta；没有再用全局 label list；最后回退 tok{t}
+                    if meta_token_names is not None and len(meta_token_names) > 0:
+                        token_names = list(meta_token_names)
+                        token_types = list(meta_token_types) if meta_token_types else None
+                    elif global_token_names:
+                        token_names = global_token_names[:T]
+                        token_types = None
+                    else:
+                        token_names = [f"tok{t}" for t in range(T)]
+                        token_types = None
+
                     save_prefix = os.path.join(save_dir, "attention", stage_info, fn)
                     os.makedirs(os.path.dirname(save_prefix), exist_ok=True)
 
-                    # 生成token names
-                    if global_token_names:
-                        token_names = global_token_names[:T]
-                    else:
-                        token_names = [f"tok{t}" for t in range(T)]
-
-                    # 增强可视化
                     visualize_attention_maps_enhanced(
                         attn_resized,
                         rgb_np,
                         save_prefix,
                         token_names=token_names,
+                        token_types=token_types,
                         alpha=alpha,
                         threshold=threshold,
-                        smooth_sigma=smooth_sigma
+                        smooth_sigma=smooth_sigma,
+                        max_tokens=max_token_vis
                     )
 
-                    logger.info(f"✓ Processed {fn} ({stage_info}): {T} tokens, resolution {h_attn}x{w_attn}")
+                    logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
 
                 processed_images += 1
 
-    # 关闭attention保存
+    # 关闭缓存开关，清理引用
     def disable_attention_save(m):
         if isinstance(m, SemanticAlignmentModule):
             m.save_attention = False
-            m.last_attention_map = None
-            m.last_spatial_shape = None
-
+            if hasattr(m, "last_attention_map"):
+                m.last_attention_map = None
+            if hasattr(m, "last_spatial_shape"):
+                m.last_spatial_shape = None
     model.apply(disable_attention_save)
 
     logger.info("=" * 100)
     logger.info(f"✓ Attention visualization completed for {processed_images} images")
     logger.info("=" * 100)
 
-    # 返回metrics
+    # 汇总指标
     if engine.distributed:
         all_metrics = [None for _ in range(engine.world_size)]
         torch.distributed.all_gather_object(all_metrics, metrics)
@@ -548,7 +540,7 @@ with Engine(custom_parser=parser) as engine:
     if args.superpower is not None:
         config.superpower = bool(args.superpower)
 
-    # ★ 强制启用text guidance（用于可视化）
+    # ★ 为可视化强制开启 text guidance（不影响评测）
     if args.save_attention:
         logger.info("Forcing enable_text_guidance=True for attention visualization")
         config.enable_text_guidance = True
@@ -567,16 +559,13 @@ with Engine(custom_parser=parser) as engine:
         tb = SummaryWriter(log_dir=tb_dir)
         engine.link_tb(tb_dir, generate_tb_dir)
 
-    if engine.distributed:
-        BatchNorm2d = nn.SyncBatchNorm
-    else:
-        BatchNorm2d = nn.BatchNorm2d
-
+    BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
     model = segmodel(cfg=config, norm_layer=BatchNorm2d)
-    weight = torch.load(args.continue_fpath)["model"]
 
-    print("Loading model weights...")
-    model.load_state_dict(weight, strict=False)
+    if args.continue_fpath:
+        weight = torch.load(args.continue_fpath, map_location="cpu")["model"]
+        print("Loading model weights...")
+        model.load_state_dict(weight, strict=False)
 
     if engine.distributed:
         logger.info("Using distributed training mode...")
@@ -596,38 +585,10 @@ with Engine(custom_parser=parser) as engine:
 
     logger.info("Begin testing...")
 
-    data_setting = {
-        "rgb_root": config.rgb_root_folder,
-        "rgb_format": config.rgb_format,
-        "gt_root": config.gt_root_folder,
-        "gt_format": config.gt_format,
-        "transform_gt": config.gt_transform,
-        "x_root": config.x_root_folder,
-        "x_format": config.x_format,
-        "x_single_channel": config.x_is_single_channel,
-        "dataset_name": getattr(config, "dataset_name", None),
-        "backbone": getattr(config, "backbone", None),
-        "enable_text_guidance": getattr(config, "enable_text_guidance", False),
-        "label_txt_path": getattr(config, "label_txt_path", None),
-        "caption_json_path": getattr(config, "caption_json_path", None),
-        "image_labels_json_path": getattr(config, "image_labels_json_path", None),
-        "text_template_set": getattr(config, "text_template_set", "clip"),
-        "max_templates_per_label": getattr(config, "max_templates_per_label", 3),
-        "text_source": getattr(config, "text_source", "both"),
-        "text_encoder": getattr(config, "text_encoder", "jinaclip"),
-        "text_encoder_name": getattr(config, "text_encoder_name", None),
-        "text_feature_dim": getattr(config, "text_feature_dim", 512),
-        "max_caption_sentences": getattr(config, "max_caption_sentences", 8),
-        "caption_topk": getattr(config, "caption_topk", 0),
-        "caption_topk_mode": getattr(config, "caption_topk_mode", "class_sim"),
-        "max_image_labels": getattr(config, "max_image_labels", 0),
-    }
-
-    all_dev = [0]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.save_attention:
-        # ★ 增强的attention可视化模式
+        # 注意力可视化模式
         with torch.no_grad():
             model.eval()
             all_metrics = evaluate_with_attention(
@@ -643,7 +604,8 @@ with Engine(custom_parser=parser) as engine:
                 num_images=args.num_images,
                 alpha=args.attention_alpha,
                 threshold=args.attention_threshold,
-                smooth_sigma=args.attention_smooth
+                smooth_sigma=args.attention_smooth,
+                max_token_vis=args.max_token_vis,
             )
 
             if engine.distributed:
@@ -663,9 +625,8 @@ with Engine(custom_parser=parser) as engine:
                 logger.info(f"mIoU: {miou:.4f}")
 
     else:
-        # 标准评估模式
+        # 标准多尺度评估
         logger.info("Running standard multi-scale evaluation...")
-
         if engine.distributed:
             print("Multi GPU test")
             with torch.no_grad():
@@ -680,7 +641,6 @@ with Engine(custom_parser=parser) as engine:
                     engine,
                     save_dir=args.save_path,
                 )
-
                 if engine.local_rank == 0:
                     metric = all_metrics[0]
                     for other_metric in all_metrics[1:]:

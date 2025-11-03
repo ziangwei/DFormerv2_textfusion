@@ -27,10 +27,11 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --save-attention \
     --vis-stage enc \
     --vis-stage-idx 1 \
+    --vis-block-idx -1 \
     --num-images 3 \
     --attention-alpha 0.5 \
-    --attention-threshold 0.3 \
-    --attention-smooth 2.0
+    --attention-threshold 0.0 \
+    --attention-smooth 0.0
 
 # choose the dataset and DFormer for evaluating
 
