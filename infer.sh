@@ -25,10 +25,10 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --sam-dec-stages=1,2,3 \
     --superpower \
     --save-attention \
-    --vis-stage enc \
-    --vis-stage-idx 1 \
+    --vis-stage dec \
+    --vis-stage-idx 3 \
     --vis-block-idx -1 \
-    --num-images 3 \
+    --num-images 1 \
     --attention-alpha 0.5 \
     --attention-threshold 0.0 \
     --attention-smooth 0.0

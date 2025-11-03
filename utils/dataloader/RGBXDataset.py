@@ -241,6 +241,7 @@ class RGBXDataset(data.Dataset):
         self.class_text_features = None
         self.caption_text_features = {}
         self.imglabel_text_features = {}  # {basename: Tensor[Ki, D]}
+        self.imglabel_text_names = {}
         self._imglabel_tokens = None      # 对齐长度（=全数据最大Ki；不做Top-K）
         # 统一句子通道长度（K = caption_topk(>0) 否则用 max_caption_sentences）
         self._cap_tokens = self.caption_topk if self.caption_topk > 0 else self.max_caption_sentences
@@ -312,6 +313,7 @@ class RGBXDataset(data.Dataset):
         else:
             self.imglabel_text_features = {}
             self._imglabel_tokens = 0
+            self.imglabel_text_names = {}
 
         if self.class_text_features is None:
             self.class_text_features = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
@@ -329,6 +331,8 @@ class RGBXDataset(data.Dataset):
         再将特征 pad/截断到统一长度后缓存到项目级缓存根（datasets/.text_cache）下。
         """
         out = {}
+        name_map = {}
+        self.imglabel_text_names = {}
 
         if (not self.image_labels_json_path) or (not os.path.exists(self.image_labels_json_path)):
             return out
@@ -356,13 +360,22 @@ class RGBXDataset(data.Dataset):
         if os.path.isfile(cache_pt):
             try:
                 payload = torch.load(cache_pt, map_location="cpu")
+                if not isinstance(payload, dict):
+                    raise ValueError("legacy cache without metadata")
                 self._imglabel_tokens = payload.get("pad_len", payload.get("K", None))
-                feats = payload.get("feats", {}) if isinstance(payload, dict) else payload
-                if feats:
+                feats = payload.get("feats", {})
+                names = payload.get("names", {})
+                if feats and isinstance(names, dict):
+                    self.imglabel_text_names = names
                     return feats
+                raise ValueError("image-label cache missing feats or names")
             except Exception as e:
                 logger.warning(f"Load image-label cache failed: {e}; will recompute.")
-
+                if self.is_master():
+                    try:
+                        cache_pt.unlink()
+                    except OSError:
+                        pass
         # 读取 JSON
         with open(self.image_labels_json_path, "r", encoding="utf-8") as f:
             mapping = json.load(f)  # {path_or_basename: [str,...]}
@@ -420,16 +433,19 @@ class RGBXDataset(data.Dataset):
                 feats = feats[:pad_len]
 
             out[key] = feats
+            name_map[key] = list(labels)
             base = os.path.basename(key)
             if base not in out:
                 out[base] = feats  # 同时支持 basename 命中
+                name_map[base] = name_map[key]
 
         self._imglabel_tokens = pad_len
+        self.imglabel_text_names = name_map
 
         # 主进程写缓存
         if self.is_master():
             try:
-                torch.save({"pad_len": pad_len, "feats": out}, cache_pt)
+                torch.save({"pad_len": pad_len, "feats": out, "names": name_map}, cache_pt)
             except Exception as exc:
                 logger.warning(f"Saving image label cache failed: {exc}")
 
@@ -627,8 +643,9 @@ class RGBXDataset(data.Dataset):
         return sentences
 
     def _get_text_features_for_item(self, rgb_path: str, item_name: str):
+        empty_meta = {"names": [], "types": []}
         if not self.enable_text_guidance:
-            return torch.zeros(1, self.text_feature_dim, dtype=torch.float32)
+            return torch.zeros(1, self.text_feature_dim, dtype=torch.float32), empty_meta
 
         class_feats = self.class_text_features
         if class_feats is None:
@@ -650,9 +667,9 @@ class RGBXDataset(data.Dataset):
             caption_feats = self.caption_fallback.clone()
 
         if self.text_source == "labels":
-            return class_feats
+            return class_feats, empty_meta
         elif self.text_source == "captions":
-            return caption_feats
+            return caption_feats, empty_meta
         elif self.text_source == "imglabels":
             # 优先用 rgb_path 的 basename 匹配
             key_candidates = []
@@ -661,15 +678,21 @@ class RGBXDataset(data.Dataset):
             if item_name:
                 key_candidates.extend([item_name, os.path.basename(item_name)])
             img_feats = None
+            names = []
             for k in key_candidates:
                 if not k:
                     continue
                 key = os.path.basename(k) if k not in self.imglabel_text_features else k
                 if key in self.imglabel_text_features:
                     img_feats = self.imglabel_text_features[key]
+                    names = list(
+                        self.imglabel_text_names.get(key) or self.imglabel_text_names.get(os.path.basename(key), []))
                     break
                 if k in self.imglabel_text_features:
-                    img_feats = self.imglabel_text_features[k]; break
+                    img_feats = self.imglabel_text_features[k]
+                    names = list(
+                        self.imglabel_text_names.get(k) or self.imglabel_text_names.get(os.path.basename(k), []))
+                    break
 
             if img_feats is None:
                 pad_len = int(self._imglabel_tokens or 0)
@@ -677,9 +700,11 @@ class RGBXDataset(data.Dataset):
                     img_feats = torch.zeros(pad_len, self.text_feature_dim, dtype=torch.float32)
                 else:
                     img_feats = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
-            return img_feats
+                names = []
+            meta = {"names": names, "types": ["imglabel"] * len(names)}
+            return img_feats, meta
         else:  # both
-            return torch.cat([class_feats, caption_feats], dim=0)
+            return torch.cat([class_feats, caption_feats], dim=0), empty_meta
 
     def __len__(self):
         if self._file_length is not None:
@@ -740,8 +765,9 @@ class RGBXDataset(data.Dataset):
             n=len(self._file_names),
         )
 
-        text_feats = self._get_text_features_for_item(path_dict.get("rgb_path"), path_dict.get("item_name", ""))
+        text_feats, text_meta = self._get_text_features_for_item(path_dict.get("rgb_path"), path_dict.get("item_name", ""))
         output_dict['text_features'] = text_feats
+        output_dict['text_token_meta'] = json.dumps(text_meta, ensure_ascii=False)
 
         return output_dict
 
