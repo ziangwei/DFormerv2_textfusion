@@ -335,13 +335,14 @@ class BasicLayer(nn.Module):
     def __init__(self, embed_dim, out_dim, depth, num_heads, init_value: float, heads_range: float,
                  ffn_dim=96.0, drop_path=0.0, norm_layer=nn.LayerNorm, split_or_not=False,
                  downsample: PatchMerging = None, use_checkpoint=False, layerscale=False, layer_init_values=1e-5,
-                 SSA_HALF_MODE=False):
+                 SSA_HALF_MODE=False, sam_share_factor: int = 2):
         super().__init__()
         self.embed_dim = embed_dim
         self.depth = depth
         self.use_checkpoint = use_checkpoint
         self.split_or_not = split_or_not
         self.SSA_HALF_MODE = SSA_HALF_MODE
+        self.sam_share_factor = max(1, int(sam_share_factor))
         self.blocks = nn.ModuleList(
             [
                 RGBD_Block(
@@ -358,7 +359,10 @@ class BasicLayer(nn.Module):
         for b_idx, blk in enumerate(self.blocks):
             sam_block = None
             if superpower and sam_blocks is not None and len(sam_blocks) > 0:
-                pair_idx = b_idx // 2 if self.SSA_HALF_MODE else b_idx
+                if self.SSA_HALF_MODE:
+                    pair_idx = b_idx // self.sam_share_factor
+                else:
+                    pair_idx = b_idx
                 if pair_idx < len(sam_blocks):
                     sam_block = sam_blocks[pair_idx]
             if self.use_checkpoint:
@@ -422,6 +426,17 @@ class dformerv2(nn.Module):
         self.patch_embed = PatchEmbed(in_chans=3, embed_dim=embed_dims[0], norm_layer=norm_layer if self.patch_norm else None)
         self.superpower = bool(superpower)
         self.SSA_HALF_MODE = True
+        self._sam_block_share_factors = []
+        for i_layer in range(self.num_layers):
+            share_factor = self._resolve_sam_block_share_factor(
+                depths[i_layer], embed_dims[i_layer]
+            )
+            # 目前三种主干在 superpower 下的默认情况：
+            #   - S：所有 stage 仍保持两块一组（share_factor = 2）
+            #   - B：第三阶段扩展为四块一组，第四阶段在深度>=6时同样为四块
+            #   - L：第三阶段扩展为八块一组，第四阶段在深度>=6时同样为八块
+            # 这里统一收集，供各 stage 的 BasicLayer/SAM 实例复用。
+            self._sam_block_share_factors.append(max(1, int(share_factor)))
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         self.layers = nn.ModuleList()
@@ -442,6 +457,7 @@ class dformerv2(nn.Module):
                 layerscale=layerscales[i_layer],
                 layer_init_values=layer_init_values,
                 SSA_HALF_MODE=self.SSA_HALF_MODE,
+                sam_share_factor=self._sam_block_share_factors[i_layer],
             )
             self.layers.append(layer)
 
@@ -463,7 +479,11 @@ class dformerv2(nn.Module):
         for i in range(self.num_layers):
             if self.superpower and (i in self._sam_enc_enabled):
                 depth_i = depths[i]
-                num_units = (depth_i + 1) // 2 if self.SSA_HALF_MODE else depth_i
+                share_factor = self._sam_block_share_factors[i] if self.SSA_HALF_MODE else 1
+                if self.SSA_HALF_MODE:
+                    num_units = (depth_i + share_factor - 1) // share_factor
+                else:
+                    num_units = depth_i
                 ml = nn.ModuleList([
                     SemanticAlignmentModule(
                         query_dim=embed_dims[i],
@@ -600,6 +620,26 @@ class dformerv2(nn.Module):
             for m in self.modules():
                 if isinstance(m, nn.BatchNorm2d):
                     m.eval()
+
+    def _resolve_sam_block_share_factor(self, depth: int, embed_dim: int) -> int:
+        """Heuristically decide how many blocks reuse one SAM under superpower mode."""
+        if not self.SSA_HALF_MODE:
+            return 1
+        if not self.superpower:
+            return 2
+        if depth >= 16:
+            if embed_dim >= 448:
+                return 8
+            if embed_dim >= 320:
+                return 4
+            return 2
+        # 第四阶段或其它浅层 stage 仍依据通道数决定是否放大共享组数，
+        # 但需要保证至少有 6 个 block 才放大，以免 S 版第四阶段被误判。
+        if depth >= 6 and embed_dim >= 640:
+            return 8
+        if depth >= 6 and embed_dim >= 512:
+            return 4
+        return 2
 
 
 def DFormerv2_S(pretrained=False, **kwargs):

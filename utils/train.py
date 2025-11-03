@@ -8,6 +8,7 @@ from importlib import import_module
 import tempfile
 import json
 import numpy as np
+import torch.distributed as dist
 import torch
 import torch.nn as nn
 from tensorboardX import SummaryWriter
@@ -23,6 +24,7 @@ from utils.init_func import configure_optimizers, group_weight
 from utils.lr_policy import WarmUpPolyLR
 import torch.distributed as dist
 from utils.pyt_utils import all_reduce_tensor
+from utils.text_embed_manager import get_or_create_text_embeddings
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")

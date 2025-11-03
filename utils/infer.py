@@ -229,8 +229,6 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     logger.info(f"Starting evaluation with attention visualization...")
     logger.info(f"Visualization stage: {vis_stage}, num_images: {num_images}, alpha: {alpha}")
 
-    attn_data = extract_attention_from_model(model, vis_stage)
-
     model.eval()
     n_classes = config.num_classes
     metrics = Metrics(n_classes, config.background, device)
@@ -284,7 +282,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         metrics.update(preds.softmax(dim=1), labels_gpu)
 
         # 可视化attention
-        if save_dir and attn_data[0][0] is not None:
+        if save_dir and attn_maps and attn_maps[0][0] is not None:
             B = images_gpu.shape[0]
 
             for b in range(B):
@@ -311,7 +309,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     fn = f"batch{idx:04d}_img{b}"
 
                 # 为每个attention map生成可视化
-                for map_idx, (attn_map, spatial_shape) in enumerate(attn_data):
+                for map_idx, (attn_map, spatial_shape) in enumerate(attn_maps):
                     if attn_map is None:
                         continue
 
