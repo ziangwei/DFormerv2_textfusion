@@ -627,19 +627,17 @@ class dformerv2(nn.Module):
             return 1
         if not self.superpower:
             return 2
-        if depth >= 16:
-            if embed_dim >= 448:
-                return 8
-            if embed_dim >= 320:
-                return 4
-            return 2
-        # 第四阶段或其它浅层 stage 仍依据通道数决定是否放大共享组数，
-        # 但需要保证至少有 6 个 block 才放大，以免 S 版第四阶段被误判。
-        if depth >= 6 and embed_dim >= 640:
-            return 8
-        if depth >= 6 and embed_dim >= 512:
-            return 4
-        return 2
+
+        # 新策略：基于stage的重要性，而不是模型大小
+        # Stage 2/3 是关键的语义stage，应该减少共享
+
+        if depth >= 16:  # Stage 2 (深度18或25)
+            return 1  # 改为1：每个block独立SAM
+
+        if depth >= 6:  # Stage 3 (深度4或8)
+            return 1  # 改为1：每个block独立SAM
+
+        return 2  # Stage 0/1: 保持共享
 
 
 def DFormerv2_S(pretrained=False, **kwargs):
