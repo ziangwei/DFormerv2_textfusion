@@ -12,6 +12,7 @@ from models.builder import logger
 from utils.prompt_utils import (
     encode_prompts,
     build_prompt_groups_from_labels,
+    encode_labels_batch,
     unload_clip_model,
     split_into_sentences,
     select_caption_topk
@@ -411,33 +412,90 @@ class RGBXDataset(data.Dataset):
             self._imglabel_tokens = 0
             return out
 
-        # 编码并对齐长度（pad 到 pad_len）
-        for key, labels in standardized.items():
-            groups = build_prompt_groups_from_labels(
-                labels,
-                L=len(labels),
+        # ===== 优化：标签级去重批量编码 =====
+        try:
+            # 步骤1：收集所有唯一标签
+            all_labels = []
+            for labels in standardized.values():
+                all_labels.extend(labels)
+
+            # 步骤2：批量编码所有唯一标签
+            unique_count = len(set(all_labels))
+            logger.info(f"[Image labels] Batch encoding {unique_count} unique labels from {len(standardized)} images (optimized)...")
+            label_embeds = encode_labels_batch(
+                labels=all_labels,
                 template_set=self.text_template_set,
                 max_templates_per_label=self.max_templates_per_label,
-            )
-            feats = encode_prompts(
-                groups,
                 encoder=self.text_encoder,
                 encoder_name=self.text_encoder_name,
                 target_dim=self.text_feature_dim,
-            ).cpu().to(torch.float32)  # [Ki, D]
+                batch_size=512,
+            )  # {label_name: tensor[D]}
 
-            if feats.shape[0] < pad_len:
-                pad = torch.zeros(pad_len - feats.shape[0], feats.shape[1], dtype=torch.float32)
-                feats = torch.cat([feats, pad], dim=0)
-            elif feats.shape[0] > pad_len:
-                feats = feats[:pad_len]
+            # 步骤3：为每张图组装特征（从标签缓存查表）
+            for key, labels in standardized.items():
+                # 查表获取每个标签的embedding
+                img_feats = []
+                for lb in labels:
+                    lb_norm = lb.lower()
+                    if lb_norm in label_embeds:
+                        img_feats.append(label_embeds[lb_norm])
+                    else:
+                        # 降级：未找到则使用零向量
+                        logger.warning(f"Label '{lb}' not found in batch-encoded labels, using zero vector")
+                        img_feats.append(torch.zeros(self.text_feature_dim, dtype=torch.float32))
 
-            out[key] = feats
-            name_map[key] = list(labels)
-            base = os.path.basename(key)
-            if base not in out:
-                out[base] = feats  # 同时支持 basename 命中
-                name_map[base] = name_map[key]
+                if len(img_feats) > 0:
+                    feats = torch.stack(img_feats, dim=0)  # [num_labels, D]
+                else:
+                    feats = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
+
+                # Pad/截断到统一长度
+                if feats.shape[0] < pad_len:
+                    pad = torch.zeros(pad_len - feats.shape[0], feats.shape[1], dtype=torch.float32)
+                    feats = torch.cat([feats, pad], dim=0)
+                elif feats.shape[0] > pad_len:
+                    feats = feats[:pad_len]
+
+                out[key] = feats
+                name_map[key] = list(labels)
+                base = os.path.basename(key)
+                if base not in out:
+                    out[base] = feats  # 同时支持 basename 命中
+                    name_map[base] = name_map[key]
+
+            logger.info(f"[Image labels] Batch encoding completed successfully")
+
+        except Exception as e:
+            # 回退到旧版逐图编码（向后兼容）
+            logger.warning(f"[Image labels] Batch encoding failed ({e}), falling back to per-image encoding...")
+            for key, labels in standardized.items():
+                groups = build_prompt_groups_from_labels(
+                    labels,
+                    L=len(labels),
+                    template_set=self.text_template_set,
+                    max_templates_per_label=self.max_templates_per_label,
+                )
+                feats = encode_prompts(
+                    groups,
+                    encoder=self.text_encoder,
+                    encoder_name=self.text_encoder_name,
+                    target_dim=self.text_feature_dim,
+                ).cpu().to(torch.float32)  # [Ki, D]
+
+                if feats.shape[0] < pad_len:
+                    pad = torch.zeros(pad_len - feats.shape[0], feats.shape[1], dtype=torch.float32)
+                    feats = torch.cat([feats, pad], dim=0)
+                elif feats.shape[0] > pad_len:
+                    feats = feats[:pad_len]
+
+                out[key] = feats
+                name_map[key] = list(labels)
+                base = os.path.basename(key)
+                if base not in out:
+                    out[base] = feats
+                    name_map[base] = name_map[key]
+            logger.info(f"[Image labels] Fallback encoding completed")
 
         self._imglabel_tokens = pad_len
         self.imglabel_text_names = name_map

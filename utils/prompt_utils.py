@@ -162,6 +162,78 @@ def encode_prompt(prompt: str,
                   target_dim: Optional[int] = None) -> torch.Tensor:
     return encode_prompts([prompt], encoder=encoder, encoder_name=encoder_name, target_dim=target_dim)[0]
 
+# =========================
+# Batch encoding for label deduplication
+# =========================
+def encode_labels_batch(labels: List[str],
+                        template_set: str = "clip",
+                        max_templates_per_label: int = 3,
+                        encoder: str = "jinaclip",
+                        encoder_name: Optional[str] = None,
+                        target_dim: Optional[int] = None,
+                        batch_size: int = 512) -> dict:
+    """
+    批量编码标签，返回标签到embedding的映射字典（去重优化）
+
+    Args:
+        labels: 标签列表（可能包含重复）
+        template_set: 模板集合（"clip" / "none"）
+        max_templates_per_label: 每个标签的最大模板数
+        encoder: 编码器类型
+        encoder_name: 编码器名称
+        target_dim: 目标维度
+        batch_size: 批量编码的batch大小
+
+    Returns:
+        dict: {label_name: tensor[D]} 标签到embedding的映射
+    """
+    # 去重保序
+    unique_labels = []
+    seen = set()
+    for lb in labels:
+        lb_norm = _normalize_label(lb)
+        if lb_norm and lb_norm not in seen:
+            unique_labels.append(lb_norm)
+            seen.add(lb_norm)
+
+    if len(unique_labels) == 0:
+        return {}
+
+    # 为每个标签生成模板变体
+    label_to_prompts = {}
+    all_prompts = []
+    prompt_to_label = []  # 记录每个prompt属于哪个标签
+
+    for lb in unique_labels:
+        variants = build_prompt_variants_for_label(lb, template_set, max_templates_per_label)
+        label_to_prompts[lb] = variants
+        all_prompts.extend(variants)
+        prompt_to_label.extend([lb] * len(variants))
+
+    # 批量编码所有prompts
+    if len(all_prompts) == 0:
+        return {}
+
+    all_embeds = []
+    for i in range(0, len(all_prompts), batch_size):
+        batch_prompts = all_prompts[i:i+batch_size]
+        batch_embeds = _encode_texts(batch_prompts, encoder, encoder_name)
+        all_embeds.append(batch_embeds)
+
+    all_embeds = torch.cat(all_embeds, dim=0)  # [total_prompts, D]
+    all_embeds = _postproject(all_embeds, target_dim)
+
+    # 按标签聚合（平均多个模板的embedding）
+    label_embeds = {}
+    idx = 0
+    for lb in unique_labels:
+        num_variants = len(label_to_prompts[lb])
+        label_feats = all_embeds[idx:idx+num_variants]  # [num_variants, D]
+        label_embeds[lb] = label_feats.mean(dim=0)  # [D]
+        idx += num_variants
+
+    return label_embeds
+
 # ========= global prompt cache helpers =========
 def set_prompt_embeds(text_embeds: torch.Tensor):
     global PROMPT_EMBEDS
