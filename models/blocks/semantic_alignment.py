@@ -123,6 +123,21 @@ class SemanticAlignmentModule(nn.Module):
         v_full = self.v_proj(text_b)                           # (B,T,Cv)
         pad_mask = self._make_text_pad_mask(text_b)            # (B,T)
 
+        # ===== [FIX] 检查是否所有文本都是padding，避免 softmax(-inf) 产生 NaN =====
+        # 统计每个样本的有效token数量
+        valid_len = (~pad_mask).sum(dim=1)  # (B,)
+        T_active = int(valid_len.max().item()) if valid_len.numel() > 0 else 0
+
+        # 如果整个batch都没有有效文本，直接跳过SAM，返回原始特征
+        if T_active == 0:
+            # 保持原始结构：仍然过FFN以保持数据流一致性
+            y = self.norm2(x)
+            y = y + self.ffn(y)
+            return y.view(B, H, W, Cv)
+
+        # 检查每个样本是否全为padding
+        all_pad_per_sample = pad_mask.all(dim=1)  # (B,) bool tensor
+
         # 多头拆分
         Hh, Dh = self.num_heads, self.head_dim
         q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,N,H,Dh)
@@ -142,6 +157,14 @@ class SemanticAlignmentModule(nn.Module):
             sim = sim.masked_fill(mask.eq(0), float('-inf'))
 
         attn = F.softmax(sim, dim=-1)
+        # ===== [FIX] 将全padding样本的attention置为0，避免NaN传播 =====
+        if all_pad_per_sample.any():
+            # 对于全padding的样本，将其attention全部置为0
+            # attn shape: (B,N,H,T)
+            attn = attn.masked_fill(
+                all_pad_per_sample.view(B, 1, 1, 1).expand(-1, attn.size(1), attn.size(2), -1),
+                0.0
+            )
         attn = self.attn_drop(attn)
 
         if self.save_attention:

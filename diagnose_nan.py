@@ -74,10 +74,16 @@ for i, minibatch in enumerate(train_loader):
     if text_feats is not None:
         has_nan = torch.isnan(text_feats).any().item()
         has_inf = torch.isinf(text_feats).any().item()
+        # Check for all-zero text (padding)
+        all_zero_mask = (text_feats.abs().sum(dim=-1) <= 1e-6)  # (B, T)
+        all_zero_samples = all_zero_mask.all(dim=1).sum().item()  # 有多少样本全是零文本
+
         if has_nan:
             print(f"  WARNING: Batch {i} has NaN in text_features!")
         if has_inf:
             print(f"  WARNING: Batch {i} has Inf in text_features!")
+        if all_zero_samples > 0:
+            print(f"  WARNING: Batch {i} has {all_zero_samples}/{text_feats.size(0)} samples with all-zero text (no valid labels)!")
 
 print(f"\nLabel Statistics (over {args.num_batches} batches):")
 print(f"  Background ratio: mean={np.mean(label_stats['background_ratio']):.2%}, "
