@@ -226,7 +226,8 @@ def encode_labels_batch(labels: List[str],
     for i in range(0, len(all_prompts), batch_size):
         batch_prompts = all_prompts[i:i+batch_size]
         batch_embeds = _encode_texts(batch_prompts, encoder, encoder_name)
-        all_embeds.append(batch_embeds)
+        # 立即移到CPU，避免设备不匹配
+        all_embeds.append(batch_embeds.cpu())
 
     all_embeds = torch.cat(all_embeds, dim=0)  # [total_prompts, D]
     all_embeds = _postproject(all_embeds, target_dim)
@@ -237,7 +238,8 @@ def encode_labels_batch(labels: List[str],
     for lb in unique_labels:
         num_variants = len(label_to_prompts[lb])
         label_feats = all_embeds[idx:idx+num_variants]  # [num_variants, D]
-        label_embeds[lb] = label_feats.mean(dim=0)  # [D]
+        # 确保返回的embedding在CPU上
+        label_embeds[lb] = label_feats.mean(dim=0).cpu()  # [D]
         idx += num_variants
 
     return label_embeds

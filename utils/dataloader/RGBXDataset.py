@@ -439,9 +439,10 @@ class RGBXDataset(data.Dataset):
                 for lb in labels:
                     lb_norm = lb.lower()
                     if lb_norm in label_embeds:
-                        img_feats.append(label_embeds[lb_norm])
+                        # 确保所有tensor都在CPU上
+                        img_feats.append(label_embeds[lb_norm].cpu())
                     else:
-                        # 降级：未找到则使用零向量
+                        # 降级：未找到则使用零向量（在CPU上）
                         logger.warning(f"Label '{lb}' not found in batch-encoded labels, using zero vector")
                         img_feats.append(torch.zeros(self.text_feature_dim, dtype=torch.float32))
 
