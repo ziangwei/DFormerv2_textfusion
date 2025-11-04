@@ -508,6 +508,11 @@ class RGBXDataset(data.Dataset):
             except Exception as exc:
                 logger.warning(f"Saving image label cache failed: {exc}")
 
+        # 调试信息：显示前几个键以帮助诊断匹配问题
+        if self.is_master() and out:
+            sample_keys = list(out.keys())[:5]
+            logger.info(f"[Image labels] Loaded {len(out)} entries, sample keys: {sample_keys}")
+
         return out
 
     def _extract_image_label_text(self, entry):
@@ -758,23 +763,59 @@ class RGBXDataset(data.Dataset):
             if rgb_path:
                 key_candidates.extend([rgb_path, os.path.basename(rgb_path)])
             if item_name:
-                key_candidates.extend([item_name, os.path.basename(item_name)])
+                # item_name 可能是 "RGB/test_0.jpg labels/test_0.png" 格式
+                # 提取第一个部分 (RGB路径)
+                item_rgb = item_name.split()[0] if ' ' in item_name else item_name
+                key_candidates.extend([item_name, item_rgb, os.path.basename(item_rgb)])
+
             img_feats = None
             names = []
+
+            # 第一轮: 精确匹配
             for k in key_candidates:
                 if not k:
                     continue
-                key = os.path.basename(k) if k not in self.imglabel_text_features else k
-                if key in self.imglabel_text_features:
-                    img_feats = self.imglabel_text_features[key]
-                    names = list(
-                        self.imglabel_text_names.get(key) or self.imglabel_text_names.get(os.path.basename(key), []))
-                    break
+                # 尝试原始key
                 if k in self.imglabel_text_features:
                     img_feats = self.imglabel_text_features[k]
-                    names = list(
-                        self.imglabel_text_names.get(k) or self.imglabel_text_names.get(os.path.basename(k), []))
+                    names = list(self.imglabel_text_names.get(k, []))
                     break
+                # 尝试basename
+                base_k = os.path.basename(k)
+                if base_k in self.imglabel_text_features:
+                    img_feats = self.imglabel_text_features[base_k]
+                    names = list(self.imglabel_text_names.get(base_k, []))
+                    break
+
+            # 第二轮: 如果精确匹配失败，尝试模糊匹配（通过数字ID）
+            if img_feats is None and rgb_path:
+                import re
+                # 从 rgb_path 提取数字ID (例如 "test_0.jpg" → "0")
+                rgb_base = os.path.basename(rgb_path)
+                numbers = re.findall(r'\d+', rgb_base)
+                if numbers:
+                    # 尝试构造可能的JSON key格式
+                    for num in numbers:
+                        # 尝试 "RGB/0.jpg" 格式
+                        for prefix in ['RGB', 'rgb', '']:
+                            for ext in ['.jpg', '.png', '.jpeg']:
+                                if prefix:
+                                    test_key = f"{prefix}/{num}{ext}"
+                                else:
+                                    test_key = f"{num}{ext}"
+
+                                if test_key in self.imglabel_text_features:
+                                    img_feats = self.imglabel_text_features[test_key]
+                                    names = list(self.imglabel_text_names.get(test_key, []))
+                                    # 首次匹配成功时记录日志（仅在第一个样本时）
+                                    if not hasattr(self, '_fuzzy_match_logged'):
+                                        logger.info(f"[Image labels] Fuzzy match enabled: '{rgb_base}' → '{test_key}' (extracted ID: {num})")
+                                        self._fuzzy_match_logged = True
+                                    break
+                            if img_feats is not None:
+                                break
+                        if img_feats is not None:
+                            break
 
             if img_feats is None:
                 pad_len = int(self._imglabel_tokens or 0)
