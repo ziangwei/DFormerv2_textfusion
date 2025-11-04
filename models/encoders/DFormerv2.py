@@ -102,7 +102,7 @@ class GeoPriorGen(nn.Module):
     def generate_pos_decay(self, H: int, W: int):
         index_h = torch.arange(H).to(self.decay)
         index_w = torch.arange(W).to(self.decay)
-        grid = torch.meshgrid([index_h, index_w])
+        grid = torch.meshgrid(index_h, index_w, indexing="ij")
         grid = torch.stack(grid, dim=-1).reshape(H * W, 2)
         mask = grid[:, None, :] - grid[None, :, :]
         mask = (mask.abs()).sum(dim=-1)

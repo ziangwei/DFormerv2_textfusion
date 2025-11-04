@@ -21,6 +21,10 @@ from tqdm import tqdm
 import cv2
 from scipy.ndimage import gaussian_filter
 
+# Keep HuggingFace tokenizers single-threaded before any subprocesses are spawned
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_TOKENIZERS_PARALLELISM", "false")
+
 from models.builder import EncoderDecoder as segmodel
 from models.blocks.semantic_alignment import SemanticAlignmentModule
 from utils.dataloader.dataloader import ValPre, get_train_loader, get_val_loader
@@ -704,6 +708,7 @@ with Engine(custom_parser=parser) as engine:
                 device_ids=[engine.local_rank],
                 output_device=engine.local_rank,
                 find_unused_parameters=True,
+                gradient_as_bucket_view=False,
             )
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

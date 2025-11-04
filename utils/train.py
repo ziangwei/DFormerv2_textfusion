@@ -7,6 +7,10 @@ import time
 from importlib import import_module
 import tempfile
 import json
+
+# Ensure HuggingFace tokenizers run in single-thread mode before dataloaders fork
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_TOKENIZERS_PARALLELISM", "false")
 import numpy as np
 import torch.distributed as dist
 import torch
@@ -443,6 +447,7 @@ with Engine(custom_parser=parser) as engine:
                     device_ids=[engine.local_rank],
                     output_device=engine.local_rank,
                     find_unused_parameters=True,
+                    gradient_as_bucket_view=False,
                 )
         else:
             model.to(device)
