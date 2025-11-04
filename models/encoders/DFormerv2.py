@@ -622,23 +622,25 @@ class dformerv2(nn.Module):
                     m.eval()
 
     def _resolve_sam_block_share_factor(self, depth: int, embed_dim: int) -> int:
-        """Heuristically decide how many blocks reuse one SAM under superpower mode."""
         if not self.SSA_HALF_MODE:
             return 1
         if not self.superpower:
             return 2
 
-        # 新策略：基于stage的重要性，而不是模型大小
-        # Stage 2/3 是关键的语义stage，应该减少共享
+        # 渐进式：只对最关键的stage减少共享
+        if depth >= 16:  # Stage 2
+            if embed_dim >= 448:  # L模型
+                return 8
+            if embed_dim >= 320:  # B模型
+                return 4
+            return 2
 
-        if depth >= 16:  # Stage 2 (深度18或25)
-            return 1  # 改为1：每个block独立SAM
+        if depth >= 6 and embed_dim >= 640:  # L模型Stage 3
+            return 4  # 从8降到4
+        if depth >= 6 and embed_dim >= 512:  # B/S模型Stage 3
+            return 2  # 从4降到2
 
-        if depth >= 6:  # Stage 3 (深度4或8)
-            return 1  # 改为1：每个block独立SAM
-
-        return 2  # Stage 0/1: 保持共享
-
+        return 2
 
 def DFormerv2_S(pretrained=False, **kwargs):
     return dformerv2(

@@ -475,10 +475,15 @@ with Engine(custom_parser=parser) as engine:
 
                 if args.amp:
                     scaler.scale(loss).backward()
+                    # Gradient clipping for stability
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     loss.backward()
+                    # Gradient clipping for stability
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
 
                 # if not args.amp:

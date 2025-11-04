@@ -204,14 +204,49 @@ class EncoderDecoder(nn.Module):
         if self.enable_text_guidance and text_features is None:
             raise ValueError("text_features must be provided when enable_text_guidance is True")
 
+        # Check for NaN/Inf in text_features
+        if text_features is not None:
+            if torch.isnan(text_features).any():
+                logger.warning("NaN detected in text_features, replacing with zeros")
+                text_features = torch.nan_to_num(text_features, nan=0.0)
+            if torch.isinf(text_features).any():
+                logger.warning("Inf detected in text_features, clamping values")
+                text_features = torch.clamp(text_features, min=-1e6, max=1e6)
+
         if self.aux_head:
             out, aux_fm = self.encode_decode(rgb, modal_x, text_features)
         else:
             out = self.encode_decode(rgb, modal_x, text_features)
 
         if label is not None:
-            loss = self.criterion(out, label.long())[label.long() != self.cfg.background].mean()
+            # Create valid mask (non-background pixels)
+            valid_mask = (label.long() != self.cfg.background)
+
+            # Main loss
+            main_loss_per_pixel = self.criterion(out, label.long())
+            valid_main_loss = main_loss_per_pixel[valid_mask]
+
+            # Check if we have valid pixels to compute loss
+            if valid_main_loss.numel() > 0:
+                loss = valid_main_loss.mean()
+            else:
+                # All pixels are background - return zero loss with gradient
+                logger.warning("Batch has no valid pixels (all background), using zero loss")
+                loss = main_loss_per_pixel.sum() * 0.0  # Returns 0 but maintains gradient graph
+
+            # Auxiliary loss
             if self.aux_head:
-                loss += self.aux_rate * self.criterion(aux_fm, label.long())[label.long() != self.cfg.background].mean()
+                aux_loss_per_pixel = self.criterion(aux_fm, label.long())
+                valid_aux_loss = aux_loss_per_pixel[valid_mask]
+
+                if valid_aux_loss.numel() > 0:
+                    loss += self.aux_rate * valid_aux_loss.mean()
+                else:
+                    loss += self.aux_rate * (aux_loss_per_pixel.sum() * 0.0)
+
+                # Final NaN check
+            if torch.isnan(loss):
+                logger.error("NaN loss detected! Replacing with zero.")
+                loss = torch.tensor(0.0, device=loss.device, requires_grad=True)
             return loss
         return out

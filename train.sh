@@ -22,7 +22,7 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     utils/train.py \
     --config=local_configs.NYUDepthv2.DFormerv2_B --gpus=$GPUS \
     --text-source imglabels \
-    --text-encoder clip \
+    --text-encoder jinaclip \
     --sam-enc-stages 1,2,3 \
     --sam-dec-stages 1,2,3 \
     --no-sliding \
