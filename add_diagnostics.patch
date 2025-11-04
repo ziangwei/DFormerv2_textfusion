@@ -1,0 +1,49 @@
+--- a/utils/val_mm.py
++++ b/utils/val_mm.py
+@@ -64,6 +64,23 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=
+                 config,
+             ).softmax(dim=1)
+         else:
+             preds = model(images[0], images[1], text_features=text_feats).softmax(dim=1)
++
++        # === DIAGNOSTIC: Check prediction diversity ===
++        if idx % 20 == 0:  # Print every 20 batches
++            pred_classes = preds.argmax(dim=1)
++            unique_preds = torch.unique(pred_classes)
++            print(f"\n[DEBUG] Batch {idx}:")
++            print(f"  Unique classes predicted: {len(unique_preds)}/{n_classes}")
++            print(f"  Class IDs: {sorted(unique_preds.tolist()[:15])}")
++            pred_flat = pred_classes.flatten()
++            for cls in unique_preds[:5]:
++                count = (pred_flat == cls).sum().item()
++                ratio = count / pred_flat.numel() * 100
++                print(f"  Class{cls:2d}: {ratio:5.1f}%")
++            if len(unique_preds) == 1:
++                print(f"  ❌ MODEL COLLAPSE: Only predicting class {unique_preds[0].item()}!")
++        # === END DIAGNOSTIC ===
++
+         # print(preds.shape,labels.shape)
+         B, H, W = labels.shape
+         metrics.update(preds, labels)
+
+--- a/utils/metrics_new.py
++++ b/utils/metrics_new.py
+@@ -23,6 +23,18 @@ class Metrics:
+         )
+
+     def compute_iou(self) -> Tuple[Tensor, Tensor]:
++        # === DIAGNOSTIC: Check confusion matrix ===
++        if self.index == 1:  # Print once
++            print(f"\n[DEBUG] Confusion Matrix:")
++            print(f"  Shape: {self.hist.shape}")
++            print(f"  Total pixels: {self.hist.sum().item()}")
++            print(f"  Diagonal sum: {self.hist.diag().sum().item()}")
++            for i in range(min(5, self.num_classes)):
++                gt_count = self.hist[i, :].sum().item()
++                pred_count = self.hist[:, i].sum().item()
++                if gt_count > 0 or pred_count > 0:
++                    print(f"  Class{i}: GT={gt_count:.0f}, Pred={pred_count:.0f}")
++        # === END DIAGNOSTIC ===
+         ious = self.hist.diag() / (self.hist.sum(0) + self.hist.sum(1) - self.hist.diag())
+         ious[ious.isnan()] = 0.0
+         miou = ious.mean().item()
