@@ -15,7 +15,8 @@ from utils.prompt_utils import (
     encode_labels_batch,
     unload_clip_model,
     split_into_sentences,
-    select_caption_topk
+    select_caption_topk,
+    _normalize_label,
 )
 
 # === Project-level persistent text cache utilities ===
@@ -367,6 +368,7 @@ class RGBXDataset(data.Dataset):
                 feats = payload.get("feats", {})
                 names = payload.get("names", {})
                 if feats and isinstance(names, dict):
+                    feats, names = self._augment_imglabel_aliases(feats, names)
                     self.imglabel_text_names = names
                     return feats
                 raise ValueError("image-label cache missing feats or names")
@@ -437,7 +439,7 @@ class RGBXDataset(data.Dataset):
                 # 查表获取每个标签的embedding
                 img_feats = []
                 for lb in labels:
-                    lb_norm = lb.lower()
+                    lb_norm = _normalize_label(lb)
                     if lb_norm in label_embeds:
                         # 确保所有tensor都在CPU上
                         img_feats.append(label_embeds[lb_norm].cpu())
@@ -460,10 +462,6 @@ class RGBXDataset(data.Dataset):
 
                 out[key] = feats
                 name_map[key] = list(labels)
-                base = os.path.basename(key)
-                if base not in out:
-                    out[base] = feats  # 同时支持 basename 命中
-                    name_map[base] = name_map[key]
 
             logger.info(f"[Image labels] Batch encoding completed successfully")
 
@@ -492,12 +490,9 @@ class RGBXDataset(data.Dataset):
 
                 out[key] = feats
                 name_map[key] = list(labels)
-                base = os.path.basename(key)
-                if base not in out:
-                    out[base] = feats
-                    name_map[base] = name_map[key]
             logger.info(f"[Image labels] Fallback encoding completed")
 
+        out, name_map = self._augment_imglabel_aliases(out, name_map)
         self._imglabel_tokens = pad_len
         self.imglabel_text_names = name_map
 
@@ -764,16 +759,13 @@ class RGBXDataset(data.Dataset):
             for k in key_candidates:
                 if not k:
                     continue
-                key = os.path.basename(k) if k not in self.imglabel_text_features else k
-                if key in self.imglabel_text_features:
-                    img_feats = self.imglabel_text_features[key]
-                    names = list(
-                        self.imglabel_text_names.get(key) or self.imglabel_text_names.get(os.path.basename(key), []))
-                    break
-                if k in self.imglabel_text_features:
-                    img_feats = self.imglabel_text_features[k]
-                    names = list(
-                        self.imglabel_text_names.get(k) or self.imglabel_text_names.get(os.path.basename(k), []))
+                for alias in self._label_key_variants(k):
+                    if alias in self.imglabel_text_features:
+                        img_feats = self.imglabel_text_features[alias]
+                        names = list(
+                            self.imglabel_text_names.get(alias) or self.imglabel_text_names.get(os.path.basename(alias), []))
+                        break
+                if img_feats is not None:
                     break
 
             if img_feats is None:
@@ -859,6 +851,58 @@ class RGBXDataset(data.Dataset):
         output_dict['text_token_meta'] = json.dumps(text_meta, ensure_ascii=False)
 
         return output_dict
+
+    def _label_key_variants(self, key: str):
+        variants = []
+        if not key:
+            return variants
+
+        def _add(candidate: str):
+            if candidate and candidate not in variants:
+                variants.append(candidate)
+
+        raw = key.strip()
+        _add(raw)
+        norm = raw.replace("\\", "/")
+        _add(norm)
+
+        base = os.path.basename(norm)
+        _add(base)
+
+        stem = Path(base).stem if base else ""
+        _add(stem)
+
+        rgb_ext = getattr(self, "_rgb_format", None)
+        if stem and rgb_ext:
+            ext = rgb_ext if rgb_ext.startswith(".") else f".{rgb_ext}"
+            _add(stem + ext)
+
+        # lowercase fallbacks for case-insensitive matches
+        lowered = [cand.lower() for cand in variants if cand and cand.lower() not in variants]
+        for cand in lowered:
+            _add(cand)
+
+        return variants
+
+    def _augment_imglabel_aliases(self, feats_dict, names_dict):
+        if not isinstance(feats_dict, dict) or not feats_dict:
+            return feats_dict, names_dict
+        if not isinstance(names_dict, dict):
+            names_dict = {}
+
+        keys = sorted(list(feats_dict.keys()), key=lambda k: (-len(str(k)), str(k)))
+        for key in keys:
+            variants = self._label_key_variants(key)
+            base_feats = feats_dict[key]
+            base_names = names_dict.get(key, [])
+            for alias in variants:
+                if alias == key:
+                    continue
+                if alias not in feats_dict:
+                    feats_dict[alias] = base_feats
+                    names_dict[alias] = list(base_names)
+
+        return feats_dict, names_dict
 
     def _get_file_names(self, split_name):
         assert split_name in ["train", "val"]
