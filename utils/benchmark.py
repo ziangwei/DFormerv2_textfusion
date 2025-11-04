@@ -86,6 +86,20 @@ def main():
     C, model, make_inputs = build_model_from_config(args.config, device)
     inputs = make_inputs(args.height, args.width)
 
+    def _clear_thop_buffers(module: torch.nn.Module):
+        """移除 thop 上次统计时留下的 total_ops/total_params 缓冲。"""
+        for name in ("total_ops", "total_params"):
+            if hasattr(module, name):
+                try:
+                    delattr(module, name)
+                except AttributeError:
+                    pass
+            if name in getattr(module, "_buffers", {}):
+                module._buffers.pop(name, None)
+
+    # 避免重复 profile 同一模型时报 "attribute 'total_ops' already exists"。
+    model.apply(_clear_thop_buffers)
+
     # 使用 thop 统计（thop 返回的是 MACs 与 Params；业内常按 MACs 记为 FLOPs）
     with torch.no_grad():
         macs, params = profile(model, inputs=inputs)

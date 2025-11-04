@@ -1,5 +1,6 @@
 import argparse
 import importlib
+import math
 import os
 import json
 import re
@@ -83,6 +84,14 @@ parser.add_argument("--max-token-vis", type=int, default=64,
 parser.add_argument("--filter-tokens", type=str, default=None,
                     help="Comma-separated list of token names to visualize (e.g., 'floor,wall,ceiling'). "
                          "If set, only these tokens will be visualized.")
+parser.add_argument("--attention-composite-mode", choices=["none", "sum", "max", "mean"], default="sum",
+                    help="How to fuse selected token maps into an additional composite heatmap")
+parser.add_argument("--attention-montage-cols", type=int, default=0,
+                    help="If >0, arrange overlays into a grid with the given number of columns")
+parser.add_argument("--attention-montage-pad", type=int, default=8,
+                    help="Padding (pixels) between tiles when building the overlay montage")
+parser.add_argument("--attention-montage-font-scale", type=float, default=0.5,
+                    help="Font scale for labels rendered on top of montage tiles")
 logger = get_logger()
 
 
@@ -150,6 +159,52 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
     overlay = cv2.addWeighted(rgb_bgr, 1.0, heat_color, float(alpha), 0.0)
     cv2.imwrite(out_prefix + "_overlay.png", overlay)
 
+    return heat_color, overlay
+
+
+def _build_attention_montage(tiles, cols: int, pad: int = 8,
+                             font_scale: float = 0.5, text_color=(255, 255, 255),
+                             text_bg_color=(0, 0, 0), text_thickness: int = 1):
+    """Assemble overlays into a simple grid for quick browsing."""
+    if not tiles or cols <= 0:
+        return None
+
+    tile_h, tile_w = tiles[0][0].shape[:2]
+    rows = int(math.ceil(len(tiles) / float(cols)))
+    canvas_h = rows * tile_h + pad * (rows + 1)
+    canvas_w = cols * tile_w + pad * (cols + 1)
+    canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    for idx, (overlay, label) in enumerate(tiles):
+        r = idx // cols
+        c = idx % cols
+        y0 = pad + r * (tile_h + pad)
+        x0 = pad + c * (tile_w + pad)
+        tile = overlay.copy()
+
+        if label:
+            text = str(label)
+            text = text[:60]  # avoid extreme strings breaking the layout
+            ((text_w, text_h), baseline) = cv2.getTextSize(text, font, font_scale, text_thickness)
+            rect_h = text_h + baseline + 6
+            rect_w = text_w + 10
+            rect_x1 = 4
+            rect_y1 = tile_h - rect_h - 4
+            rect_x2 = rect_x1 + rect_w
+            rect_y2 = rect_y1 + rect_h
+            rect_y1 = max(rect_y1, 0)
+            rect_y2 = min(rect_y2, tile_h)
+            rect_x2 = min(rect_x2, tile_w)
+            cv2.rectangle(tile, (rect_x1, rect_y1), (rect_x2, rect_y2), text_bg_color, thickness=-1)
+            text_org = (rect_x1 + 5, rect_y2 - baseline - 3)
+            cv2.putText(tile, text, text_org, font, font_scale, text_color, text_thickness, lineType=cv2.LINE_AA)
+
+        canvas[y0:y0 + tile_h, x0:x0 + tile_w] = tile
+
+    return canvas
+
 
 def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
                                       rgb_np: np.ndarray,
@@ -160,7 +215,14 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
                                       threshold: float = 0.0,
                                       smooth_sigma: float = 0.0,
                                       max_tokens: int = 64,
-                                      filter_tokens=None):
+                                      filter_tokens=None,
+                                      composite_mode: str = "sum",
+                                      montage_cols: int = 0,
+                                      montage_pad: int = 8,
+                                      montage_font_scale: float = 0.5,
+                                      montage_text_color=(255, 255, 255),
+                                      montage_text_bg_color=(0, 0, 0),
+                                      montage_text_thickness: int = 1):
     """
     attn_hwT: (H, W, T) torch or np
     rgb_np  : (H, W, 3) uint8 RGB
@@ -214,6 +276,9 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
         energy.sort(reverse=True)
         selected = [t for _, t in energy[: min(T, max_tokens)]]
 
+    composite_maps = []
+    montage_tiles = []
+
     for t in selected:
         nm = names[t].strip() if isinstance(names[t], str) else str(names[t])
         if nm.lower() in pad_markers:
@@ -224,10 +289,46 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
 
         a = _normalize01(attn_np[..., t])
         out_prefix = f"{save_prefix}__{tag}"
-        _save_single_token_map(
+        _, overlay = _save_single_token_map(
             a, rgb_np, out_prefix,
             alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma
         )
+
+        composite_maps.append(a)
+        display_label = nm if not tp else f"{tp}:{nm}"
+        montage_tiles.append((overlay, display_label))
+
+    # 生成综合注意力
+    if composite_mode and composite_mode.lower() != "none" and composite_maps:
+        mode = composite_mode.lower()
+        stack = np.stack(composite_maps, axis=0)
+        if mode == "max":
+            comp = stack.max(axis=0)
+        elif mode == "mean":
+            comp = stack.mean(axis=0)
+        else:  # default sum
+            comp = stack.sum(axis=0)
+        comp = _normalize01(comp)
+        comp_prefix = f"{save_prefix}__composite-{mode}"
+        _save_single_token_map(
+            comp, rgb_np, comp_prefix,
+            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma
+        )
+
+    # 生成蒙太奇视图
+    if montage_cols and montage_cols > 0 and montage_tiles:
+        montage = _build_attention_montage(
+            montage_tiles,
+            cols=montage_cols,
+            pad=montage_pad,
+            font_scale=montage_font_scale,
+            text_color=montage_text_color,
+            text_bg_color=montage_text_bg_color,
+            text_thickness=montage_text_thickness,
+        )
+        if montage is not None:
+            montage_path = f"{save_prefix}__montage.png"
+            cv2.imwrite(montage_path, montage)
 
 
 def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, block_idx=-1):
@@ -312,7 +413,8 @@ def load_class_names(config):
 def evaluate_with_attention(model, dataloader, config, device, engine,
                             save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
                             num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
-                            filter_tokens=None):
+                            filter_tokens=None, composite_mode="sum", montage_cols=0, montage_pad=8,
+                            montage_font_scale=0.5):
     """
     注意力可视化 + 指标计算
     """
@@ -325,6 +427,8 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     logger.info(f"  Block Index: {block_idx} (-1=last)")
     logger.info(f"  Num Images: {num_images if num_images else 'all'}")
     logger.info(f"  Alpha: {alpha}, Threshold: {threshold}, Smooth Sigma: {smooth_sigma}")
+    logger.info(f"  Composite Mode: {composite_mode}")
+    logger.info(f"  Montage Cols: {montage_cols}, Pad: {montage_pad}, Font Scale: {montage_font_scale}")
     logger.info(f"  Save Dir: {save_dir}")
     logger.info("=" * 100)
 
@@ -490,7 +594,11 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         threshold=threshold,
                         smooth_sigma=smooth_sigma,
                         max_tokens=max_token_vis,
-                        filter_tokens=filter_tokens
+                        filter_tokens=filter_tokens,
+                        composite_mode=composite_mode,
+                        montage_cols=montage_cols,
+                        montage_pad=montage_pad,
+                        montage_font_scale=montage_font_scale,
                     )
 
                     logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
@@ -632,6 +740,10 @@ with Engine(custom_parser=parser) as engine:
                 smooth_sigma=args.attention_smooth,
                 max_token_vis=args.max_token_vis,
                 filter_tokens=filter_tokens_list,
+                composite_mode=args.attention_composite_mode,
+                montage_cols=args.attention_montage_cols,
+                montage_pad=args.attention_montage_pad,
+                montage_font_scale=args.attention_montage_font_scale,
             )
 
             if engine.distributed:
