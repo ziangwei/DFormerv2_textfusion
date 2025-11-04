@@ -1,7 +1,7 @@
 # CUDA_VISIBLE_DEVICES=0,1
 # config -> which model config
 # continue_fpath -> the trained pth path
-GPUS=2
+GPUS=1
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
 PORT=${PORT:-29928}
@@ -17,12 +17,12 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     utils/infer.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S \
     --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251101-163830/epoch-302_miou_57.95.pth \
-    --save_path output/enc_stage0 \
+    --save_path output/dec_stage2 \
     --gpus=$GPUS \
-    --text-source=imglabels \
-    --text-encoder=clip \
-    --sam-enc-stages=1,2,3 \
-    --sam-dec-stages=1,2,3 \
+    --text-source imglabels \
+    --text-encoder jinaclip \
+    --sam-enc-stages 1,2,3 \
+    --sam-dec-stages 1,2,3 \
     --superpower \
     --save-attention \
     --vis-stage dec \
