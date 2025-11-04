@@ -1,5 +1,21 @@
 # prompt_utils.py (based on your original version; CLIP -> open_clip, Jina-CLIP via HF)
 import os, re, json
+
+# ---------------------------------------------------------------------------
+# HuggingFace tokenizers fork/parallelism warnings can flood multi-process logs
+# and slow down evaluation when text caches are prepared inside DataLoader
+# workers. Force the safer single-threaded path before any tokenizer is
+# imported so that child processes inherit the setting without spamming stdout.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_TOKENIZERS_PARALLELISM", "false")
+try:  # tokenizers is optional until we actually touch HF encoders
+    from tokenizers import parallelism as _tokenizers_parallelism
+
+    _tokenizers_parallelism.set_parallelism(False)
+except Exception:
+    pass
+
 from pathlib import Path
 from typing import List, Union, Optional, Tuple
 

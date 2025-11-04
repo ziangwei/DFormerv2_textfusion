@@ -25,6 +25,10 @@ from utils.lr_policy import WarmUpPolyLR
 import torch.distributed as dist
 from utils.pyt_utils import all_reduce_tensor
 
+# Ensure HuggingFace tokenizers run in single-thread mode before dataloaders fork
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_TOKENIZERS_PARALLELISM", "false")
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", default=2, type=int, help="used gpu number")
@@ -443,6 +447,7 @@ with Engine(custom_parser=parser) as engine:
                     device_ids=[engine.local_rank],
                     output_device=engine.local_rank,
                     find_unused_parameters=True,
+                    gradient_as_bucket_view=False,
                 )
         else:
             model.to(device)

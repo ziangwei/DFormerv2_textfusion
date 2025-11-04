@@ -36,7 +36,7 @@ class GeoPrior(nn.Module):
         '''
         index_h = torch.arange(H).to(self.decay) #保持一個類型
         index_w = torch.arange(W).to(self.decay) #
-        grid = torch.meshgrid([index_h, index_w])
+        grid = torch.meshgrid(index_h, index_w, indexing="ij")
         grid = torch.stack(grid, dim=-1).reshape(H*W, 2) #(H*W 2)
         mask = grid[:, None, :] - grid[None, :, :] #(H*W H*W 2)
         mask = (mask.abs()).sum(dim=-1)
