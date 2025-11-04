@@ -30,6 +30,11 @@ from utils.metric import compute_score, hist_info
 from utils.pyt_utils import all_reduce_tensor, ensure_dir, link_file, load_model, parse_devices
 from utils.val_mm import evaluate, evaluate_msf
 from utils.visualize import print_iou, show_img
+from utils.modern_visualize import (
+    visualize_attention_modern,
+    create_segmentation_grid,
+    get_segmentation_palette
+)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
@@ -124,10 +129,13 @@ def _normalize01(arr: np.ndarray) -> np.ndarray:
 def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
                            alpha: float = 0.5, threshold: float = 0.0, smooth_sigma: float = 0.0):
     """
+    Modern attention visualization with Viridis colormap (CVPR-style).
+
     attn: (H, W) in [0,1]
     rgb : (H, W, 3) uint8 (RGB)
     """
     H, W = attn.shape
+
     # 可选平滑
     if smooth_sigma and smooth_sigma > 0.0:
         attn = gaussian_filter(attn, sigma=float(smooth_sigma))
@@ -137,18 +145,19 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # 伪彩热图（OpenCV 用 BGR）
-    heat_u8 = (attn * 255.0).clip(0, 255).astype(np.uint8)
-    heat_color = cv2.applyColorMap(heat_u8, cv2.COLORMAP_JET)  # (H,W,3) BGR
+    # 使用现代化 Viridis 配色（而非老旧的 JET）
+    overlay = visualize_attention_modern(
+        attn, rgb,
+        alpha=alpha,
+        cmap='viridis',  # CVPR 流行配色
+        smooth=(smooth_sigma > 0),
+        normalize=True
+    )
 
-    # 保存 heatmap
+    # 保存现代化可视化
     os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
-    cv2.imwrite(out_prefix + "_heatmap.png", heat_color)
-
-    # 叠加到原图
-    rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    overlay = cv2.addWeighted(rgb_bgr, 1.0, heat_color, float(alpha), 0.0)
-    cv2.imwrite(out_prefix + "_overlay.png", overlay)
+    overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(out_prefix + "_modern.png", overlay_bgr)
 
 
 def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
