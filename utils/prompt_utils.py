@@ -127,6 +127,14 @@ def _encode_texts(texts: List[str],
             feats = out if isinstance(out, torch.Tensor) else torch.from_numpy(out).to(device)
     feats = feats.to(device)
     feats = _l2norm(feats)
+
+    # Check for NaN/Inf and fix if necessary
+    if torch.isnan(feats).any() or torch.isinf(feats).any():
+        print(f"WARNING: NaN/Inf detected in text encoding, replacing with zeros")
+        feats = torch.nan_to_num(feats, nan=0.0, posinf=1.0, neginf=-1.0)
+        # Re-normalize after fixing
+        feats = _l2norm(feats)
+
     return feats
 
 def encode_prompts(prompts: List[Union[str, List[str]]],
