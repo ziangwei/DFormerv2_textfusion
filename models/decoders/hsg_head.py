@@ -38,6 +38,9 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                  sam_use_topk=True,
                  sam_top_m=5,
                  backbone_num_heads=(4, 4, 8, 16),
+                 sam_decoder_use_cosine: bool = True,
+                 sam_decoder_learnable_temp: bool = True,
+                 sam_decoder_logit_init: float = 1 / 0.07,
                  **kwargs):
         super().__init__(in_channels=in_channels,
                          in_index=in_index,
@@ -73,6 +76,9 @@ class HierarchicalSemanticGuidedHead(BaseDecodeHead):
                         num_heads=self.backbone_num_heads[global_idx],
                         alpha_init=0.05,
                         attn_drop=0.0, proj_drop=0.0, ffn_drop=0.0,
+                        decoder_use_cosine=sam_decoder_use_cosine,
+                        decoder_learnable_temp=sam_decoder_learnable_temp,
+                        decoder_logit_scale_init=sam_decoder_logit_init,
                     )
                 )
             else:

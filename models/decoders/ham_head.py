@@ -111,6 +111,9 @@ class LightHamSAMHead(BaseDecodeHead):
         enable_sam=True,
         sam_use_topk=True,
         sam_top_m=5,
+        sam_decoder_use_cosine: bool = True,
+        sam_decoder_learnable_temp: bool = True,
+        sam_decoder_logit_init: float = 1 / 0.07,
         **kwargs,
     ):
         super().__init__(input_transform="multiple_select", **kwargs)
@@ -139,6 +142,9 @@ class LightHamSAMHead(BaseDecodeHead):
                 attn_drop=0.0,
                 proj_drop=0.0,
                 ffn_drop=0.0,
+                decoder_use_cosine=sam_decoder_use_cosine,
+                decoder_learnable_temp=sam_decoder_learnable_temp,
+                decoder_logit_scale_init=sam_decoder_logit_init,
             )
 
         # 原汉堡块与对齐层保持不变
