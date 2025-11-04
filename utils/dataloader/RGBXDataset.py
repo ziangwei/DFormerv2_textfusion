@@ -710,6 +710,17 @@ class RGBXDataset(data.Dataset):
         if class_feats is None:
             class_feats = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
 
+        # 准备类别名称列表（从 label_txt_path 或 class_names 获取）
+        class_names = []
+        if self.label_txt_path and os.path.exists(self.label_txt_path):
+            try:
+                with open(self.label_txt_path, "r", encoding="utf-8") as f:
+                    class_names = [ln.strip() for ln in f if ln.strip()]
+            except Exception:
+                pass
+        if not class_names and self.class_names:
+            class_names = list(self.class_names)
+
         caption_feats = None
         key_candidates = []
         if rgb_path:
@@ -725,10 +736,22 @@ class RGBXDataset(data.Dataset):
         if caption_feats is None:
             caption_feats = self.caption_fallback.clone()
 
+        # 根据不同的 text_source 返回对应的 meta 信息
         if self.text_source == "labels":
-            return class_feats, empty_meta
+            # 返回所有类别名称
+            meta = {
+                "names": class_names[:class_feats.shape[0]] if class_names else [],
+                "types": ["class"] * class_feats.shape[0]
+            }
+            return class_feats, meta
         elif self.text_source == "captions":
-            return caption_feats, empty_meta
+            # 返回 caption token 的 meta（标记为 sentence）
+            cap_tokens = caption_feats.shape[0]
+            meta = {
+                "names": [f"sent{i}" for i in range(cap_tokens)],
+                "types": ["caption"] * cap_tokens
+            }
+            return caption_feats, meta
         elif self.text_source == "imglabels":
             # 优先用 rgb_path 的 basename 匹配
             key_candidates = []
@@ -763,7 +786,14 @@ class RGBXDataset(data.Dataset):
             meta = {"names": names, "types": ["imglabel"] * len(names)}
             return img_feats, meta
         else:  # both
-            return torch.cat([class_feats, caption_feats], dim=0), empty_meta
+            # 拼接 class + caption，并返回完整的 meta 信息
+            combined_feats = torch.cat([class_feats, caption_feats], dim=0)
+            cap_tokens = caption_feats.shape[0]
+            combined_names = (class_names[:class_feats.shape[0]] if class_names else []) + \
+                            [f"sent{i}" for i in range(cap_tokens)]
+            combined_types = ["class"] * class_feats.shape[0] + ["caption"] * cap_tokens
+            meta = {"names": combined_names, "types": combined_types}
+            return combined_feats, meta
 
     def __len__(self):
         if self._file_length is not None:

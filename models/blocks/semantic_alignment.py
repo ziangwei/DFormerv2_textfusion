@@ -34,6 +34,10 @@ class SemanticAlignmentModule(nn.Module):
         encoder_logit_scale_init: float = 1.0,
     ):
         super().__init__()
+
+        # ===== FLOPs 计算支持（用于 thop/ptflops）=====
+        self.total_ops = 0
+        self.total_params = 0
         self.top_m = top_m
         self.use_topk = use_topk
         self.add_residual = add_residual

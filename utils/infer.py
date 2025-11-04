@@ -80,6 +80,8 @@ parser.add_argument("--attention-smooth", type=float, default=0.0,
                     help="Gaussian smoothing sigma for attention maps (0=no smoothing)")
 parser.add_argument("--max-token-vis", type=int, default=64,
                     help="Max tokens to save per image to avoid explosion")
+parser.add_argument("--filter-tokens", type=str, default=None,
+                    help="Comma-separated list of token names to visualize (e.g., 'floor,wall,ceiling'). If set, only these tokens will be visualized.")
 
 logger = get_logger()
 
@@ -157,7 +159,8 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
                                       alpha: float = 0.5,
                                       threshold: float = 0.0,
                                       smooth_sigma: float = 0.0,
-                                      max_tokens: int = 64):
+                                      max_tokens: int = 64,
+                                      filter_tokens=None):
     """
     attn_hwT: (H, W, T) torch or np
     rgb_np  : (H, W, 3) uint8 RGB
@@ -186,15 +189,30 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
         names.append(nm)
         types.append(tp)
 
-    # 限制最多输出 max_tokens，优先选择“能量高”的
-    energy = []
-    for t in range(T):
-        a = attn_np[..., t]
-        a = _normalize01(a)
-        score = float(a.mean())
-        energy.append((score, t))
-    energy.sort(reverse=True)
-    selected = [t for _, t in energy[: min(T, max_tokens)]]
+    # 如果设置了 filter_tokens，优先过滤指定的 token
+    if filter_tokens is not None and len(filter_tokens) > 0:
+        # 将过滤列表转为小写，方便匹配
+        filter_set = {ft.lower().strip() for ft in filter_tokens}
+        selected = []
+        for t in range(T):
+            nm = names[t].strip() if isinstance(names[t], str) else str(names[t])
+            if nm.lower() in filter_set:
+                selected.append(t)
+        if len(selected) == 0:
+            logger.warning(f"No tokens matched filter {filter_tokens}, falling back to energy-based selection")
+            # 回退到能量选择
+            filter_tokens = None
+
+    # 如果没有设置 filter_tokens 或过滤后为空，使用能量选择
+    if filter_tokens is None or len(selected) == 0:
+        energy = []
+        for t in range(T):
+            a = attn_np[..., t]
+            a = _normalize01(a)
+            score = float(a.mean())
+            energy.append((score, t))
+        energy.sort(reverse=True)
+        selected = [t for _, t in energy[: min(T, max_tokens)]]
 
     for t in selected:
         nm = names[t].strip() if isinstance(names[t], str) else str(names[t])
@@ -293,7 +311,8 @@ def load_class_names(config):
 @torch.no_grad()
 def evaluate_with_attention(model, dataloader, config, device, engine,
                             save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
-                            num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64):
+                            num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
+                            filter_tokens=None):
     """
     注意力可视化 + 指标计算
     """
@@ -470,7 +489,8 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         alpha=alpha,
                         threshold=threshold,
                         smooth_sigma=smooth_sigma,
-                        max_tokens=max_token_vis
+                        max_tokens=max_token_vis,
+                        filter_tokens=filter_tokens
                     )
 
                     logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
@@ -589,6 +609,12 @@ with Engine(custom_parser=parser) as engine:
 
     if args.save_attention:
         # 注意力可视化模式
+        # 解析 filter_tokens 参数
+        filter_tokens_list = None
+        if args.filter_tokens:
+            filter_tokens_list = [t.strip() for t in args.filter_tokens.split(',') if t.strip()]
+            logger.info(f"Filtering tokens: {filter_tokens_list}")
+
         with torch.no_grad():
             model.eval()
             all_metrics = evaluate_with_attention(
@@ -606,6 +632,7 @@ with Engine(custom_parser=parser) as engine:
                 threshold=args.attention_threshold,
                 smooth_sigma=args.attention_smooth,
                 max_token_vis=args.max_token_vis,
+                filter_tokens=filter_tokens_list,
             )
 
             if engine.distributed:
