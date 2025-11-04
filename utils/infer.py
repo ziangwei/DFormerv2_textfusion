@@ -583,6 +583,8 @@ with Engine(custom_parser=parser) as engine:
         config.enable_text_guidance = True
 
         # 确保所有必要的文本配置都有默认值
+        if not hasattr(config, 'text_source') or config.text_source is None:
+            config.text_source = 'labels'  # 默认使用全局类别
         if not hasattr(config, 'text_encoder') or config.text_encoder is None:
             config.text_encoder = 'jinaclip'
         if not hasattr(config, 'text_encoder_name') or config.text_encoder_name is None:
@@ -593,15 +595,30 @@ with Engine(custom_parser=parser) as engine:
             config.text_template_set = 'clip'
         if not hasattr(config, 'max_templates_per_label') or config.max_templates_per_label is None:
             config.max_templates_per_label = 3
+        if not hasattr(config, 'max_image_labels') or config.max_image_labels is None:
+            config.max_image_labels = 0
 
         # 打印实际使用的配置
         logger.info("=" * 80)
         logger.info("TEXT GUIDANCE CONFIGURATION:")
-        logger.info(f"  text_source: {getattr(config, 'text_source', 'NOT SET')}")
+        logger.info(f"  text_source: {config.text_source}")
         logger.info(f"  text_encoder: {config.text_encoder}")
         logger.info(f"  text_feature_dim: {config.text_feature_dim}")
         logger.info(f"  label_txt_path: {getattr(config, 'label_txt_path', 'NOT SET')}")
+        logger.info(f"  caption_json_path: {getattr(config, 'caption_json_path', 'NOT SET')}")
         logger.info(f"  image_labels_json_path: {getattr(config, 'image_labels_json_path', 'NOT SET')}")
+
+        # 检查文件是否存在
+        if config.text_source == 'imglabels':
+            img_json = getattr(config, 'image_labels_json_path', None)
+            if img_json and os.path.exists(img_json):
+                logger.info(f"  ✓ image_labels_json found: {img_json}")
+            else:
+                logger.error(f"  ✗ image_labels_json NOT FOUND or NOT SET!")
+                logger.error(f"  Path checked: {img_json}")
+                logger.error(f"  Current working dir: {os.getcwd()}")
+                logger.error(f"  This will cause per-image labels to be unavailable!")
+
         logger.info("=" * 80)
 
     config.pad = False
