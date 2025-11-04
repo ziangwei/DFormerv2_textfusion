@@ -58,6 +58,12 @@ class EncoderDecoder(nn.Module):
             backbone_kwargs["sam_use_topk"] = getattr(cfg, "sam_use_topk", True)
             backbone_kwargs["sam_top_m"] = getattr(cfg, "sam_top_m", 5)
             backbone_kwargs["superpower"] = getattr(cfg, "superpower", False)
+            backbone_kwargs["sam_decoder_use_cosine"] = getattr(cfg, "sam_decoder_use_cosine", True)
+            backbone_kwargs["sam_decoder_learnable_temp"] = getattr(cfg, "sam_decoder_learnable_temp", True)
+            backbone_kwargs["sam_decoder_logit_init"] = getattr(cfg, "sam_decoder_logit_init", 1 / 0.07)
+            backbone_kwargs["sam_encoder_use_cosine"] = getattr(cfg, "sam_encoder_use_cosine", False)
+            backbone_kwargs["sam_encoder_learnable_temp"] = getattr(cfg, "sam_encoder_learnable_temp", False)
+            backbone_kwargs["sam_encoder_logit_init"] = getattr(cfg, "sam_encoder_logit_init", 1.0)
 
         self.backbone = backbone(**backbone_kwargs)
         self.aux_head = None
@@ -75,7 +81,10 @@ class EncoderDecoder(nn.Module):
                                                               sam_use_topk=getattr(cfg, "sam_use_topk", True),
                                                               sam_top_m=getattr(cfg, "sam_top_m", 5),
                                                               backbone_num_heads=getattr(self.backbone, "num_heads",
-                                                                                         [4, 4, 8, 16]))
+                                                                                         [4, 4, 8, 16]),
+                                                              sam_decoder_use_cosine=getattr(cfg, "sam_decoder_use_cosine", True),
+                                                              sam_decoder_learnable_temp=getattr(cfg, "sam_decoder_learnable_temp", True),
+                                                              sam_decoder_logit_init=getattr(cfg, "sam_decoder_logit_init", 1 / 0.07))
             if cfg.aux_rate != 0:
                 from .decoders.fcnhead import FCNHead
                 self.aux_index = 2
@@ -101,6 +110,9 @@ class EncoderDecoder(nn.Module):
                 in_index=[1, 2, 3],
                 norm_cfg=norm_cfg,
                 channels=cfg.decoder_embed_dim,
+                sam_decoder_use_cosine=getattr(cfg, "sam_decoder_use_cosine", True),
+                sam_decoder_learnable_temp=getattr(cfg, "sam_decoder_learnable_temp", True),
+                sam_decoder_logit_init=getattr(cfg, "sam_decoder_logit_init", 1 / 0.07),
             )
             from .decoders.fcnhead import FCNHead
             if cfg.aux_rate != 0:

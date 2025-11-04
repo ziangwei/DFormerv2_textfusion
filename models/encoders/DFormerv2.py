@@ -412,6 +412,12 @@ class dformerv2(nn.Module):
         sam_top_m=5,
         superpower: bool = False,
         sam_enc_gamma_scale: float = 1.0,
+        sam_decoder_use_cosine: bool = True,
+        sam_decoder_learnable_temp: bool = True,
+        sam_decoder_logit_init: float = 1 / 0.07,
+        sam_encoder_use_cosine: bool = False,
+        sam_encoder_learnable_temp: bool = False,
+        sam_encoder_logit_init: float = 1.0,
     ):
         super().__init__()
         self.out_indices = out_indices
@@ -470,6 +476,12 @@ class dformerv2(nn.Module):
                 top_m=sam_top_m,
                 num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
                 gamma_scale=sam_enc_gamma_scale,
+                decoder_use_cosine=sam_decoder_use_cosine,
+                decoder_learnable_temp=sam_decoder_learnable_temp,
+                decoder_logit_scale_init=sam_decoder_logit_init,
+                encoder_use_cosine=sam_encoder_use_cosine,
+                encoder_learnable_temp=sam_encoder_learnable_temp,
+                encoder_logit_scale_init=sam_encoder_logit_init,
             )
 
             for i in range(self.num_layers)
@@ -492,6 +504,12 @@ class dformerv2(nn.Module):
                         top_m=sam_top_m,
                         num_heads=self.num_heads[i],  # 同一 stage 的头数
                         gamma_scale=sam_enc_gamma_scale,
+                        decoder_use_cosine=sam_decoder_use_cosine,
+                        decoder_learnable_temp=sam_decoder_learnable_temp,
+                        decoder_logit_scale_init=sam_decoder_logit_init,
+                        encoder_use_cosine=sam_encoder_use_cosine,
+                        encoder_learnable_temp=sam_encoder_learnable_temp,
+                        encoder_logit_scale_init=sam_encoder_logit_init,
                     )
                     for _ in range(num_units)
                 ])

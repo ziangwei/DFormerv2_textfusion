@@ -12,6 +12,8 @@ echo "Hugging Face cache has been set to: ${HF_HOME}"
 export CUDA_VISIBLE_DEVICES="0,1"
 export TORCHDYNAMO_VERBOSE=1
 
+EXTRA_ARGS=("$@")
+
 PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     torchrun \
     --nnodes=$NNODES \
@@ -35,6 +37,7 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --pad_SUNRGBD \
     --no-use_seed \
     --superpower \
+    "${EXTRA_ARGS[@]}"
 
 # --text-source imglabels \
 # 文本来源：labels / captions / both / imglabels

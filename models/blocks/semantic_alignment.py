@@ -26,6 +26,12 @@ class SemanticAlignmentModule(nn.Module):
         clamp_logit: float = 2.0,
         num_heads: int = 1,        # 由调用方传：该 stage 的 num_heads
         gamma_scale: float = 1.0,  # SSA-lite 的额外缩放，默认为 1
+        decoder_use_cosine: bool = True,
+        decoder_learnable_temp: bool = True,
+        decoder_logit_scale_init: float = 1 / 0.07,
+        encoder_use_cosine: bool = False,
+        encoder_learnable_temp: bool = False,
+        encoder_logit_scale_init: float = 1.0,
     ):
         super().__init__()
         self.top_m = top_m
@@ -40,6 +46,7 @@ class SemanticAlignmentModule(nn.Module):
             f"query_dim({query_dim}) must be divisible by num_heads({self.num_heads})"
         self.head_dim = query_dim // self.num_heads  # Dh
         self.d_k = float(self.head_dim)              # 缩放用
+        self.register_buffer("_inv_sqrt_dk", torch.tensor(1.0 / math.sqrt(self.d_k), dtype=torch.float))
 
         # === 预归一化（decoder 侧 forward 用；SSA-lite 不用） ===
         self.norm1 = nn.LayerNorm(query_dim)
@@ -56,8 +63,22 @@ class SemanticAlignmentModule(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        # 温度参数（对数域）
-        self.logit_scale = nn.Parameter(torch.tensor(math.log(1 / 0.07)))
+        # 温度与注意力样式配置
+        self.decoder_use_cosine = bool(decoder_use_cosine)
+        self.decoder_learnable_temp = bool(decoder_learnable_temp)
+        decoder_init = math.log(max(decoder_logit_scale_init, 1e-6))
+        self.decoder_logit_scale = nn.Parameter(
+            torch.tensor(decoder_init, dtype=torch.float),
+            requires_grad=self.decoder_learnable_temp,
+        )
+
+        self.encoder_use_cosine = bool(encoder_use_cosine)
+        self.encoder_learnable_temp = bool(encoder_learnable_temp)
+        encoder_init = math.log(max(encoder_logit_scale_init, 1e-6))
+        self.encoder_logit_scale = nn.Parameter(
+            torch.tensor(encoder_init, dtype=torch.float),
+            requires_grad=self.encoder_learnable_temp,
+        )
 
         # FFN（decoder 侧 forward 使用；SSA-lite 不用）
         self.ffn = nn.Sequential(
@@ -72,7 +93,6 @@ class SemanticAlignmentModule(nn.Module):
         self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
         self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))       # encoder/superpower (SSA-lite)
         self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
-        self.register_buffer("ssa_scale", torch.tensor(self.head_dim ** -0.5, dtype=torch.float))
 
         self.save_attention = False  # 新增：控制是否保存attention
         self.last_attention_map = None  # 新增：保存最后一次的attention
@@ -104,6 +124,18 @@ class SemanticAlignmentModule(nn.Module):
         将全零 token 视作 padding：返回 (B,T) 的 bool 掩码
         """
         return (text_feats.float().abs().sum(dim=-1) <= eps)
+
+    def _decoder_scale(self) -> torch.Tensor:
+        scale_log = self.decoder_logit_scale
+        if self.decoder_learnable_temp:
+            scale_log = torch.clamp(scale_log, min=-self.clamp_logit, max=self.clamp_logit)
+        return torch.exp(scale_log) * self._inv_sqrt_dk
+
+    def _encoder_scale(self) -> torch.Tensor:
+        scale_log = self.encoder_logit_scale
+        if self.encoder_learnable_temp:
+            scale_log = torch.clamp(scale_log, min=-self.clamp_logit, max=self.clamp_logit)
+        return torch.exp(scale_log) * self._inv_sqrt_dk
 
     # ---------- Decoder 侧：多头 +（可选）TopK + FFN ----------
     def forward(self, visual_features: torch.Tensor, text_features: torch.Tensor):
@@ -141,12 +173,15 @@ class SemanticAlignmentModule(nn.Module):
 
         # 多头拆分
         Hh, Dh = self.num_heads, self.head_dim
-        q = F.normalize(q_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,N,H,Dh)
-        k = F.normalize(k_full, dim=-1, eps=1e-6).view(B, -1, Hh, Dh)  # (B,T,H,Dh)
+        q = q_full.view(B, -1, Hh, Dh)
+        k = k_full.view(B, -1, Hh, Dh)
+        if self.decoder_use_cosine:
+            q = F.normalize(q, dim=-1, eps=1e-6)
+            k = F.normalize(k, dim=-1, eps=1e-6)
         v = v_full.view(B, -1, Hh, Dh)                                  # (B,T,H,Dh)
 
         # 注意力
-        scale = torch.clamp(self.logit_scale, min=-self.clamp_logit, max=self.clamp_logit).exp() / math.sqrt(self.d_k)
+        scale = self._decoder_scale()
         sim = torch.einsum('bnhd,bthd->bnht', q, k) * scale             # (B,N,H,T)
         if pad_mask.any():
             sim = sim.masked_fill(pad_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
@@ -215,8 +250,13 @@ class SemanticAlignmentModule(nn.Module):
         v_full = self.v_proj(text_b)  # [B, T_active, Cv]
 
         Hh, Dh = self.num_heads, self.head_dim
-        q = q_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, N, Dh]
-        k = k_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
+        q = q_full.view(B, -1, Hh, Dh)
+        k = k_full.view(B, -1, Hh, Dh)
+        if self.encoder_use_cosine:
+            q = F.normalize(q, dim=-1, eps=1e-6)
+            k = F.normalize(k, dim=-1, eps=1e-6)
+        q = q.permute(0, 2, 1, 3)  # [B, Hh, N, Dh]
+        k = k.permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
         v = v_full.view(B, -1, Hh, Dh).permute(0, 2, 1, 3)  # [B, Hh, T, Dh]
 
         all_pad = pad_mask.all(dim=1)  # [B]
@@ -232,7 +272,7 @@ class SemanticAlignmentModule(nn.Module):
             pad_act = pad_mask.index_select(0, active_idx)
 
             # (5) 标准缩放 + mask 再 softmax（与旧 SSA 逻辑保持一致）
-            attn_logits = torch.matmul(q_act, k_act.transpose(-2, -1)) * self.ssa_scale
+            attn_logits = torch.matmul(q_act, k_act.transpose(-2, -1)) * self._encoder_scale()
             attn_logits = attn_logits.masked_fill(pad_act.unsqueeze(1).unsqueeze(2), float('-inf'))
             attn = torch.softmax(attn_logits, dim=-1)
 
