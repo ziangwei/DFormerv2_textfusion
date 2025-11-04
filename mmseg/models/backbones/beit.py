@@ -92,7 +92,7 @@ class BEiTAttention(BaseModule):
         coords_h = torch.arange(Wh)
         coords_w = torch.arange(Ww)
         # coords shape is (2, Wh, Ww)
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w], indexing='ij'))
         # coords_flatten shape is (2, Wh*Ww)
         coords_flatten = torch.flatten(coords, 1)
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]

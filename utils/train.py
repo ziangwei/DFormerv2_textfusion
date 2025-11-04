@@ -25,6 +25,9 @@ from utils.lr_policy import WarmUpPolyLR
 import torch.distributed as dist
 from utils.pyt_utils import all_reduce_tensor
 
+# Disable tokenizers parallelism warning when forking processes
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", default=2, type=int, help="used gpu number")
@@ -565,12 +568,7 @@ with Engine(custom_parser=parser) as engine:
             logger.info(print_str)
             train_timer.stop()
 
-            logger.info(f"[Train] epoch {epoch} - before is_eval()")
-            for h in logger.handlers: h.flush()
-
             if is_eval(epoch, config):
-                logger.info("[Eval] Entering evaluation—val_loader length = %d", len(val_loader))
-                for h in logger.handlers: h.flush()
                 eval_timer.start()
                 torch.cuda.empty_cache()
 
@@ -665,8 +663,6 @@ with Engine(custom_parser=parser) as engine:
                         print("miou", miou, "best", best_miou)
                 except Exception as e:
                     logger.exception("Exception during evaluation!")
-                for h in logger.handlers:
-                    h.flush()
 
                 logger.info(
                     f"Epoch {epoch} validation result: mIoU: {miou:.4f},Best mIoU: {best_miou:.4f}, "

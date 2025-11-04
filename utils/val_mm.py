@@ -17,11 +17,6 @@ import numpy as np
 
 @torch.no_grad()
 def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False, classbank_KD: torch.Tensor | None = None, prompt_mode: str = "single"):
-    logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
-    logger.info(f"[evaluate] Entered evaluate(), dataloader size={len(dataloader)}")
-    for h in logger.handlers:
-        h.flush()
-
     print("Evaluating...")
     model.eval()
     n_classes = config.num_classes
@@ -30,10 +25,9 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
 
     for idx, minibatch in enumerate(dataloader):
 
-        logger.info(f"[evaluate] Batch {idx}/{len(dataloader)}, keys={list(minibatch.keys())}")
-        for h in logger.handlers: h.flush()
-
-        if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
+        # Reduced logging frequency to improve evaluation speed
+        # Only log every 10% of batches instead of every batch
+        if ((idx + 1) % max(1, int(len(dataloader) * 0.1)) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
         ):
             print(f"Validation Iter: {idx + 1} / {len(dataloader)}")
@@ -161,10 +155,6 @@ def slide_inference(model, imgs, modal_xs,text_features, config=None):
 
 
     h_crop, w_crop = config.eval_crop_size
-
-    logger = get_logger(config.log_dir, config.log_file, rank=None)
-    logger.info(f"[slide_inference] Entered slide_inference(), h_grids={h_crop}, w_grids={w_crop}")
-    for h in logger.handlers: h.flush()
 
     # new add:
     if h_crop > imgs.shape[-2] or w_crop > imgs.shape[-1]:
