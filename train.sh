@@ -35,6 +35,14 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --pad_SUNRGBD \
     --no-use_seed \
     --superpower \
+    # ===== SAM Attention 模式控制 (可选) =====
+    # 默认: Encoder固定温度+普通注意力, Decoder可学习温度+余弦注意力
+    # --sam-decoder-use-cosine / --no-sam-decoder-use-cosine
+    # --sam-decoder-learnable-temp / --no-sam-decoder-learnable-temp
+    # --sam-decoder-logit-init 14.285714
+    # --sam-encoder-use-cosine / --no-sam-encoder-use-cosine
+    # --sam-encoder-learnable-temp / --no-sam-encoder-learnable-temp
+    # --sam-encoder-logit-init 1.0
 
 # --text-source imglabels \
 # 文本来源：labels / captions / both / imglabels
