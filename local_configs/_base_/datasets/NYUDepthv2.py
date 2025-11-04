@@ -71,6 +71,12 @@ C.max_caption_sentences = 6
 C.text_template_set = "clip"
 C.max_templates_per_label = 3
 
+# Per-image labels configuration (for inference visualization)
+# Set text_source to "imglabels" to use per-image labels from JSON
+C.text_source = "imglabels"  # Options: "labels" (global), "captions", "both", "imglabels" (per-image)
+C.image_labels_json_path = osp.join(C.dataset_path, "out.json")  # JSON: {"RGB/0.jpg": ["wall", "floor", ...], ...}
+C.max_image_labels = 0  # 0 = no limit, use max length from data
+
 """Image Config"""
 C.background = 255
 C.image_height = 480
