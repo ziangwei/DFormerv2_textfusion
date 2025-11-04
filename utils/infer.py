@@ -30,11 +30,6 @@ from utils.metric import compute_score, hist_info
 from utils.pyt_utils import all_reduce_tensor, ensure_dir, link_file, load_model, parse_devices
 from utils.val_mm import evaluate, evaluate_msf
 from utils.visualize import print_iou, show_img
-from utils.modern_visualize import (
-    visualize_attention_modern,
-    create_segmentation_grid,
-    get_segmentation_palette
-)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
@@ -129,11 +124,15 @@ def _normalize01(arr: np.ndarray) -> np.ndarray:
 def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
                            alpha: float = 0.5, threshold: float = 0.0, smooth_sigma: float = 0.0):
     """
-    Modern attention visualization with Viridis colormap (CVPR-style).
+    Modern attention visualization with Viridis/Magma colormap (CVPR 2023-2025 style).
 
     attn: (H, W) in [0,1]
     rgb : (H, W, 3) uint8 (RGB)
     """
+    import matplotlib
+    matplotlib.use('Agg')  # 无GUI后端
+    import matplotlib.pyplot as plt
+
     H, W = attn.shape
 
     # 可选平滑
@@ -145,19 +144,17 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # 使用现代化 Viridis 配色（而非老旧的 JET）
-    overlay = visualize_attention_modern(
-        attn, rgb,
-        alpha=alpha,
-        cmap='viridis',  # CVPR 流行配色
-        smooth=(smooth_sigma > 0),
-        normalize=True
-    )
+    # 使用 Matplotlib 的现代配色（perceptually uniform）
+    cmap = plt.get_cmap('viridis')  # 可选: 'magma', 'inferno', 'plasma'
+    heat_color = (cmap(attn)[:, :, :3] * 255).astype(np.uint8)  # RGB
 
-    # 保存现代化可视化
+    # 叠加到原图
+    overlay = (alpha * heat_color + (1 - alpha) * rgb).astype(np.uint8)
+
+    # 保存
     os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
     overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(out_prefix + "_modern.png", overlay_bgr)
+    cv2.imwrite(out_prefix + "_attn.png", overlay_bgr)
 
 
 def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
@@ -436,6 +433,10 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                             meta = json.loads(raw_meta)
                             meta_token_names = meta.get("names") or None
                             meta_token_types = meta.get("types") or None
+                            # DEBUG: 打印实际获取的标签
+                            if idx == 0 and b == 0:
+                                logger.info(f"[DEBUG] Sample image token names: {meta_token_names[:5] if meta_token_names else 'None'}...")
+                                logger.info(f"[DEBUG] Sample image token types: {meta_token_types[:5] if meta_token_types else 'None'}...")
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
@@ -479,12 +480,19 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     if meta_token_names is not None and len(meta_token_names) > 0:
                         token_names = list(meta_token_names)
                         token_types = list(meta_token_types) if meta_token_types else None
+                        if idx == 0 and b == 0:
+                            logger.info(f"[DEBUG] Using per-image token names (source: dataset metadata)")
                     elif global_token_names:
                         token_names = global_token_names[:T]
                         token_types = None
+                        if idx == 0 and b == 0:
+                            logger.warning(f"[WARNING] Falling back to global label list! This may not match per-image labels.")
+                            logger.warning(f"[WARNING] Check if --text-source=imglabels and --image-labels-json-path are set correctly.")
                     else:
                         token_names = [f"tok{t}" for t in range(T)]
                         token_types = None
+                        if idx == 0 and b == 0:
+                            logger.warning(f"[WARNING] Using generic token names (tok0, tok1, ...). No label information available!")
 
                     save_prefix = os.path.join(save_dir, "attention", stage_info, fn)
                     os.makedirs(os.path.dirname(save_prefix), exist_ok=True)
@@ -573,6 +581,28 @@ with Engine(custom_parser=parser) as engine:
     if args.save_attention:
         logger.info("Forcing enable_text_guidance=True for attention visualization")
         config.enable_text_guidance = True
+
+        # 确保所有必要的文本配置都有默认值
+        if not hasattr(config, 'text_encoder') or config.text_encoder is None:
+            config.text_encoder = 'jinaclip'
+        if not hasattr(config, 'text_encoder_name') or config.text_encoder_name is None:
+            config.text_encoder_name = None
+        if not hasattr(config, 'text_feature_dim') or config.text_feature_dim is None:
+            config.text_feature_dim = 512
+        if not hasattr(config, 'text_template_set') or config.text_template_set is None:
+            config.text_template_set = 'clip'
+        if not hasattr(config, 'max_templates_per_label') or config.max_templates_per_label is None:
+            config.max_templates_per_label = 3
+
+        # 打印实际使用的配置
+        logger.info("=" * 80)
+        logger.info("TEXT GUIDANCE CONFIGURATION:")
+        logger.info(f"  text_source: {getattr(config, 'text_source', 'NOT SET')}")
+        logger.info(f"  text_encoder: {config.text_encoder}")
+        logger.info(f"  text_feature_dim: {config.text_feature_dim}")
+        logger.info(f"  label_txt_path: {getattr(config, 'label_txt_path', 'NOT SET')}")
+        logger.info(f"  image_labels_json_path: {getattr(config, 'image_labels_json_path', 'NOT SET')}")
+        logger.info("=" * 80)
 
     config.pad = False
     if "x_modal" not in config:
