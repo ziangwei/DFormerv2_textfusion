@@ -756,33 +756,62 @@ class RGBXDataset(data.Dataset):
             # 优先用 rgb_path 的 basename 匹配
             key_candidates = []
             if rgb_path:
-                key_candidates.extend([rgb_path, os.path.basename(rgb_path)])
+                # 尝试更多的 key 变体
+                key_candidates.extend([
+                    rgb_path,                              # 完整路径
+                    os.path.basename(rgb_path),            # basename
+                    os.path.basename(rgb_path).replace(self._rgb_format, ''),  # 去掉扩展名
+                ])
             if item_name:
-                key_candidates.extend([item_name, os.path.basename(item_name)])
+                key_candidates.extend([
+                    item_name,                             # 原始 item_name
+                    os.path.basename(item_name),           # basename of item_name
+                    os.path.basename(item_name).split('.')[0],  # 去掉扩展名
+                ])
+
+            # 去重保序
+            seen = set()
+            unique_candidates = []
+            for k in key_candidates:
+                if k and k not in seen:
+                    unique_candidates.append(k)
+                    seen.add(k)
+
             img_feats = None
             names = []
-            for k in key_candidates:
-                if not k:
-                    continue
-                key = os.path.basename(k) if k not in self.imglabel_text_features else k
-                if key in self.imglabel_text_features:
-                    img_feats = self.imglabel_text_features[key]
-                    names = list(
-                        self.imglabel_text_names.get(key) or self.imglabel_text_names.get(os.path.basename(key), []))
-                    break
+            matched_key = None
+
+            # 尝试所有候选 key
+            for k in unique_candidates:
                 if k in self.imglabel_text_features:
                     img_feats = self.imglabel_text_features[k]
-                    names = list(
-                        self.imglabel_text_names.get(k) or self.imglabel_text_names.get(os.path.basename(k), []))
+                    names = list(self.imglabel_text_names.get(k, []))
+                    matched_key = k
                     break
 
+            # 如果没有找到，记录警告（仅在第一次或偶尔记录，避免刷屏）
             if img_feats is None:
+                # 仅偶尔记录（避免日志爆炸）
+                if not hasattr(self, '_imglabel_miss_count'):
+                    self._imglabel_miss_count = 0
+                self._imglabel_miss_count += 1
+
+                if self._imglabel_miss_count <= 5 or self._imglabel_miss_count % 100 == 0:
+                    logger.warning(
+                        f"[ImgLabels] No match for image (miss #{self._imglabel_miss_count})\n"
+                        f"  rgb_path: {rgb_path}\n"
+                        f"  item_name: {item_name}\n"
+                        f"  Tried keys: {unique_candidates}\n"
+                        f"  Available keys sample: {list(self.imglabel_text_features.keys())[:3]}"
+                    )
+
                 pad_len = int(self._imglabel_tokens or 0)
                 if pad_len > 0:
                     img_feats = torch.zeros(pad_len, self.text_feature_dim, dtype=torch.float32)
                 else:
                     img_feats = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
                 names = []
+
             meta = {"names": names, "types": ["imglabel"] * len(names)}
             return img_feats, meta
         else:  # both

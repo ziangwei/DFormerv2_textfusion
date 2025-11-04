@@ -62,8 +62,26 @@ def main():
     if text_source == "imglabels":
         if image_labels_json and os.path.exists(image_labels_json):
             print(f"   ✅ Image labels file: {image_labels_json}")
+            # 检查 JSON 格式
+            try:
+                import json
+                with open(image_labels_json, 'r', encoding='utf-8') as f:
+                    img_labels = json.load(f)
+                print(f"      Total images in JSON: {len(img_labels)}")
+                sample_keys = list(img_labels.keys())[:3]
+                print(f"      Sample keys:")
+                for k in sample_keys:
+                    labels = img_labels[k]
+                    if isinstance(labels, list):
+                        print(f"        '{k}' -> {len(labels)} labels")
+                    else:
+                        print(f"        '{k}' -> {labels}")
+            except Exception as e:
+                print(f"      ⚠️ Failed to parse JSON: {e}")
         else:
-            print(f"   ⚠️  Image labels file not found: {image_labels_json}")
+            print(f"   ❌ Image labels file not found: {image_labels_json}")
+            print(f"      This is REQUIRED for text_source='imglabels' mode!")
+            return
 
     # 6. 检查 SAM 配置
     sam_enc_stages = getattr(C, "sam_enc_stages", None)
@@ -102,6 +120,24 @@ def main():
     print("\n" + "=" * 80)
     print("💡 使用建议：")
     print("=" * 80)
+
+    if text_source == "imglabels":
+        print("\n⚠️  当前使用 imglabels 模式，请先诊断 key 匹配：")
+        print(f"\n   python utils/diagnose_imglabels.py \\")
+        print(f"       --image-labels-json {image_labels_json or 'YOUR_JSON'} \\")
+        eval_src = getattr(C, "eval_source", "datasets/sunrgbd/test.txt")
+        print(f"       --eval-source {eval_src} \\")
+        rgb_root = getattr(C, "rgb_root", "datasets/sunrgbd/SUNRGBD")
+        print(f"       --rgb-root {rgb_root} \\")
+        rgb_fmt = getattr(C, "rgb_format", ".jpg")
+        print(f"       --rgb-format {rgb_fmt}")
+
+        print("\n   如果发现 key 不匹配，可以规范化 JSON：")
+        print(f"\n   python utils/normalize_imglabels_keys.py \\")
+        print(f"       --input {image_labels_json or 'YOUR_JSON'} \\")
+        print(f"       --output {image_labels_json or 'YOUR_JSON'}.normalized.json")
+        print("\n")
+
     print("\n1. 可视化所有 tokens（能量排序）：")
     print(f"   python utils/infer.py --config {args.config} \\")
     print("       --save-attention --save_path ./vis_output \\")
