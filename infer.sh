@@ -26,7 +26,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --superpower \
     --save-attention \
     --vis-stage dec \
-    --vis-stage-idx 3 \
+    --vis-stage-idx 2 \
     --vis-block-idx -1 \
     --num-images 1 \
     --attention-alpha 0.5 \
