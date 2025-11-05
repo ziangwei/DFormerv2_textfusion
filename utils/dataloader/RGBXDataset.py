@@ -16,8 +16,21 @@ from utils.prompt_utils import (
     unload_clip_model,
     split_into_sentences,
     select_caption_topk,
-    _normalize_label,
+    _normalize_label
 )
+
+
+# --- normalize to a canonical key like "rgb/<id>.jpg" ---
+def _canonical_img_key(k: str) -> str:
+    import os, re
+    k = (k or "").replace("\\", "/").strip()
+    b = os.path.basename(k)
+    m = re.search(r"(\d+)", b)
+    if m:
+        num = m.group(1)              # keep number only; no leading zeros
+        return f"rgb/{num}.jpg"       # lower, fixed suffix
+    return b.lower()
+
 
 # === Project-level persistent text cache utilities ===
 def _project_root() -> Path:
@@ -368,7 +381,6 @@ class RGBXDataset(data.Dataset):
                 feats = payload.get("feats", {})
                 names = payload.get("names", {})
                 if feats and isinstance(names, dict):
-                    feats, names = self._augment_imglabel_aliases(feats, names)
                     self.imglabel_text_names = names
                     return feats
                 raise ValueError("image-label cache missing feats or names")
@@ -397,9 +409,10 @@ class RGBXDataset(data.Dataset):
                 s = self._extract_image_label_text(lb)
                 if not s:
                     continue
-                s = s.lower()
+                s = _normalize_label(s)  # 使用_normalize_label而不是简单的lower()
                 if s not in seen:
-                    clean.append(s); seen.add(s)
+                    clean.append(s)
+                    seen.add(s)
 
             if not clean:
                 continue
@@ -439,13 +452,14 @@ class RGBXDataset(data.Dataset):
                 # 查表获取每个标签的embedding
                 img_feats = []
                 for lb in labels:
-                    lb_norm = _normalize_label(lb)
+                    lb_norm = _normalize_label(lb)  # 改为使用_normalize_label
                     if lb_norm in label_embeds:
                         # 确保所有tensor都在CPU上
                         img_feats.append(label_embeds[lb_norm].cpu())
                     else:
                         # 降级：未找到则使用零向量（在CPU上）
-                        logger.warning(f"Label '{lb}' not found in batch-encoded labels, using zero vector")
+                        logger.warning(
+                            f"Label '{lb}' (normalized: '{lb_norm}') not found in batch-encoded labels, using zero vector")
                         img_feats.append(torch.zeros(self.text_feature_dim, dtype=torch.float32))
 
                 if len(img_feats) > 0:
@@ -462,6 +476,15 @@ class RGBXDataset(data.Dataset):
 
                 out[key] = feats
                 name_map[key] = list(labels)
+                base = os.path.basename(key)
+                if base not in out:
+                    out[base] = feats  # 同时支持 basename 命中
+                    name_map[base] = name_map[key]
+
+                canon = _canonical_img_key(key)
+                if canon not in out:
+                    out[canon] = feats
+                    name_map[canon] = name_map[key]
 
             logger.info(f"[Image labels] Batch encoding completed successfully")
 
@@ -490,9 +513,12 @@ class RGBXDataset(data.Dataset):
 
                 out[key] = feats
                 name_map[key] = list(labels)
+                base = os.path.basename(key)
+                if base not in out:
+                    out[base] = feats
+                    name_map[base] = name_map[key]
             logger.info(f"[Image labels] Fallback encoding completed")
 
-        out, name_map = self._augment_imglabel_aliases(out, name_map)
         self._imglabel_tokens = pad_len
         self.imglabel_text_names = name_map
 
@@ -502,6 +528,11 @@ class RGBXDataset(data.Dataset):
                 torch.save({"pad_len": pad_len, "feats": out, "names": name_map}, cache_pt)
             except Exception as exc:
                 logger.warning(f"Saving image label cache failed: {exc}")
+
+        # 调试信息：显示前几个键以帮助诊断匹配问题
+        if self.is_master() and out:
+            sample_keys = list(out.keys())[:5]
+            logger.info(f"[Image labels] Loaded {len(out)} entries, sample keys: {sample_keys}")
 
         return out
 
@@ -697,6 +728,10 @@ class RGBXDataset(data.Dataset):
         return sentences
 
     def _get_text_features_for_item(self, rgb_path: str, item_name: str):
+        """
+        修复版的 _get_text_features_for_item 函数
+        增强了模糊匹配逻辑，可以处理 test_0.jpg -> RGB/0.jpg 的映射
+        """
         empty_meta = {"names": [], "types": []}
         if not self.enable_text_guidance:
             return torch.zeros(1, self.text_feature_dim, dtype=torch.float32), empty_meta
@@ -753,28 +788,121 @@ class RGBXDataset(data.Dataset):
             if rgb_path:
                 key_candidates.extend([rgb_path, os.path.basename(rgb_path)])
             if item_name:
-                key_candidates.extend([item_name, os.path.basename(item_name)])
+                # item_name 可能是 "RGB/test_0.jpg labels/test_0.png" 格式
+                # 提取第一个部分 (RGB路径)
+                item_rgb = item_name.split()[0] if ' ' in item_name else item_name
+                key_candidates.extend([item_name, item_rgb, os.path.basename(item_rgb)])
+
             img_feats = None
             names = []
+
+            # === 调试信息（首次运行时打印）===
+            if not hasattr(self, '_match_debug_logged'):
+                logger.info(f"[DEBUG] Image labels matching attempt:")
+                logger.info(f"  - RGB path: {rgb_path}")
+                logger.info(f"  - Item name: {item_name}")
+                logger.info(f"  - Available keys count: {len(self.imglabel_text_features)}")
+                if len(self.imglabel_text_features) > 0:
+                    sample_keys = list(self.imglabel_text_features.keys())[:5]
+                    logger.info(f"  - Sample keys: {sample_keys}")
+                self._match_debug_logged = True
+
+            # 第一轮: 精确匹配
             for k in key_candidates:
                 if not k:
                     continue
-                for alias in self._label_key_variants(k):
-                    if alias in self.imglabel_text_features:
-                        img_feats = self.imglabel_text_features[alias]
-                        names = list(
-                            self.imglabel_text_names.get(alias) or self.imglabel_text_names.get(os.path.basename(alias), []))
-                        break
-                if img_feats is not None:
+                # 尝试原始key
+                if k in self.imglabel_text_features:
+                    img_feats = self.imglabel_text_features[k]
+                    names = list(self.imglabel_text_names.get(k, []))
+                    if not hasattr(self, '_exact_match_logged'):
+                        logger.info(f"[SUCCESS] Exact match found: '{k}'")
+                        self._exact_match_logged = True
+                    break
+                # 尝试basename
+                base_k = os.path.basename(k)
+                if base_k in self.imglabel_text_features:
+                    img_feats = self.imglabel_text_features[base_k]
+                    names = list(self.imglabel_text_names.get(base_k, []))
+                    if not hasattr(self, '_basename_match_logged'):
+                        logger.info(f"[SUCCESS] Basename match found: '{base_k}'")
+                        self._basename_match_logged = True
                     break
 
+            # 在第790行模糊匹配部分，增强匹配策略
+            if img_feats is None and rgb_path:
+                import re
+                rgb_base = os.path.basename(rgb_path)
+
+                # 直接尝试原始路径（适用于NYUDepthv2等）
+                if rgb_path in self.imglabel_text_features:
+                    img_feats = self.imglabel_text_features[rgb_path]
+                    names = list(self.imglabel_text_names.get(rgb_path, []))
+                    logger.info(f"[Direct match] Found: {rgb_path}")
+
+                # 如果失败，尝试各种变体
+                if img_feats is None:
+                    # 提取数字
+                    numbers = re.findall(r'\d+', rgb_base)
+                    if numbers:
+                        for num in numbers:
+                            # 尝试各种可能的格式
+                            candidates = [
+                                f"RGB/{num}.jpg",  # 原始格式
+                                f"RGB/test_{num}.jpg",  # 测试集格式
+                                f"RGB/train_{num}.jpg",  # 训练集格式
+                                rgb_path,  # 原始路径
+                            ]
+
+                            for candidate in candidates:
+                                if candidate in self.imglabel_text_features:
+                                    img_feats = self.imglabel_text_features[candidate]
+                                    names = list(self.imglabel_text_names.get(candidate, []))
+                                    logger.info(f"[Fuzzy match] '{rgb_base}' -> '{candidate}'")
+                                    break
+                            if img_feats is not None:
+                                break
+
+                # 策略2: 通用数字提取
+                if img_feats is None:
+                    numbers = re.findall(r'\d+', rgb_base)
+                    if numbers:
+                        # 尝试构造可能的JSON key格式
+                        for num in numbers:
+                            # 尝试各种路径格式
+                            test_keys = [
+                                f"RGB/{num}.jpg",
+                                f"RGB/{num}.jpeg",
+                                f"RGB/{num}.png",
+                                f"rgb/{num}.jpg",
+                                f"{num}.jpg",
+                            ]
+
+                            for test_key in test_keys:
+                                if test_key in self.imglabel_text_features:
+                                    img_feats = self.imglabel_text_features[test_key]
+                                    names = list(self.imglabel_text_names.get(test_key, []))
+                                    if not hasattr(self, '_fuzzy_match_logged'):
+                                        logger.info(f"[SUCCESS] Fuzzy match: '{rgb_base}' -> '{test_key}' (ID: {num})")
+                                        self._fuzzy_match_logged = True
+                                    break
+                            if img_feats is not None:
+                                break
+
+            # 如果仍然没有匹配，记录警告
             if img_feats is None:
+                if not hasattr(self, '_no_match_warned'):
+                    logger.warning(f"[FAILED] No match found for: {rgb_path or item_name}")
+                    logger.warning(f"  Tried candidates: {key_candidates}")
+                    self._no_match_warned = True
+
                 pad_len = int(self._imglabel_tokens or 0)
                 if pad_len > 0:
                     img_feats = torch.zeros(pad_len, self.text_feature_dim, dtype=torch.float32)
                 else:
                     img_feats = torch.zeros(0, self.text_feature_dim, dtype=torch.float32)
                 names = []
+
             meta = {"names": names, "types": ["imglabel"] * len(names)}
             return img_feats, meta
         else:  # both
@@ -851,58 +979,6 @@ class RGBXDataset(data.Dataset):
         output_dict['text_token_meta'] = json.dumps(text_meta, ensure_ascii=False)
 
         return output_dict
-
-    def _label_key_variants(self, key: str):
-        variants = []
-        if not key:
-            return variants
-
-        def _add(candidate: str):
-            if candidate and candidate not in variants:
-                variants.append(candidate)
-
-        raw = key.strip()
-        _add(raw)
-        norm = raw.replace("\\", "/")
-        _add(norm)
-
-        base = os.path.basename(norm)
-        _add(base)
-
-        stem = Path(base).stem if base else ""
-        _add(stem)
-
-        rgb_ext = getattr(self, "_rgb_format", None)
-        if stem and rgb_ext:
-            ext = rgb_ext if rgb_ext.startswith(".") else f".{rgb_ext}"
-            _add(stem + ext)
-
-        # lowercase fallbacks for case-insensitive matches
-        lowered = [cand.lower() for cand in variants if cand and cand.lower() not in variants]
-        for cand in lowered:
-            _add(cand)
-
-        return variants
-
-    def _augment_imglabel_aliases(self, feats_dict, names_dict):
-        if not isinstance(feats_dict, dict) or not feats_dict:
-            return feats_dict, names_dict
-        if not isinstance(names_dict, dict):
-            names_dict = {}
-
-        keys = sorted(list(feats_dict.keys()), key=lambda k: (-len(str(k)), str(k)))
-        for key in keys:
-            variants = self._label_key_variants(key)
-            base_feats = feats_dict[key]
-            base_names = names_dict.get(key, [])
-            for alias in variants:
-                if alias == key:
-                    continue
-                if alias not in feats_dict:
-                    feats_dict[alias] = base_feats
-                    names_dict[alias] = list(base_names)
-
-        return feats_dict, names_dict
 
     def _get_file_names(self, split_name):
         assert split_name in ["train", "val"]

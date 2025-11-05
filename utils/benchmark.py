@@ -7,7 +7,8 @@ import argparse
 import importlib
 import torch
 import torch.nn as nn
-from thop import profile
+from thop import profile, clever_format
+from thop.vision.basic_hooks import zero_ops
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))           # .../<repo>/utils
 REPO_ROOT = os.path.dirname(THIS_DIR)                           # .../<repo>
@@ -15,6 +16,58 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 from models.builder import EncoderDecoder as segmodel
 
+
+# ========== Custom Ops for thop ==========
+# Register handlers for layers that thop doesn't support by default
+
+def layernorm_flops_counter_hook(module, input, output):
+    """LayerNorm: 2 * normalized_shape for mean/var, 2 * normalized_shape for scale/shift"""
+    input = input[0]
+    batch_flops = input.numel()  # Mean and variance
+    batch_flops += input.numel()  # Normalize
+    batch_flops += input.numel()  # Scale and shift
+    module.__flops__ += int(batch_flops)
+
+def gelu_flops_counter_hook(module, input, output):
+    """GELU: approximation requires ~8 ops per element"""
+    input = input[0]
+    module.__flops__ += int(input.numel() * 8)
+
+def dropout_flops_counter_hook(module, input, output):
+    """Dropout: no computation during eval, but count mask generation during training"""
+    if module.training:
+        input = input[0]
+        module.__flops__ += int(input.numel())
+    else:
+        module.__flops__ += 0
+
+def syncbn_flops_counter_hook(module, input, output):
+    """SyncBatchNorm: similar to BatchNorm"""
+    input = input[0]
+    batch_flops = input.numel() * 2  # Mean and variance
+    batch_flops += input.numel() * 2  # Normalize + affine
+    module.__flops__ += int(batch_flops)
+
+def identity_flops_counter_hook(module, input, output):
+    """Identity/Pass-through layers: zero ops"""
+    module.__flops__ += 0
+
+# Build custom ops dict
+CUSTOM_OPS = {
+    nn.LayerNorm: layernorm_flops_counter_hook,
+    nn.GELU: gelu_flops_counter_hook,
+    nn.Dropout: dropout_flops_counter_hook,
+    nn.Dropout2d: dropout_flops_counter_hook,
+    nn.SyncBatchNorm: syncbn_flops_counter_hook,
+    nn.Identity: identity_flops_counter_hook,
+}
+
+# Try to add custom layers from your codebase
+try:
+    from models.encoders.DFormerv2 import LayerNorm2d
+    CUSTOM_OPS[LayerNorm2d] = layernorm_flops_counter_hook
+except ImportError:
+    pass
 
 
 def build_model_from_config(cfg_module: str, device: torch.device):
@@ -100,19 +153,37 @@ def main():
     # 避免重复 profile 同一模型时报 "attribute 'total_ops' already exists"。
     model.apply(_clear_thop_buffers)
 
-    # 使用 thop 统计（thop 返回的是 MACs 与 Params；业内常按 MACs 记为 FLOPs）
-    with torch.no_grad():
-        macs, params = profile(model, inputs=inputs)
 
     print("=" * 60)
     print(f"[Config]   {args.config}")
-    print(f"[Input]    3x{args.height}x{args.width} + 1x{args.height}x{args.width} (RGB+Depth)")
-    print(f"[Backend]  thop")
+    print(f"[Backbone] {C.backbone}")
+    print(f"[Input]    RGB: 3x{args.height}x{args.width}, Depth: 1x{args.height}x{args.width}")
+    if getattr(C, "enable_text_guidance", False):
+        src = getattr(C, "text_source", "both")
+        print(f"[Text]     Enabled (source={src})")
+    print(f"[Backend]  thop with custom ops")
     print("-" * 60)
-    print(f"Params: {humanize(params, ' Params')}  ({params/1e6:.2f} M)")
-    print(f"FLOPs : {humanize(macs,   ' FLOPs')}   ({macs/1e9:.2f} G)")
-    print("=" * 60)
-    print("Note: thop 统计的是乘加次数（MACs）；论文中通常按 FLOPs 报告，口径一致即可。")
+
+
+    # 使用 thop 统计，传入 custom_ops 避免 AttributeError
+    try:
+        with torch.no_grad():
+            macs, params = profile(model, inputs=inputs, custom_ops=CUSTOM_OPS, verbose=False)
+
+        # Use clever_format for better readability
+        macs_str, params_str = clever_format([macs, params], "%.3f")
+
+        print(f"Parameters: {params_str}  ({params/1e6:.2f} M)")
+        print(f"FLOPs (MACs): {macs_str}  ({macs/1e9:.2f} G)")
+        print("=" * 60)
+        print("Note: FLOPs reported as MACs (Multiply-Accumulate operations)")
+        print("      For paper reporting, typically FLOPs ≈ 2 × MACs")
+
+    except Exception as e:
+        print(f"ERROR: Failed to profile model: {e}")
+        print(f"Try running with --device cpu if CUDA errors occur")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,14 @@ NODE_RANK=${NODE_RANK:-0}
 PORT=${PORT:-29928}
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
+CACHE_DIR="/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache"
+mkdir -p ${CACHE_DIR}
+export HF_HOME=${CACHE_DIR}
+echo "Hugging Face cache has been set to: ${HF_HOME}"
+
+export TEXT_EMBED_CACHE="$(pwd)/datasets/.text_cache"
+mkdir -p "$TEXT_EMBED_CACHE"
+
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     torchrun \
     --nnodes=$NNODES \
@@ -17,21 +25,19 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     utils/infer.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S \
     --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251101-163830/epoch-302_miou_57.95.pth \
-    --save_path output/dec_stage2 \
+    --save_path output/enc_stage2 \
     --gpus=$GPUS \
     --text-source imglabels \
+    --image-labels-json-path datasets/NYUDepthv2/out.json \
     --text-encoder jinaclip \
     --sam-enc-stages 1,2,3 \
     --sam-dec-stages 1,2,3 \
     --superpower \
     --save-attention \
-    --vis-stage dec \
+    --vis-stage enc \
     --vis-stage-idx 2 \
     --vis-block-idx -1 \
-    --num-images 1 \
-    --attention-alpha 0.5 \
-    --attention-threshold 0.0 \
-    --attention-smooth 0.0
+    --num-images 3
 
 # choose the dataset and DFormer for evaluating
 

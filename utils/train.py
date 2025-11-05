@@ -357,12 +357,22 @@ with Engine(custom_parser=parser) as engine:
 
         train_loader, train_sampler = get_train_loader(engine, RGBXDataset, config)
 
-        val_dl_factor = 1
+        val_dl_factor = 4
+
+        # SUNRGBD: increase from gpus*1 to gpus*16 for ~4x speedup
+        # Other datasets: use 4x training batch
+        if config.dataset_name == "SUNRGBD":
+            val_batch_size = 64  # More aggressive for SUNRGBD
+            logger.info(f"Using larger validation batch size for SUNRGBD: {val_batch_size}")
+        else:
+            val_batch_size = int(config.batch_size * val_dl_factor)
+            logger.info(f"Using {val_dl_factor}x training batch for validation: {val_batch_size}")
+
         val_loader, val_sampler = get_val_loader(
             engine,
             RGBXDataset,
             config,
-            val_batch_size=int(config.batch_size * val_dl_factor) if config.dataset_name != "SUNRGBD" else int(args.gpus),
+            val_batch_size=val_batch_size,
         )
 
         logger.info(f"val dataset len:{len(val_loader) * int(args.gpus)}")

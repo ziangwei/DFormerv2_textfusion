@@ -35,9 +35,11 @@ class SemanticAlignmentModule(nn.Module):
     ):
         super().__init__()
 
-        # ===== FLOPs 计算支持（用于 thop/ptflops）=====
-        self.total_ops = 0
-        self.total_params = 0
+        # 注意：thop 在 DFS 统计时会假定这些计数器是张量（并调用 .item()）。
+        # 早期版本里使用 Python int 会在 benchmark.py 中触发 AttributeError。
+        # 这里改为注册为 buffer，以与 thop/ptflops 的预期类型一致。
+        self.register_buffer("total_ops", torch.zeros(1))
+        self.register_buffer("total_params", torch.zeros(1))
         self.top_m = top_m
         self.use_topk = use_topk
         self.add_residual = add_residual

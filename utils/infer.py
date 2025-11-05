@@ -1,6 +1,5 @@
 import argparse
 import importlib
-import math
 import os
 import json
 import re
@@ -20,10 +19,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import cv2
 from scipy.ndimage import gaussian_filter
-
-# Keep HuggingFace tokenizers single-threaded before any subprocesses are spawned
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("HF_TOKENIZERS_PARALLELISM", "false")
 
 from models.builder import EncoderDecoder as segmodel
 from models.blocks.semantic_alignment import SemanticAlignmentModule
@@ -45,6 +40,7 @@ parser.add_argument("--show_image", "-s", default=False, action="store_true")
 parser.add_argument("--save_path", default=None)
 parser.add_argument("--checkpoint_dir")
 parser.add_argument("--continue_fpath")
+
 
 # --- text guidance runtime switches ---
 parser.add_argument("--text-source", choices=["labels", "captions", "both", "imglabels"])
@@ -88,14 +84,6 @@ parser.add_argument("--max-token-vis", type=int, default=64,
 parser.add_argument("--filter-tokens", type=str, default=None,
                     help="Comma-separated list of token names to visualize (e.g., 'floor,wall,ceiling'). "
                          "If set, only these tokens will be visualized.")
-parser.add_argument("--attention-composite-mode", choices=["none", "sum", "max", "mean"], default="sum",
-                    help="How to fuse selected token maps into an additional composite heatmap")
-parser.add_argument("--attention-montage-cols", type=int, default=0,
-                    help="If >0, arrange overlays into a grid with the given number of columns")
-parser.add_argument("--attention-montage-pad", type=int, default=8,
-                    help="Padding (pixels) between tiles when building the overlay montage")
-parser.add_argument("--attention-montage-font-scale", type=float, default=0.5,
-                    help="Font scale for labels rendered on top of montage tiles")
 logger = get_logger()
 
 
@@ -137,10 +125,17 @@ def _normalize01(arr: np.ndarray) -> np.ndarray:
 def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
                            alpha: float = 0.5, threshold: float = 0.0, smooth_sigma: float = 0.0):
     """
+    Modern attention visualization with Viridis/Magma colormap (CVPR 2023-2025 style).
+
     attn: (H, W) in [0,1]
     rgb : (H, W, 3) uint8 (RGB)
     """
+    import matplotlib
+    matplotlib.use('Agg')  # 无GUI后端
+    import matplotlib.pyplot as plt
+
     H, W = attn.shape
+
     # 可选平滑
     if smooth_sigma and smooth_sigma > 0.0:
         attn = gaussian_filter(attn, sigma=float(smooth_sigma))
@@ -150,64 +145,17 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # 伪彩热图（OpenCV 用 BGR）
-    heat_u8 = (attn * 255.0).clip(0, 255).astype(np.uint8)
-    heat_color = cv2.applyColorMap(heat_u8, cv2.COLORMAP_JET)  # (H,W,3) BGR
-
-    # 保存 heatmap
-    os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
-    cv2.imwrite(out_prefix + "_heatmap.png", heat_color)
+    # 使用 Matplotlib 的现代配色（perceptually uniform）
+    cmap = plt.get_cmap('viridis')  # 可选: 'magma', 'inferno', 'plasma'
+    heat_color = (cmap(attn)[:, :, :3] * 255).astype(np.uint8)  # RGB
 
     # 叠加到原图
-    rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    overlay = cv2.addWeighted(rgb_bgr, 1.0, heat_color, float(alpha), 0.0)
-    cv2.imwrite(out_prefix + "_overlay.png", overlay)
+    overlay = (alpha * heat_color + (1 - alpha) * rgb).astype(np.uint8)
 
-    return heat_color, overlay
-
-
-def _build_attention_montage(tiles, cols: int, pad: int = 8,
-                             font_scale: float = 0.5, text_color=(255, 255, 255),
-                             text_bg_color=(0, 0, 0), text_thickness: int = 1):
-    """Assemble overlays into a simple grid for quick browsing."""
-    if not tiles or cols <= 0:
-        return None
-
-    tile_h, tile_w = tiles[0][0].shape[:2]
-    rows = int(math.ceil(len(tiles) / float(cols)))
-    canvas_h = rows * tile_h + pad * (rows + 1)
-    canvas_w = cols * tile_w + pad * (cols + 1)
-    canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
-
-    font = cv2.FONT_HERSHEY_SIMPLEX
-
-    for idx, (overlay, label) in enumerate(tiles):
-        r = idx // cols
-        c = idx % cols
-        y0 = pad + r * (tile_h + pad)
-        x0 = pad + c * (tile_w + pad)
-        tile = overlay.copy()
-
-        if label:
-            text = str(label)
-            text = text[:60]  # avoid extreme strings breaking the layout
-            ((text_w, text_h), baseline) = cv2.getTextSize(text, font, font_scale, text_thickness)
-            rect_h = text_h + baseline + 6
-            rect_w = text_w + 10
-            rect_x1 = 4
-            rect_y1 = tile_h - rect_h - 4
-            rect_x2 = rect_x1 + rect_w
-            rect_y2 = rect_y1 + rect_h
-            rect_y1 = max(rect_y1, 0)
-            rect_y2 = min(rect_y2, tile_h)
-            rect_x2 = min(rect_x2, tile_w)
-            cv2.rectangle(tile, (rect_x1, rect_y1), (rect_x2, rect_y2), text_bg_color, thickness=-1)
-            text_org = (rect_x1 + 5, rect_y2 - baseline - 3)
-            cv2.putText(tile, text, text_org, font, font_scale, text_color, text_thickness, lineType=cv2.LINE_AA)
-
-        canvas[y0:y0 + tile_h, x0:x0 + tile_w] = tile
-
-    return canvas
+    # 保存
+    os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
+    overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(out_prefix + "_attn.png", overlay_bgr)
 
 
 def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
@@ -219,14 +167,7 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
                                       threshold: float = 0.0,
                                       smooth_sigma: float = 0.0,
                                       max_tokens: int = 64,
-                                      filter_tokens=None,
-                                      composite_mode: str = "sum",
-                                      montage_cols: int = 0,
-                                      montage_pad: int = 8,
-                                      montage_font_scale: float = 0.5,
-                                      montage_text_color=(255, 255, 255),
-                                      montage_text_bg_color=(0, 0, 0),
-                                      montage_text_thickness: int = 1):
+                                      filter_tokens=None):
     """
     attn_hwT: (H, W, T) torch or np
     rgb_np  : (H, W, 3) uint8 RGB
@@ -280,9 +221,6 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
         energy.sort(reverse=True)
         selected = [t for _, t in energy[: min(T, max_tokens)]]
 
-    composite_maps = []
-    montage_tiles = []
-
     for t in selected:
         nm = names[t].strip() if isinstance(names[t], str) else str(names[t])
         if nm.lower() in pad_markers:
@@ -293,46 +231,10 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
 
         a = _normalize01(attn_np[..., t])
         out_prefix = f"{save_prefix}__{tag}"
-        _, overlay = _save_single_token_map(
+        _save_single_token_map(
             a, rgb_np, out_prefix,
             alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma
         )
-
-        composite_maps.append(a)
-        display_label = nm if not tp else f"{tp}:{nm}"
-        montage_tiles.append((overlay, display_label))
-
-    # 生成综合注意力
-    if composite_mode and composite_mode.lower() != "none" and composite_maps:
-        mode = composite_mode.lower()
-        stack = np.stack(composite_maps, axis=0)
-        if mode == "max":
-            comp = stack.max(axis=0)
-        elif mode == "mean":
-            comp = stack.mean(axis=0)
-        else:  # default sum
-            comp = stack.sum(axis=0)
-        comp = _normalize01(comp)
-        comp_prefix = f"{save_prefix}__composite-{mode}"
-        _save_single_token_map(
-            comp, rgb_np, comp_prefix,
-            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma
-        )
-
-    # 生成蒙太奇视图
-    if montage_cols and montage_cols > 0 and montage_tiles:
-        montage = _build_attention_montage(
-            montage_tiles,
-            cols=montage_cols,
-            pad=montage_pad,
-            font_scale=montage_font_scale,
-            text_color=montage_text_color,
-            text_bg_color=montage_text_bg_color,
-            text_thickness=montage_text_thickness,
-        )
-        if montage is not None:
-            montage_path = f"{save_prefix}__montage.png"
-            cv2.imwrite(montage_path, montage)
 
 
 def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, block_idx=-1):
@@ -417,8 +319,7 @@ def load_class_names(config):
 def evaluate_with_attention(model, dataloader, config, device, engine,
                             save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
                             num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
-                            filter_tokens=None, composite_mode="sum", montage_cols=0, montage_pad=8,
-                            montage_font_scale=0.5):
+                            filter_tokens=None):
     """
     注意力可视化 + 指标计算
     """
@@ -431,8 +332,6 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     logger.info(f"  Block Index: {block_idx} (-1=last)")
     logger.info(f"  Num Images: {num_images if num_images else 'all'}")
     logger.info(f"  Alpha: {alpha}, Threshold: {threshold}, Smooth Sigma: {smooth_sigma}")
-    logger.info(f"  Composite Mode: {composite_mode}")
-    logger.info(f"  Montage Cols: {montage_cols}, Pad: {montage_pad}, Font Scale: {montage_font_scale}")
     logger.info(f"  Save Dir: {save_dir}")
     logger.info("=" * 100)
 
@@ -451,6 +350,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     def enable_attention_save(m):
         if isinstance(m, SemanticAlignmentModule):
             m.save_attention = True
+
     model.apply(enable_attention_save)
 
     # 全局回退 token 名称
@@ -535,6 +435,12 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                             meta = json.loads(raw_meta)
                             meta_token_names = meta.get("names") or None
                             meta_token_types = meta.get("types") or None
+                            # DEBUG: 打印实际获取的标签
+                            if idx == 0 and b == 0:
+                                logger.info(
+                                    f"[DEBUG] Sample image token names: {meta_token_names[:5] if meta_token_names else 'None'}...")
+                                logger.info(
+                                    f"[DEBUG] Sample image token types: {meta_token_types[:5] if meta_token_types else 'None'}...")
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
@@ -555,7 +461,8 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     N, T = attn_single.shape
 
                     # 还原空间网格
-                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(spatial_shape) == 2:
+                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(
+                            spatial_shape) == 2:
                         h_attn, w_attn = int(spatial_shape[0]), int(spatial_shape[1])
                     else:
                         h_attn = int(np.sqrt(N))
@@ -578,12 +485,22 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     if meta_token_names is not None and len(meta_token_names) > 0:
                         token_names = list(meta_token_names)
                         token_types = list(meta_token_types) if meta_token_types else None
+                        if idx == 0 and b == 0:
+                            logger.info(f"[DEBUG] Using per-image token names (source: dataset metadata)")
                     elif global_token_names:
                         token_names = global_token_names[:T]
                         token_types = None
+                        if idx == 0 and b == 0:
+                            logger.warning(
+                                f"[WARNING] Falling back to global label list! This may not match per-image labels.")
+                            logger.warning(
+                                f"[WARNING] Check if --text-source=imglabels and --image-labels-json-path are set correctly.")
                     else:
                         token_names = [f"tok{t}" for t in range(T)]
                         token_types = None
+                        if idx == 0 and b == 0:
+                            logger.warning(
+                                f"[WARNING] Using generic token names (tok0, tok1, ...). No label information available!")
 
                     save_prefix = os.path.join(save_dir, "attention", stage_info, fn)
                     os.makedirs(os.path.dirname(save_prefix), exist_ok=True)
@@ -598,11 +515,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         threshold=threshold,
                         smooth_sigma=smooth_sigma,
                         max_tokens=max_token_vis,
-                        filter_tokens=filter_tokens,
-                        composite_mode=composite_mode,
-                        montage_cols=montage_cols,
-                        montage_pad=montage_pad,
-                        montage_font_scale=montage_font_scale,
+                        filter_tokens=filter_tokens
                     )
 
                     logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
@@ -617,6 +530,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 m.last_attention_map = None
             if hasattr(m, "last_spatial_shape"):
                 m.last_spatial_shape = None
+
     model.apply(disable_attention_save)
 
     logger.info("=" * 100)
@@ -677,6 +591,42 @@ with Engine(custom_parser=parser) as engine:
         logger.info("Forcing enable_text_guidance=True for attention visualization")
         config.enable_text_guidance = True
 
+        if not hasattr(config, 'text_source') or config.text_source is None:
+            config.text_source = 'imglabels'  # 默认使用全局类别
+        # 确保所有必要的文本配置都有默认值
+        if not hasattr(config, 'text_encoder') or config.text_encoder is None:
+            config.text_encoder = 'jinaclip'
+        if not hasattr(config, 'text_encoder_name') or config.text_encoder_name is None:
+            config.text_encoder_name = None
+        if not hasattr(config, 'text_feature_dim') or config.text_feature_dim is None:
+            config.text_feature_dim = 512
+        if not hasattr(config, 'text_template_set') or config.text_template_set is None:
+            config.text_template_set = 'clip'
+        if not hasattr(config, 'max_templates_per_label') or config.max_templates_per_label is None:
+            config.max_templates_per_label = 3
+
+        # 打印实际使用的配置
+        logger.info("=" * 80)
+        logger.info("TEXT GUIDANCE CONFIGURATION:")
+        logger.info(f"  text_source: {config.text_source}")
+        logger.info(f"  text_encoder: {config.text_encoder}")
+        logger.info(f"  text_feature_dim: {config.text_feature_dim}")
+        logger.info(f"  label_txt_path: {getattr(config, 'label_txt_path', 'NOT SET')}")
+        logger.info(f"  image_labels_json_path: {getattr(config, 'image_labels_json_path', 'NOT SET')}")
+
+        # 检查文件是否存在
+        if config.text_source == 'imglabels':
+            img_json = getattr(config, 'image_labels_json_path', None)
+            if img_json and os.path.exists(img_json):
+                logger.info(f"  ✓ image_labels_json found: {img_json}")
+            else:
+                logger.error(f"  ✗ image_labels_json NOT FOUND or NOT SET!")
+                logger.error(f"  Path checked: {img_json}")
+                logger.error(f"  Current working dir: {os.getcwd()}")
+                logger.error(f"  This will cause per-image labels to be unavailable!")
+
+        logger.info("=" * 80)
+
     config.pad = False
     if "x_modal" not in config:
         config["x_modal"] = "d"
@@ -708,7 +658,6 @@ with Engine(custom_parser=parser) as engine:
                 device_ids=[engine.local_rank],
                 output_device=engine.local_rank,
                 find_unused_parameters=True,
-                gradient_as_bucket_view=False,
             )
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -745,10 +694,6 @@ with Engine(custom_parser=parser) as engine:
                 smooth_sigma=args.attention_smooth,
                 max_token_vis=args.max_token_vis,
                 filter_tokens=filter_tokens_list,
-                composite_mode=args.attention_composite_mode,
-                montage_cols=args.attention_montage_cols,
-                montage_pad=args.attention_montage_pad,
-                montage_font_scale=args.attention_montage_font_scale,
             )
 
             if engine.distributed:
