@@ -192,6 +192,8 @@ def parse_args():
 
 
 def main():
+    import time  # 添加time导入
+
     args = parse_args()
     ACTIVE_DATASET_PORT = args.dataset_port
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -212,59 +214,107 @@ def main():
     processor = AutoProcessor.from_pretrained(args.model_id)
     device = next(model.parameters()).device
 
-    results: Dict[str, List[str]] = {}
-    bs = max(1, int(args.batch_size))
-
-    for i in tqdm(range(0, len(img_paths), bs), desc="Generating"):
-        batch_paths = img_paths[i : i + bs]
-        batch_imgs = [Image.open(p).convert("RGB") for p in batch_paths]
-
-        # Build inputs and generate
-        inputs = make_batched_inputs(processor, batch_imgs, vocab, args.max_labels, device)
-        with torch.inference_mode():
-            gen_ids = model.generate(
-                **inputs,
-                max_new_tokens=args.max_new_tokens,
-                do_sample=False,
-                temperature=0.0,
-            )
-
-        attn = inputs["attention_mask"]  # (B, L)
-        prompt_lens = attn.sum(dim=1).tolist()  # 每个样本真实长度（不含padding）
-
-        trimmed = [gen_ids[j, int(prompt_lens[j]):] for j in range(len(batch_paths))]
-        texts = processor.batch_decode(trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-
-        # Parse and sanitize
-        for abspath, raw in zip(batch_paths, texts):
-            rel_key = str(Path(abspath).resolve().relative_to(Path(args.dataset_dir).resolve()))
-            # Pass vocab to enable fallback extraction (Layer 2)
-            labels = extract_json_array(raw, allowed_vocab=vocab)
-            # Keep only labels from the fixed vocabulary; limit to max_labels
-            if vocab:
-                labels = [x for x in labels if x in vocab]
-            # Deduplicate while preserving order
-            seen, uniq = set(), []
-            for s in labels:
-                if s not in seen:
-                    seen.add(s); uniq.append(s)
-            results[rel_key] = uniq[: args.max_labels]
-
-        # Close PIL images to release handles
-        for img in batch_imgs:
-            try:
-                img.close()
-            except Exception:
-                pass
-
-    # Write JSON
+    # 续跑支持：加载已有结果
     out_path = Path(args.output_file)
-    # 自动添加.json后缀（如果没有的话）
     if out_path.suffix.lower() != '.json':
         out_path = out_path.with_suffix('.json')
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-    logging.info(f"Done. Wrote {len(results)} entries to: {out_path}")
+
+    results: Dict[str, List[str]] = {}
+    if out_path.exists():
+        try:
+            with open(out_path, 'r', encoding='utf-8') as f:
+                results = json.load(f)
+            if not isinstance(results, dict):
+                results = {}
+            logging.info(f"Loaded {len(results)} existing entries from {out_path}")
+        except Exception as e:
+            logging.warning(f"Failed to load existing results: {e}")
+            results = {}
+
+    # 计算待处理的图像（跳过已完成的）
+    def to_rel_key(abspath):
+        return str(Path(abspath).resolve().relative_to(Path(args.dataset_dir).resolve()))
+
+    all_rel_keys = [to_rel_key(p) for p in img_paths]
+    to_process_indices = [i for i, key in enumerate(all_rel_keys) if key not in results]
+
+    logging.info(f"Total images: {len(img_paths)} | Already processed: {len(results)} | To process: {len(to_process_indices)}")
+
+    if not to_process_indices:
+        logging.info("All images already processed. Nothing to do.")
+        return
+
+    bs = max(1, int(args.batch_size))
+
+    # 只处理未完成的图像
+    processed_count = 0
+    for idx_in_batch, start_idx in enumerate(tqdm(range(0, len(to_process_indices), bs), desc="Generating")):
+        batch_indices = to_process_indices[start_idx : start_idx + bs]
+        batch_paths = [img_paths[i] for i in batch_indices]
+
+        try:
+            batch_imgs = [Image.open(p).convert("RGB") for p in batch_paths]
+
+            # Build inputs and generate
+            inputs = make_batched_inputs(processor, batch_imgs, vocab, args.max_labels, device)
+
+            with torch.inference_mode():
+                gen_ids = model.generate(
+                    **inputs,
+                    max_new_tokens=args.max_new_tokens,
+                    do_sample=False,
+                    temperature=0.0,
+                )
+
+            attn = inputs["attention_mask"]  # (B, L)
+            prompt_lens = attn.sum(dim=1).tolist()  # 每个样本真实长度（不含padding）
+
+            trimmed = [gen_ids[j, int(prompt_lens[j]):] for j in range(len(batch_paths))]
+            texts = processor.batch_decode(trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+
+            # Parse and sanitize
+            for abspath, raw in zip(batch_paths, texts):
+                rel_key = to_rel_key(abspath)
+                # Pass vocab to enable fallback extraction (Layer 2)
+                labels = extract_json_array(raw, allowed_vocab=vocab)
+                # Keep only labels from the fixed vocabulary; limit to max_labels
+                if vocab:
+                    labels = [x for x in labels if x in vocab]
+                # Deduplicate while preserving order
+                seen, uniq = set(), []
+                for s in labels:
+                    if s not in seen:
+                        seen.add(s); uniq.append(s)
+                results[rel_key] = uniq[: args.max_labels]
+                processed_count += 1
+
+            # Close PIL images to release handles
+            for img in batch_imgs:
+                try:
+                    img.close()
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logging.error(f"Batch processing failed for images starting at index {batch_indices[0]}: {e}")
+            # 失败的图像记录为空列表
+            for i in batch_indices:
+                rel_key = to_rel_key(img_paths[i])
+                if rel_key not in results:
+                    results[rel_key] = []
+
+        # 每批次持久化（防止崩溃丢失进度）
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(out_path, 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logging.error(f"Failed to save intermediate results: {e}")
+
+        # 休眠，防止GPU过热
+        time.sleep(0.1)  # 100ms休眠
+
+    logging.info(f"Done. Processed {processed_count} new images. Total entries: {len(results)} -> {out_path}")
 
 
 if __name__ == "__main__":
