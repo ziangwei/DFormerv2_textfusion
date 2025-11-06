@@ -796,15 +796,15 @@ class RGBXDataset(data.Dataset):
             img_feats = None
             names = []
 
-            # === 调试信息（首次运行时打印）===
+            # === 调试信息（首次运行时打印，使用DEBUG级别减少日志噪音）===
             if not hasattr(self, '_match_debug_logged'):
-                logger.info(f"[DEBUG] Image labels matching attempt:")
-                logger.info(f"  - RGB path: {rgb_path}")
-                logger.info(f"  - Item name: {item_name}")
-                logger.info(f"  - Available keys count: {len(self.imglabel_text_features)}")
+                logger.debug(f"[DEBUG] Image labels matching attempt:")
+                logger.debug(f"  - RGB path: {rgb_path}")
+                logger.debug(f"  - Item name: {item_name}")
+                logger.debug(f"  - Available keys count: {len(self.imglabel_text_features)}")
                 if len(self.imglabel_text_features) > 0:
                     sample_keys = list(self.imglabel_text_features.keys())[:5]
-                    logger.info(f"  - Sample keys: {sample_keys}")
+                    logger.debug(f"  - Sample keys: {sample_keys}")
                 self._match_debug_logged = True
 
             # 第一轮: 精确匹配
@@ -816,7 +816,7 @@ class RGBXDataset(data.Dataset):
                     img_feats = self.imglabel_text_features[k]
                     names = list(self.imglabel_text_names.get(k, []))
                     if not hasattr(self, '_exact_match_logged'):
-                        logger.info(f"[SUCCESS] Exact match found: '{k}'")
+                        logger.debug(f"[SUCCESS] Exact match found: '{k}'")
                         self._exact_match_logged = True
                     break
                 # 尝试basename
@@ -825,7 +825,7 @@ class RGBXDataset(data.Dataset):
                     img_feats = self.imglabel_text_features[base_k]
                     names = list(self.imglabel_text_names.get(base_k, []))
                     if not hasattr(self, '_basename_match_logged'):
-                        logger.info(f"[SUCCESS] Basename match found: '{base_k}'")
+                        logger.debug(f"[SUCCESS] Basename match found: '{base_k}'")
                         self._basename_match_logged = True
                     break
 
@@ -838,7 +838,7 @@ class RGBXDataset(data.Dataset):
                 if rgb_path in self.imglabel_text_features:
                     img_feats = self.imglabel_text_features[rgb_path]
                     names = list(self.imglabel_text_names.get(rgb_path, []))
-                    logger.info(f"[Direct match] Found: {rgb_path}")
+                    logger.debug(f"[Direct match] Found: {rgb_path}")
 
                 # 如果失败，尝试各种变体
                 if img_feats is None:
@@ -858,7 +858,7 @@ class RGBXDataset(data.Dataset):
                                 if candidate in self.imglabel_text_features:
                                     img_feats = self.imglabel_text_features[candidate]
                                     names = list(self.imglabel_text_names.get(candidate, []))
-                                    logger.info(f"[Fuzzy match] '{rgb_base}' -> '{candidate}'")
+                                    logger.debug(f"[Fuzzy match] '{rgb_base}' -> '{candidate}'")
                                     break
                             if img_feats is not None:
                                 break
@@ -883,7 +883,7 @@ class RGBXDataset(data.Dataset):
                                     img_feats = self.imglabel_text_features[test_key]
                                     names = list(self.imglabel_text_names.get(test_key, []))
                                     if not hasattr(self, '_fuzzy_match_logged'):
-                                        logger.info(f"[SUCCESS] Fuzzy match: '{rgb_base}' -> '{test_key}' (ID: {num})")
+                                        logger.debug(f"[SUCCESS] Fuzzy match: '{rgb_base}' -> '{test_key}' (ID: {num})")
                                         self._fuzzy_match_logged = True
                                     break
                             if img_feats is not None:

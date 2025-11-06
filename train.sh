@@ -35,6 +35,8 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
     --pad_SUNRGBD \
     --no-use_seed \
     --superpower \
+    --sam-encoder-use-cosine \
+    --sam-encoder-learnable-temp
 
 # --text-source imglabels \
 # 文本来源：labels / captions / both / imglabels

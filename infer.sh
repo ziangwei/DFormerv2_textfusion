@@ -24,7 +24,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --master_port=$PORT \
     utils/infer.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S \
-    --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251101-163830/epoch-302_miou_57.95.pth \
+    --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251105-115814/epoch-339_miou_57.48.pth \
     --save_path output/enc_stage2 \
     --gpus=$GPUS \
     --text-source imglabels \
@@ -34,9 +34,9 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --sam-dec-stages 1,2,3 \
     --superpower \
     --save-attention \
-    --vis-stage enc \
-    --vis-stage-idx 2 \
-    --vis-block-idx -1 \
+    --vis-stage dec \
+    --vis-stage-idx 1 \
+    --vis-block-idx 0 \
     --num-images 3
 
 # choose the dataset and DFormer for evaluating

@@ -452,8 +452,8 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     # attn_map: (B, N, Hh, T) 或 (B, N, T)
                     attn_single = attn_map[b]
                     if attn_single.dim() == 3:
-                        # 平均掉 head 维： (N, Hh, T) -> (N, T)
-                        attn_single = attn_single.mean(dim=1)
+                        # 对每个token选响应最大的head
+                        attn_single = attn_single.max(dim=1)[0]
                     elif attn_single.dim() != 2:
                         logger.warning(f"Unsupported attention shape: {tuple(attn_single.shape)}")
                         continue

@@ -92,13 +92,20 @@ def build_model_from_config(cfg_module: str, device: torch.device):
         cap_k = getattr(C, "caption_topk", 0)
         cap_max = getattr(C, "max_caption_sentences", 0)
         cap_tokens = cap_k if (isinstance(cap_k, int) and cap_k > 0) else cap_max
+        max_img_labels = getattr(C, "max_image_labels", 0)
 
         if src == "labels":
             text_tokens = C.num_classes
         elif src == "captions":
             text_tokens = cap_tokens
-        else:
+        elif src == "imglabels":
+            # Per-image labels: use max_image_labels if set, otherwise default to 6
+            text_tokens = max_img_labels if max_img_labels > 0 else 6
+        elif src == "both":
             text_tokens = C.num_classes + cap_tokens
+        else:
+            # Fallback for unknown text_source
+            text_tokens = C.num_classes
 
         text_dim = getattr(C, "text_feature_dim", 512)
         enable_text = getattr(C, "enable_text_guidance", False)

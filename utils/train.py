@@ -223,13 +223,42 @@ with Engine(custom_parser=parser) as engine:
         if (not args.pad_SUNRGBD) and config.backbone.startswith("DFormerv2") and config.dataset_name == "SUNRGBD":
             raise ValueError("DFormerv2 is not recommended without pad_SUNRGBD")
         config.pad = args.pad_SUNRGBD
+
+        # === Seed Configuration ===
         if args.use_seed:
-            set_seed(config.seed)
-            logger.info(f"set seed {config.seed}")
+            # Deterministic mode: use config seed
+            actual_seed = config.seed
+            set_seed(actual_seed)
+            logger.info(f"✓ Deterministic training enabled with seed: {actual_seed}")
         else:
+            # Non-deterministic mode: generate 5-digit random seed for logging/reproducibility
+            # IMPORTANT: In distributed training, rank 0 generates seed and broadcasts to others
+            if engine.distributed:
+                if engine.local_rank == 0:
+                    actual_seed = random.randint(10000, 99999)
+                    seed_tensor = torch.tensor(actual_seed, dtype=torch.int64, device='cuda')
+                else:
+                    seed_tensor = torch.tensor(0, dtype=torch.int64, device='cuda')
+                # Broadcast seed from rank 0 to all ranks
+                dist.broadcast(seed_tensor, src=0)
+                actual_seed = int(seed_tensor.item())
+            else:
+                actual_seed = random.randint(10000, 99999)
+
+            # Set the seed for basic reproducibility (all ranks use same seed)
+            random.seed(actual_seed)
+            np.random.seed(actual_seed)
+            torch.manual_seed(actual_seed)
+            torch.cuda.manual_seed_all(actual_seed)
+            # Enable benchmark for speed (non-deterministic)
             torch.backends.cudnn.enabled = True
             torch.backends.cudnn.benchmark = True
-            logger.info("use random seed")
+            torch.backends.cudnn.deterministic = False
+            logger.info(f"✓ Non-deterministic training (faster) with seed: {actual_seed}")
+            logger.info(f"  To reproduce: modify config.seed={actual_seed} and use --use_seed")
+
+        # Store actual seed for logging/checkpointing
+        config.actual_seed = actual_seed
 
         if not args.compile and args.compile_mode != "default":
             logger.warning("compile_mode is only valid when compile is enabled, ignoring compile_mode")
@@ -362,7 +391,7 @@ with Engine(custom_parser=parser) as engine:
         # SUNRGBD: increase from gpus*1 to gpus*16 for ~4x speedup
         # Other datasets: use 4x training batch
         if config.dataset_name == "SUNRGBD":
-            val_batch_size = 64  # More aggressive for SUNRGBD
+            val_batch_size = 32  # More aggressive for SUNRGBD
             logger.info(f"Using larger validation batch size for SUNRGBD: {val_batch_size}")
         else:
             val_batch_size = int(config.batch_size * val_dl_factor)

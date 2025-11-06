@@ -8,7 +8,7 @@ import glob
 import argparse
 import logging
 from pathlib import Path
-from typing import List, Dict, Sequence
+from typing import List, Dict, Sequence, Optional
 
 import torch
 from PIL import Image
@@ -68,22 +68,64 @@ def build_messages(img: Image.Image, vocab: Sequence[str], max_labels: int) -> L
     ]
 
 
-def extract_json_array(text: str) -> List[str]:
-    """Extract a JSON array of strings from raw model text with a robust fallback."""
+def extract_json_array(text: str, allowed_vocab: Optional[List[str]] = None) -> List[str]:
+    """
+    Extract a JSON array of strings from raw model text with robust fallback.
+
+    Two-layer fallback strategy (inspired by InternVL):
+    1. Try JSON parsing (strict)
+    2. If fails, search for vocabulary labels in text using regex (lenient)
+
+    This prevents empty results when model outputs non-JSON text.
+    """
     text = re.sub(r"```(?:json)?", "", text).replace("```", "").strip()
+
+    # Layer 1: Try JSON parsing
     m = JSON_ARRAY_RE.search(text)
     cand = m.group(0) if m else text
     try:
         arr = json.loads(cand)
         if isinstance(arr, list):
-            return [str(x).strip() for x in arr if str(x).strip()]
+            labels = [str(x).strip() for x in arr if str(x).strip()]
+            if labels:  # JSON parse succeeded and got results
+                return labels
     except Exception:
         pass
-    # Fallback: lenient split (best-effort if the model adds extra text)
+
+    # Layer 2: Fallback to vocabulary-based extraction (like InternVL)
+    if allowed_vocab:
+        # Search for vocabulary labels in the text (case-insensitive, word boundaries)
+        found = []
+        text_lower = " " + re.sub(r"[^a-z0-9\s_]", " ", text.lower()) + " "
+
+        for label in allowed_vocab:
+            # Try word boundary match first (more precise)
+            pattern = r"\b" + re.escape(label.lower()) + r"\b"
+            if re.search(pattern, text_lower):
+                found.append(label)
+            else:
+                # Fallback: substring match (handles "floormat" -> "floor_mat")
+                label_no_space = label.replace(" ", "").replace("_", "")
+                text_no_space = text_lower.replace(" ", "").replace("_", "")
+                if label_no_space in text_no_space:
+                    found.append(label)
+
+        # Remove duplicates while preserving order of appearance
+        seen = set()
+        unique_found = []
+        for lab in found:
+            if lab not in seen:
+                seen.add(lab)
+                unique_found.append(lab)
+
+        if unique_found:
+            return unique_found
+
+    # Layer 3: Last resort lenient split (original fallback)
     items = re.split(r"[,;\n]+", cand)
     out = []
     for s in items:
-        s = s.strip().strip("-*•").strip("“”\"' ").rstrip(".")
+        s = s.strip().strip("-*•").strip("\"' ").rstrip(".")
         if s:
             out.append(s)
     return out
@@ -196,7 +238,8 @@ def main():
         # Parse and sanitize
         for abspath, raw in zip(batch_paths, texts):
             rel_key = str(Path(abspath).resolve().relative_to(Path(args.dataset_dir).resolve()))
-            labels = extract_json_array(raw)
+            # Pass vocab to enable fallback extraction (Layer 2)
+            labels = extract_json_array(raw, allowed_vocab=vocab)
             # Keep only labels from the fixed vocabulary; limit to max_labels
             if vocab:
                 labels = [x for x in labels if x in vocab]
