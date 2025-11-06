@@ -77,7 +77,7 @@ C.aux_rate = 0.0
 C.eval_iter = 25
 C.eval_stride_rate = 2 / 3
 C.eval_scale_array = [1]  # [0.75, 1, 1.25] #
-C.eval_flip = False  # 临时关闭flip以节省内存，最终评估时再开启
+C.eval_flip = True  # 通过eval过程中的cache清理来节省内存，无需关闭flip
 C.eval_crop_size = [480, 640]  # [height weight]
 
 """Store Config"""
