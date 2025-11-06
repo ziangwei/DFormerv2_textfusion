@@ -29,6 +29,9 @@ from utils.pyt_utils import all_reduce_tensor
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("HF_TOKENIZERS_PARALLELISM", "false")
 
+# 防止CUDA内存碎片化导致OOM（尤其对大模型重要）
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", default=2, type=int, help="used gpu number")
@@ -616,7 +619,12 @@ with Engine(custom_parser=parser) as engine:
                 logger.info("[Eval] Entering evaluation—val_loader length = %d", len(val_loader))
                 for h in logger.handlers: h.flush()
                 eval_timer.start()
+                # 激进的内存清理，防止碎片化导致OOM
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()  # 等待所有CUDA操作完成
+                import gc
+                gc.collect()  # 触发Python垃圾回收
+                torch.cuda.empty_cache()  # 再次清理
 
                 try:
                     if engine.distributed:
