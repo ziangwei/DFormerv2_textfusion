@@ -4,7 +4,7 @@ from .._base_.datasets.SUNRGBD import *
 C.backbone = "DFormerv2_B"  # Remember change the path below.
 C.pretrained_model = "checkpoints/pretrained/DFormerv2_Base_pretrained.pth"
 C.decoder = "HSGHead"
-C.decoder_embed_dim = 1024
+C.decoder_embed_dim = 512  # 修复：从1024改为512，匹配encoder维度
 C.optimizer = "AdamW"
 
 
@@ -52,7 +52,7 @@ C.sam_use_topk = (C.text_source != "imglabels")
 C.sam_top_m = 5
 
 """Train Config"""
-C.lr = 8e-5
+C.lr = 6e-5  # 优化：从8e-5降低到6e-5，与NYU对齐，训练更稳定
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
@@ -66,7 +66,7 @@ C.warm_up_epoch = 10
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.drop_path_rate = 0.1
+C.drop_path_rate = 0.2  # 优化：从0.1提高到0.2，增强泛化能力
 C.aux_rate = 0.0
 
 """Eval Config"""

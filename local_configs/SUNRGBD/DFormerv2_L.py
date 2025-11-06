@@ -52,7 +52,7 @@ C.sam_use_topk = (C.text_source != "imglabels")
 C.sam_top_m = 5
 
 """Train Config"""
-C.lr = 8e-5
+C.lr = 6e-5  # 优化：从8e-5降低到6e-5，与NYU对齐，训练更稳定
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
@@ -66,7 +66,7 @@ C.warm_up_epoch = 10
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.drop_path_rate = 0.27
+C.drop_path_rate = 0.3  # 优化：从0.27提高到0.3，与NYU对齐，增强泛化
 C.aux_rate = 0.0
 
 """Eval Config"""
