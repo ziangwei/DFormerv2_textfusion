@@ -31,7 +31,7 @@ python generate_tags_qwen3vl.py \
   --dataset_port SUNRGBD_PORT \
   --dataset_dir datasets/SUNRGBD \
   --image_folder RGB \
-  --output_file datasets/SUNRGBD/sunrgbd_image_labels2_qwen3vl \
+  --output_file datasets/SUNRGBD/sunrgbd_image_labels2_qwen3vl.json \
   --batch_size 16 \
   --max_new_tokens 64 \
   --max_labels 8

@@ -259,6 +259,9 @@ def main():
 
     # Write JSON
     out_path = Path(args.output_file)
+    # 自动添加.json后缀（如果没有的话）
+    if out_path.suffix.lower() != '.json':
+        out_path = out_path.with_suffix('.json')
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
     logging.info(f"Done. Wrote {len(results)} entries to: {out_path}")
