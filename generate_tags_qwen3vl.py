@@ -231,14 +231,26 @@ def main():
             logging.warning(f"Failed to load existing results: {e}")
             results = {}
 
-    # 计算待处理的图像（跳过已完成的）
+    # 计算待处理的图像（跳过已成功完成的）
+    # 注意：空列表被视为失败，需要重新处理
     def to_rel_key(abspath):
         return str(Path(abspath).resolve().relative_to(Path(args.dataset_dir).resolve()))
 
     all_rel_keys = [to_rel_key(p) for p in img_paths]
-    to_process_indices = [i for i, key in enumerate(all_rel_keys) if key not in results]
+    to_process_indices = [
+        i for i, key in enumerate(all_rel_keys)
+        if key not in results or not results[key]  # 不存在 或 为空列表
+    ]
 
-    logging.info(f"Total images: {len(img_paths)} | Already processed: {len(results)} | To process: {len(to_process_indices)}")
+    # 统计已成功/失败的数量
+    existing_success = sum(1 for key in all_rel_keys if key in results and results[key])
+    existing_failed = sum(1 for key in all_rel_keys if key in results and not results[key])
+
+    logging.info(f"Total images: {len(img_paths)}")
+    logging.info(f"  ✓ Already processed (success): {existing_success}")
+    logging.info(f"  ✗ Previously failed (empty): {existing_failed} (will retry)")
+    logging.info(f"  ○ Not yet processed: {len(to_process_indices) - existing_failed}")
+    logging.info(f"  → Total to process: {len(to_process_indices)}")
 
     if not to_process_indices:
         logging.info("All images already processed. Nothing to do.")
@@ -314,7 +326,29 @@ def main():
         # 休眠，防止GPU过热
         time.sleep(0.1)  # 100ms休眠
 
-    logging.info(f"Done. Processed {processed_count} new images. Total entries: {len(results)} -> {out_path}")
+    # 最终统计
+    final_success = sum(1 for key in all_rel_keys if key in results and results[key])
+    final_failed = sum(1 for key in all_rel_keys if key in results and not results[key])
+    final_missing = len(img_paths) - len([k for k in all_rel_keys if k in results])
+
+    logging.info("=" * 80)
+    logging.info(f"✓ Processing complete! Results saved to: {out_path}")
+    logging.info(f"  Total images:    {len(img_paths)}")
+    logging.info(f"  ✓ Success:       {final_success} ({final_success/len(img_paths)*100:.1f}%)")
+    logging.info(f"  ✗ Failed (empty): {final_failed} ({final_failed/len(img_paths)*100:.1f}%)")
+    logging.info(f"  ○ Missing:       {final_missing} ({final_missing/len(img_paths)*100:.1f}%)")
+
+    if final_failed > 0:
+        logging.warning(f"⚠ {final_failed} images have empty labels (likely failed).")
+        logging.warning(f"  Re-run this script to retry failed images automatically.")
+        # 列出前10个失败的图片作为示例
+        failed_keys = [k for k in all_rel_keys if k in results and not results[k]][:10]
+        if failed_keys:
+            logging.warning(f"  First {len(failed_keys)} failed images:")
+            for fk in failed_keys:
+                logging.warning(f"    - {fk}")
+
+    logging.info("=" * 80)
 
 
 if __name__ == "__main__":
