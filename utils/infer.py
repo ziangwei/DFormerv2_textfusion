@@ -73,6 +73,14 @@ parser.add_argument("--vis-block-idx", type=int, default=-1,
                     help="Which block in the stage (-1 for last block)")
 parser.add_argument("--num-images", type=int, default=None,
                     help="Number of images to process for visualization (None=all)")
+parser.add_argument("--image-indices", type=str, default=None,
+                    help="Comma-separated image indices to visualize (e.g., '0,5,10'). Overrides --num-images.")
+parser.add_argument("--image-names", type=str, default=None,
+                    help="Comma-separated image name patterns to match (e.g., 'img_0001,img_0042'). Overrides --num-images.")
+parser.add_argument("--random-images", action="store_true",
+                    help="Randomly sample num-images instead of taking first N")
+parser.add_argument("--save-seg-overlay", action="store_true",
+                    help="Save segmentation prediction overlay (in addition to attention maps)")
 parser.add_argument("--attention-alpha", type=float, default=0.5,
                     help="Alpha blending factor for overlay visualization (0-1)")
 parser.add_argument("--attention-threshold", type=float, default=0.0,
@@ -318,12 +326,33 @@ def load_class_names(config):
 @torch.no_grad()
 def evaluate_with_attention(model, dataloader, config, device, engine,
                             save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
-                            num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
-                            filter_tokens=None):
+                            num_images=None, image_indices=None, image_names=None, random_images=False,
+                            save_seg_overlay=False, alpha=0.5, threshold=0.0, smooth_sigma=0.0,
+                            max_token_vis=64, filter_tokens=None):
     """
-    注意力可视化 + 指标计算
+    注意力可视化 + 指标计算 + 分割结果可视化
     """
     from utils.metrics_new import Metrics
+    import random as py_random
+
+    # 解析image_indices和image_names
+    target_indices = None
+    target_names = None
+
+    if image_indices is not None:
+        target_indices = set(int(i.strip()) for i in image_indices.split(',') if i.strip())
+        logger.info(f"Target indices: {sorted(target_indices)}")
+
+    if image_names is not None:
+        target_names = [n.strip().lower() for n in image_names.split(',') if n.strip()]
+        logger.info(f"Target name patterns: {target_names}")
+
+    # 如果使用随机采样，需要先知道数据集大小
+    random_sample_indices = None
+    if random_images and num_images is not None:
+        dataset_size = len(dataloader.dataset) if hasattr(dataloader, 'dataset') else len(dataloader)
+        random_sample_indices = set(py_random.sample(range(dataset_size), min(num_images, dataset_size)))
+        logger.info(f"Random sampling {len(random_sample_indices)} images from {dataset_size}")
 
     logger.info("=" * 100)
     logger.info(f"Starting ENHANCED attention visualization")
@@ -331,6 +360,10 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     logger.info(f"  Stage Index: {stage_idx}")
     logger.info(f"  Block Index: {block_idx} (-1=last)")
     logger.info(f"  Num Images: {num_images if num_images else 'all'}")
+    logger.info(f"  Image Indices: {image_indices if image_indices else 'sequential'}")
+    logger.info(f"  Image Names: {image_names if image_names else 'none'}")
+    logger.info(f"  Random Sampling: {random_images}")
+    logger.info(f"  Save Seg Overlay: {save_seg_overlay}")
     logger.info(f"  Alpha: {alpha}, Threshold: {threshold}, Smooth Sigma: {smooth_sigma}")
     logger.info(f"  Save Dir: {save_dir}")
     logger.info("=" * 100)
@@ -356,9 +389,12 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     # 全局回退 token 名称
     global_token_names = load_class_names(config)
     processed_images = 0
+    batch_start_idx = 0  # 跟踪全局图片索引
 
     for idx, minibatch in enumerate(dataloader):
-        if num_images and processed_images >= num_images:
+        # 提前终止条件（仅当使用顺序采样且没有指定indices/names时）
+        if (num_images and processed_images >= num_images and
+            target_indices is None and target_names is None and random_sample_indices is None):
             logger.info(f"✓ Reached target number of images ({num_images}), stopping...")
             break
 
@@ -401,11 +437,38 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         metrics.update(preds.softmax(dim=1), labels_gpu)
 
         # 可视化
-        if save_dir and attn_data[0][0] is not None:
+        if save_dir:
             B = images_gpu.shape[0]
             for b in range(B):
-                if num_images and processed_images >= num_images:
-                    break
+                global_img_idx = batch_start_idx + b
+
+                # 检查是否应该处理这张图片
+                should_process = False
+
+                # 优先级1: image_indices指定
+                if target_indices is not None:
+                    should_process = global_img_idx in target_indices
+
+                # 优先级2: image_names指定
+                elif target_names is not None:
+                    if "fn" in minibatch and len(minibatch["fn"]) > b:
+                        fn = minibatch["fn"][b].lower()
+                        should_process = any(pattern in fn for pattern in target_names)
+
+                # 优先级3: random_images
+                elif random_sample_indices is not None:
+                    should_process = global_img_idx in random_sample_indices
+
+                # 优先级4: 顺序采样num_images
+                elif num_images is not None:
+                    should_process = processed_images < num_images
+
+                # 默认: 全部处理
+                else:
+                    should_process = True
+
+                if not should_process:
+                    continue
 
                 # 反规范化得到 RGB 原图（H,W,3）uint8
                 rgb_tensor = images[b]
@@ -423,6 +486,55 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     fn = re.sub(r"[\\/]+", "_", fn)
                 else:
                     fn = f"batch{idx:04d}_img{b}"
+
+                # === 保存分割结果叠加图 ===
+                if save_seg_overlay:
+                    pred_mask = preds[b].argmax(dim=0).cpu().numpy().astype(np.uint8)  # (H, W)
+
+                    # 加载调色板
+                    if config.dataset_name in ["NYUDepthv2", "SUNRGBD"]:
+                        palette = np.load("./utils/nyucmap.npy")
+                    elif config.dataset_name in ["KITTI-360", "EventScape"]:
+                        palette = np.array([
+                            [128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156],
+                            [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0],
+                            [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60],
+                            [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100],
+                            [0, 80, 100], [0, 0, 230], [119, 11, 32]
+                        ], dtype=np.uint8)
+                    elif config.dataset_name == "MFNet":
+                        palette = np.array([
+                            [0, 0, 0], [64, 0, 128], [64, 64, 0], [0, 128, 192],
+                            [0, 0, 192], [128, 128, 0], [64, 64, 128], [192, 128, 128],
+                            [192, 64, 0]
+                        ], dtype=np.uint8)
+                    else:
+                        palette = None
+
+                    if palette is not None:
+                        # 彩色分割图
+                        pred_color = palette[pred_mask]  # (H, W, 3)
+
+                        # 叠加到原图 (alpha blending)
+                        overlay = (alpha * pred_color + (1 - alpha) * rgb_np).astype(np.uint8)
+
+                        # 保存三种可视化
+                        seg_dir = os.path.join(save_dir, "segmentation", fn)
+                        os.makedirs(seg_dir, exist_ok=True)
+
+                        # 1. 纯分割结果
+                        seg_bgr = cv2.cvtColor(pred_color, cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(os.path.join(seg_dir, "pred_mask.png"), seg_bgr)
+
+                        # 2. 叠加图
+                        overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(os.path.join(seg_dir, "overlay.png"), overlay_bgr)
+
+                        # 3. 原图（方便对比）
+                        rgb_bgr = cv2.cvtColor(rgb_np, cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(os.path.join(seg_dir, "original.png"), rgb_bgr)
+
+                        logger.info(f"✓ {fn}: saved segmentation overlay (3 files)")
 
                 # 解析该图的 token 名称/类型（来自 dataset 的 text_token_meta）
                 meta_token_names, meta_token_types = None, None
@@ -444,6 +556,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
+                # === 处理注意力可视化（如果有） ===
                 for (attn_map, spatial_shape, stage_info) in attn_data:
                     if attn_map is None:
                         logger.warning(f"Attention map is None for {fn}, reason: {stage_info}")
@@ -521,6 +634,9 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                     logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
 
                 processed_images += 1
+
+        # 更新全局batch索引
+        batch_start_idx += B
 
     # 关闭缓存开关，清理引用
     def disable_attention_save(m):
@@ -689,6 +805,10 @@ with Engine(custom_parser=parser) as engine:
                 stage_idx=args.vis_stage_idx,
                 block_idx=args.vis_block_idx,
                 num_images=args.num_images,
+                image_indices=args.image_indices,
+                image_names=args.image_names,
+                random_images=args.random_images,
+                save_seg_overlay=args.save_seg_overlay,
                 alpha=args.attention_alpha,
                 threshold=args.attention_threshold,
                 smooth_sigma=args.attention_smooth,
