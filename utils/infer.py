@@ -73,17 +73,35 @@ parser.add_argument("--vis-block-idx", type=int, default=-1,
                     help="Which block in the stage (-1 for last block)")
 parser.add_argument("--num-images", type=int, default=None,
                     help="Number of images to process for visualization (None=all)")
-parser.add_argument("--attention-alpha", type=float, default=0.5,
+parser.add_argument("--attention-alpha", type=float, default=0.6,
                     help="Alpha blending factor for overlay visualization (0-1)")
-parser.add_argument("--attention-threshold", type=float, default=0.0,
+parser.add_argument("--attention-threshold", type=float, default=0.05,
                     help="Zero-out low responses in [0,1] after normalization (0=no threshold)")
-parser.add_argument("--attention-smooth", type=float, default=0.0,
+parser.add_argument("--attention-smooth", type=float, default=1.5,
                     help="Gaussian smoothing sigma for attention maps (0=no smoothing)")
 parser.add_argument("--max-token-vis", type=int, default=64,
                     help="Max tokens to save per image to avoid explosion")
 parser.add_argument("--filter-tokens", type=str, default=None,
                     help="Comma-separated list of token names to visualize (e.g., 'floor,wall,ceiling'). "
                          "If set, only these tokens will be visualized.")
+
+# --- Enhanced visualization options ---
+parser.add_argument("--vis-competition", type=str, default='softmax',
+                    choices=['none', 'softmax', 'margin', 'ratio'],
+                    help="Competitive normalization mode to highlight token-specific regions. "
+                         "'softmax' (recommended) uses temperature-scaled softmax across all tokens, "
+                         "'margin' keeps only regions where the token dominates, "
+                         "'ratio' computes ratio vs other tokens, "
+                         "'none' disables competitive normalization")
+parser.add_argument("--vis-competition-tau", type=float, default=2.0,
+                    help="Temperature for softmax competitive normalization (higher = sharper)")
+parser.add_argument("--vis-colormap", type=str, default='turbo',
+                    choices=['turbo', 'plasma', 'viridis', 'jet', 'magma', 'inferno'],
+                    help="Colormap for attention heatmaps. 'turbo' and 'plasma' are recommended for CVPR-style visuals")
+parser.add_argument("--vis-gamma", type=float, default=0.75,
+                    help="Gamma correction for attention maps (< 1.0 brightens, > 1.0 darkens, 1.0 = no change)")
+parser.add_argument("--vis-grid", action='store_true',
+                    help="Overlay light grid on attention maps for structure visualization (default: disabled)")
 logger = get_logger()
 
 
@@ -122,13 +140,71 @@ def _normalize01(arr: np.ndarray) -> np.ndarray:
     return out.astype(np.float32)
 
 
-def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
-                           alpha: float = 0.5, threshold: float = 0.0, smooth_sigma: float = 0.0):
+def compute_competitive_map(attn_hwT: np.ndarray, token_idx: int, mode: str = 'softmax', tau: float = 2.0) -> np.ndarray:
     """
-    Modern attention visualization with Viridis/Magma colormap (CVPR 2023-2025 style).
+    Compute competitive normalization for a specific token to highlight its unique regions.
+
+    Args:
+        attn_hwT: (H, W, T) attention maps for all tokens
+        token_idx: index of the target token
+        mode: 'softmax' | 'margin' | 'ratio'
+            - softmax: exp(tau*A_t) / sum_j exp(tau*A_j)  [recommended]
+            - margin: A_t - max_{j≠t} A_j
+            - ratio: A_t / (sum_{j≠t} A_j + eps)
+        tau: temperature for softmax mode (higher = sharper)
+
+    Returns:
+        competitive_map: (H, W) in [0, 1]
+    """
+    H, W, T = attn_hwT.shape
+    if token_idx < 0 or token_idx >= T:
+        return np.zeros((H, W), dtype=np.float32)
+
+    A_t = attn_hwT[..., token_idx]  # (H, W)
+
+    if mode == 'softmax':
+        # Numerically stable softmax with temperature
+        attn_scaled = attn_hwT * tau  # (H, W, T)
+        max_vals = np.max(attn_scaled, axis=-1, keepdims=True)  # (H, W, 1)
+        exp_vals = np.exp(attn_scaled - max_vals)  # (H, W, T)
+        sum_exp = np.sum(exp_vals, axis=-1)  # (H, W)
+        competitive = exp_vals[..., token_idx] / (sum_exp + 1e-8)  # (H, W)
+
+    elif mode == 'margin':
+        # Keep only regions where token_idx is clearly dominant
+        others_mask = np.ones(T, dtype=bool)
+        others_mask[token_idx] = False
+        A_others = attn_hwT[..., others_mask]  # (H, W, T-1)
+        max_others = np.max(A_others, axis=-1)  # (H, W)
+        competitive = A_t - max_others
+        competitive = np.maximum(competitive, 0.0)  # Clip negative
+
+    elif mode == 'ratio':
+        # Ratio of target vs all others
+        others_mask = np.ones(T, dtype=bool)
+        others_mask[token_idx] = False
+        A_others = attn_hwT[..., others_mask]  # (H, W, T-1)
+        sum_others = np.sum(A_others, axis=-1)  # (H, W)
+        competitive = A_t / (sum_others + 1e-8)
+
+    else:
+        raise ValueError(f"Unknown competitive mode: {mode}")
+
+    # Normalize to [0, 1]
+    return _normalize01(competitive)
+
+
+def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
+                           alpha: float = 0.5, threshold: float = 0.0, smooth_sigma: float = 0.0,
+                           colormap: str = 'turbo', gamma: float = 0.75, enable_grid: bool = False):
+    """
+    Modern attention visualization with enhanced colormap and processing.
 
     attn: (H, W) in [0,1]
     rgb : (H, W, 3) uint8 (RGB)
+    colormap: 'turbo' | 'plasma' | 'viridis' | 'jet' | 'magma' | 'inferno'
+    gamma: gamma correction for brightness (< 1.0 brightens, > 1.0 darkens)
+    enable_grid: overlay light grid for structure visualization
     """
     import matplotlib
     matplotlib.use('Agg')  # 无GUI后端
@@ -136,23 +212,42 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
 
     H, W = attn.shape
 
-    # 可选平滑
+    # Step 1: Gaussian smoothing (reduce pixel-level noise)
     if smooth_sigma and smooth_sigma > 0.0:
         attn = gaussian_filter(attn, sigma=float(smooth_sigma))
         attn = _normalize01(attn)
 
-    # 阈值
+    # Step 2: Gamma correction (enhance visibility)
+    if gamma and gamma > 0.0 and gamma != 1.0:
+        attn = np.power(attn, gamma)
+        attn = _normalize01(attn)
+
+    # Step 3: Threshold low responses
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # 使用 Matplotlib 的现代配色（perceptually uniform）
-    cmap = plt.get_cmap('viridis')  # 可选: 'magma', 'inferno', 'plasma'
+    # Step 4: Apply colormap
+    cmap = plt.get_cmap(colormap)
     heat_color = (cmap(attn)[:, :, :3] * 255).astype(np.uint8)  # RGB
 
-    # 叠加到原图
+    # Step 5: Blend with original image
     overlay = (alpha * heat_color + (1 - alpha) * rgb).astype(np.uint8)
 
-    # 保存
+    # Step 6: Slight contrast enhancement (CVPR-style)
+    overlay = cv2.convertScaleAbs(overlay, alpha=1.05, beta=5)
+
+    # Step 7: Optional grid overlay
+    if enable_grid:
+        grid_step = 16
+        grid_color = 255
+        grid_intensity = 0.05
+        # Horizontal lines
+        overlay[::grid_step, :] = (1 - grid_intensity) * overlay[::grid_step, :] + grid_intensity * grid_color
+        # Vertical lines
+        overlay[:, ::grid_step] = (1 - grid_intensity) * overlay[:, ::grid_step] + grid_intensity * grid_color
+        overlay = overlay.astype(np.uint8)
+
+    # Save
     os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
     overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
     cv2.imwrite(out_prefix + "_attn.png", overlay_bgr)
@@ -167,10 +262,16 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
                                       threshold: float = 0.0,
                                       smooth_sigma: float = 0.0,
                                       max_tokens: int = 64,
-                                      filter_tokens=None):
+                                      filter_tokens=None,
+                                      competition_mode: str = 'softmax',
+                                      competition_tau: float = 2.0,
+                                      colormap: str = 'turbo',
+                                      gamma: float = 0.75,
+                                      enable_grid: bool = False):
     """
     attn_hwT: (H, W, T) torch or np
     rgb_np  : (H, W, 3) uint8 RGB
+    competition_mode: 'none' | 'softmax' | 'margin' | 'ratio'
     """
     if isinstance(attn_hwT, torch.Tensor):
         attn_np = attn_hwT.detach().cpu().numpy()
@@ -229,11 +330,17 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
         tp = types[t].strip() if isinstance(types[t], str) else ""
         tag = f"{_slugify(tp)}_{_slugify(nm)}" if tp else _slugify(nm)
 
-        a = _normalize01(attn_np[..., t])
+        # Apply competitive normalization if enabled
+        if competition_mode and competition_mode.lower() != 'none':
+            a = compute_competitive_map(attn_np, t, mode=competition_mode, tau=competition_tau)
+        else:
+            a = _normalize01(attn_np[..., t])
+
         out_prefix = f"{save_prefix}__{tag}"
         _save_single_token_map(
             a, rgb_np, out_prefix,
-            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma
+            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma,
+            colormap=colormap, gamma=gamma, enable_grid=enable_grid
         )
 
 
@@ -319,7 +426,8 @@ def load_class_names(config):
 def evaluate_with_attention(model, dataloader, config, device, engine,
                             save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
                             num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
-                            filter_tokens=None):
+                            filter_tokens=None, competition_mode='softmax', competition_tau=2.0,
+                            colormap='turbo', gamma=0.75, enable_grid=False):
     """
     注意力可视化 + 指标计算
     """
@@ -515,7 +623,12 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         threshold=threshold,
                         smooth_sigma=smooth_sigma,
                         max_tokens=max_token_vis,
-                        filter_tokens=filter_tokens
+                        filter_tokens=filter_tokens,
+                        competition_mode=competition_mode,
+                        competition_tau=competition_tau,
+                        colormap=colormap,
+                        gamma=gamma,
+                        enable_grid=enable_grid
                     )
 
                     logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
@@ -694,6 +807,11 @@ with Engine(custom_parser=parser) as engine:
                 smooth_sigma=args.attention_smooth,
                 max_token_vis=args.max_token_vis,
                 filter_tokens=filter_tokens_list,
+                competition_mode=args.vis_competition,
+                competition_tau=args.vis_competition_tau,
+                colormap=args.vis_colormap,
+                gamma=args.vis_gamma,
+                enable_grid=args.vis_grid,
             )
 
             if engine.distributed:
