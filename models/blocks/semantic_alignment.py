@@ -87,11 +87,12 @@ class SemanticAlignmentModule(nn.Module):
         )
 
         # FFN（decoder 侧 forward 使用；SSA-lite 不用）
+        # Use 2x expansion to match checkpoint (was 4x)
         self.ffn = nn.Sequential(
-            nn.Linear(query_dim, query_dim * 4),
+            nn.Linear(query_dim, query_dim * 2),
             nn.GELU(),
             nn.Dropout(ffn_drop),
-            nn.Linear(query_dim * 4, query_dim),
+            nn.Linear(query_dim * 2, query_dim),
             nn.Dropout(ffn_drop),
         )
 
