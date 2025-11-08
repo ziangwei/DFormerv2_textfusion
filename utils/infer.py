@@ -31,6 +31,19 @@ from utils.pyt_utils import all_reduce_tensor, ensure_dir, link_file, load_model
 from utils.val_mm import evaluate, evaluate_msf
 from utils.visualize import print_iou, show_img
 
+
+class SubsetDataset(torch.utils.data.Dataset):
+    """Wrapper to select a subset of dataset by indices"""
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        return self.dataset[self.indices[idx]]
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", help="used gpu number")
@@ -73,6 +86,12 @@ parser.add_argument("--vis-block-idx", type=int, default=-1,
                     help="Which block in the stage (-1 for last block)")
 parser.add_argument("--num-images", type=int, default=None,
                     help="Number of images to process for visualization (None=all)")
+parser.add_argument("--random-select", action="store_true",
+                    help="Randomly select images instead of sequential selection")
+parser.add_argument("--image-indices", type=str, default=None,
+                    help="Comma-separated list of image indices to process (e.g., '0,5,10')")
+parser.add_argument("--image-paths", type=str, default=None,
+                    help="Path to text file containing image paths to process (one per line)")
 parser.add_argument("--attention-alpha", type=float, default=0.6,
                     help="Alpha blending factor for overlay visualization (0-1)")
 parser.add_argument("--attention-threshold", type=float, default=0.15,
@@ -465,10 +484,9 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     global_token_names = load_class_names(config)
     processed_images = 0
 
+    # Note: num_images filtering is now handled at DataLoader level, not here
+    # This parameter is kept for backward compatibility with attention visualization
     for idx, minibatch in enumerate(dataloader):
-        if num_images and processed_images >= num_images:
-            logger.info(f"✓ Reached target number of images ({num_images}), stopping...")
-            break
 
         if ((idx + 1) % int(max(len(dataloader) * 0.5, 1)) == 0 or idx == 0) and (
                 (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -512,9 +530,6 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         if save_dir and attn_data[0][0] is not None:
             B = images_gpu.shape[0]
             for b in range(B):
-                if num_images and processed_images >= num_images:
-                    break
-
                 # 反规范化得到 RGB 原图（H,W,3）uint8
                 rgb_tensor = images[b]
                 rgb_np = rgb_tensor.permute(1, 2, 0).cpu().numpy()
@@ -746,7 +761,69 @@ with Engine(custom_parser=parser) as engine:
     cudnn.benchmark = True
 
     val_loader, val_sampler = get_val_loader(engine, RGBXDataset, config, int(args.gpus))
-    print(f"Validation dataset size: {len(val_loader)}")
+
+    # Apply image selection if specified
+    original_dataset = val_loader.dataset
+    selected_indices = None
+
+    if args.image_indices is not None:
+        # Parse comma-separated indices
+        try:
+            selected_indices = [int(i.strip()) for i in args.image_indices.split(',')]
+            logger.info(f"Using specified image indices: {selected_indices}")
+        except ValueError as e:
+            logger.error(f"Invalid image indices format: {e}")
+            sys.exit(1)
+
+    elif args.image_paths is not None:
+        # Load image paths from file
+        if not os.path.exists(args.image_paths):
+            logger.error(f"Image paths file not found: {args.image_paths}")
+            sys.exit(1)
+
+        with open(args.image_paths, 'r') as f:
+            target_paths = [line.strip() for line in f if line.strip()]
+
+        # Match paths to dataset indices
+        selected_indices = []
+        dataset_files = original_dataset._file_names
+        for target_path in target_paths:
+            target_base = os.path.basename(target_path)
+            for idx, file_name in enumerate(dataset_files):
+                if target_base in file_name or file_name in target_path:
+                    selected_indices.append(idx)
+                    break
+
+        logger.info(f"Matched {len(selected_indices)}/{len(target_paths)} images from file")
+
+    elif args.num_images is not None and args.random_select:
+        # Random selection
+        total_images = len(original_dataset)
+        num_select = min(args.num_images, total_images)
+        selected_indices = np.random.choice(total_images, size=num_select, replace=False).tolist()
+        logger.info(f"Randomly selected {num_select} images from {total_images}")
+
+    elif args.num_images is not None:
+        # Sequential selection (first N images)
+        total_images = len(original_dataset)
+        num_select = min(args.num_images, total_images)
+        selected_indices = list(range(num_select))
+        logger.info(f"Using first {num_select} images")
+
+    # Apply subset if indices were selected
+    if selected_indices is not None and len(selected_indices) > 0:
+        subset_dataset = SubsetDataset(original_dataset, selected_indices)
+        val_loader = DataLoader(
+            subset_dataset,
+            batch_size=val_loader.batch_size,
+            num_workers=config.num_workers,
+            drop_last=False,
+            shuffle=False,
+            pin_memory=True,
+        )
+        logger.info(f"Dataset filtered to {len(subset_dataset)} images")
+
+    print(f"Validation dataset size: {len(val_loader.dataset)}")
 
     if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
         tb_dir = config.tb_dir + "/{}".format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
@@ -791,6 +868,7 @@ with Engine(custom_parser=parser) as engine:
             logger.info(f"Filtering tokens: {filter_tokens_list}")
         with torch.no_grad():
             model.eval()
+            # Note: num_images is now handled by dataset filtering above
             all_metrics = evaluate_with_attention(
                 model,
                 val_loader,
@@ -801,7 +879,7 @@ with Engine(custom_parser=parser) as engine:
                 vis_stage=args.vis_stage,
                 stage_idx=args.vis_stage_idx,
                 block_idx=args.vis_block_idx,
-                num_images=args.num_images,
+                num_images=None,  # Dataset already filtered
                 alpha=args.attention_alpha,
                 threshold=args.attention_threshold,
                 smooth_sigma=args.attention_smooth,
@@ -831,8 +909,14 @@ with Engine(custom_parser=parser) as engine:
                 logger.info(f"mIoU: {miou:.4f}")
 
     else:
-        # 标准多尺度评估
-        logger.info("Running standard multi-scale evaluation...")
+        # 标准多尺度评估 (使用和eval.py相同的配置以获得一致的mIoU)
+        logger.info("Running standard multi-scale+flip evaluation (same as eval.py)...")
+        scales = [0.5, 0.75, 1.0, 1.25, 1.5]
+        flip = True
+
+        logger.info(f"Evaluation scales: {scales}")
+        logger.info(f"Flip augmentation: {flip}")
+
         if engine.distributed:
             print("Multi GPU test")
             with torch.no_grad():
@@ -842,8 +926,8 @@ with Engine(custom_parser=parser) as engine:
                     val_loader,
                     config,
                     device,
-                    [0.5, 0.75, 1.0, 1.25, 1.5],
-                    True,
+                    scales,
+                    flip,
                     engine,
                     save_dir=args.save_path,
                 )
@@ -854,6 +938,13 @@ with Engine(custom_parser=parser) as engine:
                     ious, miou = metric.compute_iou()
                     acc, macc = metric.compute_pixel_acc()
                     f1, mf1 = metric.compute_f1()
+                    logger.info("=" * 80)
+                    logger.info("FINAL RESULTS (Multi-Scale + Flip):")
+                    logger.info(f"mIoU: {miou:.4f}")
+                    logger.info(f"mAcc: {macc:.4f}")
+                    logger.info(f"mF1: {mf1:.4f}")
+                    logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
+                    logger.info("=" * 80)
                     print(f"mIoU: {miou:.4f}")
         else:
             with torch.no_grad():
@@ -863,12 +954,19 @@ with Engine(custom_parser=parser) as engine:
                     val_loader,
                     config,
                     device,
-                    [0.5, 0.75, 1.0, 1.25, 1.5],
-                    True,
+                    scales,
+                    flip,
                     engine,
                     save_dir=args.save_path,
                 )
                 ious, miou = metric.compute_iou()
                 acc, macc = metric.compute_pixel_acc()
                 f1, mf1 = metric.compute_f1()
+                logger.info("=" * 80)
+                logger.info("FINAL RESULTS (Multi-Scale + Flip):")
+                logger.info(f"mIoU: {miou:.4f}")
+                logger.info(f"mAcc: {macc:.4f}")
+                logger.info(f"mF1: {mf1:.4f}")
+                logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
+                logger.info("=" * 80)
                 print(f"mIoU: {miou:.4f}")
