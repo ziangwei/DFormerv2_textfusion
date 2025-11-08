@@ -174,7 +174,9 @@ def build_model_from_config(cfg_module: str, device: torch.device, load_pretrain
         enable_text = getattr(C, "enable_text_guidance", False)
 
         if enable_text:
-            dummy_text = torch.zeros(1, text_tokens, text_dim, device=device)
+            # 使用randn而非zeros，避免被SAM识别为padding而跳过计算
+            # 全零tensor会被_make_text_pad_mask识别为padding，导致T_active=0，SAM直接return
+            dummy_text = torch.randn(1, text_tokens, text_dim, device=device)
             # 你的 forward 支持 (rgb, depth, None, text_features)
             return (rgb, dep, None, dummy_text), text_tokens  # 同时返回实际使用的token数
         else:
