@@ -79,12 +79,14 @@ parser.add_argument("--save-attention", action="store_true",
                     help="Save attention maps for visualization")
 parser.add_argument("--save-predictions", action="store_true",
                     help="Save segmentation predictions (works without text guidance)")
+parser.add_argument("--save-gt", action="store_true",
+                    help="Save Ground Truth labels with color mapping (useful for comparison)")
 parser.add_argument("--dual-model", action="store_true",
                     help="Load two different models and run both on the same images (model1=text-guided, model2=visual-only)")
 parser.add_argument("--model2-path", type=str, default=None,
                     help="Path to second model checkpoint for dual-model comparison (required if --dual-model is set)")
 parser.add_argument("--model2-save-path", type=str, default=None,
-                    help="Output path for second model (default: <save_path>_model2)")
+                    help="Output path for second model (default: same as model1, integrated output)")
 parser.add_argument("--vis-stage", type=str, default="enc",
                     choices=["enc", "dec"],
                     help="Visualize encoder or decoder attention")
@@ -541,7 +543,7 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                             num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
                             filter_tokens=None, competition_mode='softmax', competition_tau=2.0,
                             colormap='turbo', gamma=0.75, enable_grid=False, save_predictions=True,
-                            aggregate_mode="none"):
+                            aggregate_mode="none", save_gt=False, model_name=None):
     """
     注意力可视化 + 指标计算
     stage_indices: list of int, or None for all stages
@@ -678,10 +680,27 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 original_path = os.path.join(img_output_dir, "00_original.png")
                 plt.imsave(original_path, rgb_np)
 
-                # 2. 保存分割结果
+                file_counter = 1  # 用于动态分配文件编号
+
+                # 2. 保存 GT 标签（如果启用）
+                if save_gt:
+                    label_np = labels[b].cpu().numpy().astype(np.uint8)
+                    # 使用相同的 palette 进行颜色映射
+                    gt_colored = palette[label_np]
+                    gt_path = os.path.join(img_output_dir, f"{file_counter:02d}_GT.png")
+                    plt.imsave(gt_path, gt_colored)
+                    file_counter += 1
+
+                # 3. 保存分割结果（模型预测）
                 pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]
-                seg_path = os.path.join(img_output_dir, "01_segmentation.png")
+                # 根据 model_name 添加后缀
+                if model_name:
+                    seg_filename = f"{file_counter:02d}_pred_{model_name}.png"
+                else:
+                    seg_filename = f"{file_counter:02d}_segmentation.png"
+                seg_path = os.path.join(img_output_dir, seg_filename)
                 plt.imsave(seg_path, pred_colored)
+                file_counter += 1
 
                 # 解析该图的 token 名称/类型
                 meta_token_names, meta_token_types = None, None
@@ -697,8 +716,8 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
-                # 3. 保存每个token的attention可视化
-                token_counter = 2  # 从02开始编号（00是原图，01是分割）
+                # 4. 保存每个token的attention可视化
+                token_counter = file_counter  # 使用动态计数器
 
                 for (attn_map, spatial_shape, stage_info) in attn_data_to_save:
                     if attn_map is None:
@@ -869,27 +888,30 @@ with Engine(custom_parser=parser) as engine:
             logger.error(f"Model 2 checkpoint not found: {args.model2_path}")
             sys.exit(1)
 
-        # 双模型模式：强制设置模式1为 attention，模式2为 predictions
-        args.save_attention = True
-        args.save_predictions = False  # 模型1不保存predictions
+        # 双模型模式：强制设置
+        args.save_attention = True     # 模型1: attention 可视化
+        args.save_predictions = False  # 模型1不单独保存predictions
+        args.save_gt = True            # 自动保存 GT 用于对比
 
         # 设置默认输出路径
         if not args.save_path:
-            args.save_path = "./dual_model_model1_attention"
-            logger.info(f"Model 1 output path not specified, using default: {args.save_path}")
+            args.save_path = "./dual_model_comparison"
+            logger.info(f"Output path not specified, using default: {args.save_path}")
 
-        if not args.model2_save_path:
-            args.model2_save_path = args.save_path.rstrip('/') + "_model2_visual"
-            logger.info(f"Model 2 output path not specified, using default: {args.model2_save_path}")
+        # 双模型模式下，默认集成到同一个文件夹
+        # 如果用户指定了 model2_save_path，则使用独立文件夹（兼容旧行为）
+        integrated_mode = (args.model2_save_path is None)
 
         logger.info("=" * 80)
         logger.info("DUAL-MODEL COMPARISON MODE ENABLED")
         logger.info(f"Model 1 (Text-Guided): {args.continue_fpath}")
-        logger.info(f"  Output: {args.save_path}")
-        logger.info(f"  Mode: Attention visualization (--save-attention)")
         logger.info(f"Model 2 (Visual-Only): {args.model2_path}")
-        logger.info(f"  Output: {args.model2_save_path}")
-        logger.info(f"  Mode: Prediction only (--save-predictions)")
+        logger.info(f"Output: {args.save_path}")
+        if integrated_mode:
+            logger.info(f"  Mode: Integrated (GT + Model1 + Model2 + Attention in same folders)")
+        else:
+            logger.info(f"  Model 1 Output: {args.save_path}")
+            logger.info(f"  Model 2 Output: {args.model2_save_path}")
         logger.info("=" * 80)
 
     # ★ 为可视化强制开启 text guidance（不影响评测）
@@ -1105,6 +1127,8 @@ with Engine(custom_parser=parser) as engine:
                 gamma=args.vis_gamma,
                 enable_grid=args.vis_grid,
                 aggregate_mode=args.vis_aggregate,
+                save_gt=args.save_gt,
+                model_name="model1_text" if args.dual_model else None,
             )
 
             if engine.distributed:
@@ -1179,6 +1203,14 @@ with Engine(custom_parser=parser) as engine:
             scales = [0.5, 0.75, 1.0, 1.25, 1.5]
             flip = True
 
+            # 集成模式：使用临时目录，之后会合并到模型1的文件夹
+            integrated_mode = (args.model2_save_path is None)
+            if integrated_mode:
+                model2_temp_dir = args.save_path + "_model2_temp"
+                logger.info(f"  Integrated mode: using temporary directory {model2_temp_dir}")
+            else:
+                model2_temp_dir = args.model2_save_path
+
             if engine.distributed:
                 with torch.no_grad():
                     model2.eval()
@@ -1190,7 +1222,7 @@ with Engine(custom_parser=parser) as engine:
                         scales,
                         flip,
                         engine,
-                        save_dir=args.model2_save_path,
+                        save_dir=model2_temp_dir,
                     )
                     if engine.local_rank == 0:
                         metric_m2 = all_metrics_m2[0]
@@ -1217,7 +1249,7 @@ with Engine(custom_parser=parser) as engine:
                         scales,
                         flip,
                         engine,
-                        save_dir=args.model2_save_path,
+                        save_dir=model2_temp_dir,
                     )
                     ious_m2, miou_m2 = metric_m2.compute_iou()
                     acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
@@ -1230,11 +1262,52 @@ with Engine(custom_parser=parser) as engine:
                     logger.info(f"mF1: {mf1_m2:.4f}")
                     logger.info("=" * 100)
 
+            # 集成模式：将模型2的预测合并到模型1的文件夹
+            if integrated_mode and os.path.exists(model2_temp_dir):
+                logger.info("\n" + "=" * 80)
+                logger.info("Merging Model 2 predictions into Model 1 folders...")
+                import shutil
+                import glob
+
+                # 遍历临时目录中的所有 _pred.png 文件
+                model2_files = glob.glob(os.path.join(model2_temp_dir, "*_pred.png"))
+                for src_file in model2_files:
+                    # 提取图片名称（去掉 _pred.png 后缀）
+                    base_name = os.path.basename(src_file).replace("_pred.png", "")
+
+                    # 找到对应的模型1文件夹
+                    model1_folder = os.path.join(args.save_path, base_name)
+                    if os.path.exists(model1_folder):
+                        # 读取模型2的预测图片
+                        from PIL import Image
+                        model2_pred = Image.open(src_file)
+
+                        # 保存为 03_pred_model2_visual.png
+                        dest_file = os.path.join(model1_folder, "03_pred_model2_visual.png")
+                        model2_pred.save(dest_file)
+                        logger.info(f"  ✓ Merged {base_name}")
+                    else:
+                        logger.warning(f"  ⚠ Model 1 folder not found for {base_name}")
+
+                # 删除临时目录
+                shutil.rmtree(model2_temp_dir)
+                logger.info(f"✓ Cleaned up temporary directory: {model2_temp_dir}")
+                logger.info("=" * 80 + "\n")
+
             logger.info("\n" + "=" * 100)
             logger.info("DUAL-MODEL COMPARISON COMPLETED")
             logger.info("=" * 100)
-            logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
-            logger.info(f"Model 2 (Visual-Only) outputs: {args.model2_save_path}")
+            if integrated_mode:
+                logger.info(f"Integrated outputs (GT + Model1 + Model2 + Attention): {args.save_path}")
+                logger.info("  Each image folder contains:")
+                logger.info("    - 00_original.png")
+                logger.info("    - 01_GT.png")
+                logger.info("    - 02_pred_model1_text.png")
+                logger.info("    - 03_pred_model2_visual.png")
+                logger.info("    - 04+ attention maps")
+            else:
+                logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
+                logger.info(f"Model 2 (Visual-Only) outputs: {args.model2_save_path}")
             logger.info("=" * 100 + "\n")
 
     else:
