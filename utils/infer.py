@@ -77,6 +77,8 @@ parser.add_argument("--superpower", default=None, action=argparse.BooleanOptiona
 # --- Attention visualization switches (Enhanced) ---
 parser.add_argument("--save-attention", action="store_true",
                     help="Save attention maps for visualization")
+parser.add_argument("--save-predictions", action="store_true",
+                    help="Save segmentation predictions (works without text guidance)")
 parser.add_argument("--vis-stage", type=str, default="enc",
                     choices=["enc", "dec"],
                     help="Visualize encoder or decoder attention")
@@ -997,6 +999,11 @@ with Engine(custom_parser=parser) as engine:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # 如果设置了 --save-predictions 但没有 --save_path，使用默认路径
+    if args.save_predictions and not args.save_path:
+        args.save_path = "./infer_predictions"
+        logger.info(f"--save-predictions enabled but no --save_path specified, using default: {args.save_path}")
+
     if args.save_attention:
         # 注意力可视化模式
         # 解析 filter_tokens 参数
@@ -1070,6 +1077,13 @@ with Engine(custom_parser=parser) as engine:
         logger.info(f"Evaluation scales: {scales}")
         logger.info(f"Flip augmentation: {flip}")
 
+        # 确定是否保存预测结果
+        save_dir_for_eval = args.save_path if args.save_predictions else None
+
+        if save_dir_for_eval:
+            logger.info(f"Predictions will be saved to: {save_dir_for_eval}")
+            logger.info("Output format: <save_path>/<image_name>_pred.png")
+
         if engine.distributed:
             print("Multi GPU test")
             with torch.no_grad():
@@ -1082,7 +1096,7 @@ with Engine(custom_parser=parser) as engine:
                     scales,
                     flip,
                     engine,
-                    save_dir=args.save_path,
+                    save_dir=save_dir_for_eval,
                 )
                 if engine.local_rank == 0:
                     metric = all_metrics[0]
@@ -1110,7 +1124,7 @@ with Engine(custom_parser=parser) as engine:
                     scales,
                     flip,
                     engine,
-                    save_dir=args.save_path,
+                    save_dir=save_dir_for_eval,
                 )
                 ious, miou = metric.compute_iou()
                 acc, macc = metric.compute_pixel_acc()
