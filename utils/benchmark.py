@@ -52,6 +52,78 @@ def identity_flops_counter_hook(module, input, output):
     """Identity/Pass-through layers: zero ops"""
     module.__flops__ += 0
 
+def sam_flops_counter_hook(module, input, output):
+    """
+    SemanticAlignmentModule (SAM) FLOPs 计算
+
+    SAM 的主要计算：
+    1. Linear 投影 (q_proj, k_proj, v_proj, out_proj) - 由 thop 自动计算
+    2. Multi-head Attention:
+       - Q·K^T: 2 * B * N * T * Dh * num_heads
+       - Softmax: 5 * B * N * num_heads * T (exp + sum + div)
+       - Attention·V: 2 * B * N * T * Dh * num_heads
+    3. FFN (decoder only):
+       - fc1: 2 * B * N * query_dim * (4 * query_dim)
+       - fc2: 2 * B * N * (4 * query_dim) * query_dim
+    4. LayerNorm (norm1, norm2) - 由自定义钩子计算
+    5. Residual/gating - 可忽略（加法）
+
+    注意：这是一个近似计算，实际 FLOPs 会因 Top-K、padding mask 等而变化
+    """
+    visual_features, text_features = input
+
+    # 获取形状
+    if visual_features.dim() == 4:  # (B, H, W, Cv)
+        B, H, W, Cv = visual_features.shape
+        N = H * W
+    else:  # (B, N, Cv)
+        B, N, Cv = visual_features.shape
+
+    # 文本 token 数
+    if text_features is not None:
+        if text_features.dim() == 3:  # (B, T, Ct)
+            T = text_features.size(1)
+        elif text_features.dim() == 2:  # (T, Ct)
+            T = text_features.size(0)
+        else:
+            T = 1
+    else:
+        # 如果没有文本特征，FLOPs 几乎为 0（只有残差）
+        module.__flops__ += 0
+        return
+
+    # 多头参数
+    num_heads = getattr(module, 'num_heads', 1)
+    Dh = Cv // num_heads
+
+    flops = 0
+
+    # Multi-head Attention:
+    # Q·K^T: B * num_heads * N * T * Dh (matmul: 2*Dh FLOPs per output element)
+    flops += 2 * B * num_heads * N * T * Dh
+
+    # Softmax over T dimension: ~5 ops per element (exp, sum, div, etc.)
+    flops += 5 * B * num_heads * N * T
+
+    # Attention·V: B * num_heads * N * T * Dh
+    flops += 2 * B * num_heads * N * T * Dh
+
+    # Top-K selection (if enabled): ignore for simplicity (small overhead)
+
+    # FFN (decoder mode - check if module has FFN)
+    # Most SAM instances use FFN in decoder, so count it
+    # fc1: B * N * Cv * (4*Cv)
+    flops += 2 * B * N * Cv * (4 * Cv)
+    # fc2: B * N * (4*Cv) * Cv
+    flops += 2 * B * N * (4 * Cv) * Cv
+
+    # Normalize (cosine similarity if enabled): 2*N*Cv for Q, 2*T*Cv for K
+    if getattr(module, 'decoder_use_cosine', False) or getattr(module, 'encoder_use_cosine', False):
+        flops += 2 * N * Cv  # normalize Q
+        flops += 2 * T * Cv  # normalize K
+
+    module.__flops__ += int(flops)
+
 # Build custom ops dict
 CUSTOM_OPS = {
     nn.LayerNorm: layernorm_flops_counter_hook,
@@ -66,6 +138,12 @@ CUSTOM_OPS = {
 try:
     from models.encoders.DFormerv2 import LayerNorm2d
     CUSTOM_OPS[LayerNorm2d] = layernorm_flops_counter_hook
+except ImportError:
+    pass
+
+try:
+    from models.blocks.semantic_alignment import SemanticAlignmentModule
+    CUSTOM_OPS[SemanticAlignmentModule] = sam_flops_counter_hook
 except ImportError:
     pass
 

@@ -35,11 +35,9 @@ class SemanticAlignmentModule(nn.Module):
     ):
         super().__init__()
 
-        # 注意：thop 在 DFS 统计时会假定这些计数器是张量（并调用 .item()）。
-        # 早期版本里使用 Python int 会在 benchmark.py 中触发 AttributeError。
-        # 这里改为注册为 buffer，以与 thop/ptflops 的预期类型一致。
-        self.register_buffer("total_ops", torch.zeros(1))
-        self.register_buffer("total_params", torch.zeros(1))
+        # ❌ 删除 total_ops/total_params buffer：
+        # 这些 buffer 会阻止 thop 正确计算 FLOPs，因为 thop 会认为模块已被计数。
+        # FLOPs 统计应该由外部工具（thop/fvcore）通过钩子函数处理，而不是在模块内部预设。
         self.top_m = top_m
         self.use_topk = use_topk
         self.add_residual = add_residual
