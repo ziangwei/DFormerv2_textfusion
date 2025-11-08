@@ -91,12 +91,23 @@ python utils/infer.py \
 
 ## 新增参数说明
 
+### 图片选择参数
+
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--num-images` | int | 要处理的图片数量（None=全部） |
 | `--random-select` | flag | 随机选择图片而非顺序选择 |
 | `--image-indices` | str | 逗号分隔的图片索引列表，如 "0,5,10" |
 | `--image-paths` | str | 包含图片路径的文本文件路径（每行一个） |
+
+### Attention 可视化增强参数（新增）
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--vis-stage-idx` | str | "0" | Stage索引：单个 "0"，多个 "0,1,2"，全部 "all" |
+| `--vis-aggregate` | str | "none" | 聚合模式：none/mean/max/weighted |
+
+详细使用方法请参考 [INFER_ADVANCED_FEATURES.md](./INFER_ADVANCED_FEATURES.md)
 
 ## 注意事项
 

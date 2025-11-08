@@ -80,10 +80,13 @@ parser.add_argument("--save-attention", action="store_true",
 parser.add_argument("--vis-stage", type=str, default="enc",
                     choices=["enc", "dec"],
                     help="Visualize encoder or decoder attention")
-parser.add_argument("--vis-stage-idx", type=int, default=0,
-                    help="Which stage index to visualize (0,1,2,3 for encoder; 0,1,2 for decoder)")
+parser.add_argument("--vis-stage-idx", type=str, default="0",
+                    help="Which stage index(es) to visualize. Single: '0', Multiple: '0,1,2', All: 'all'")
 parser.add_argument("--vis-block-idx", type=int, default=-1,
                     help="Which block in the stage (-1 for last block)")
+parser.add_argument("--vis-aggregate", type=str, default="none",
+                    choices=["none", "mean", "max", "weighted"],
+                    help="How to aggregate attention from multiple stages (none=save separately)")
 parser.add_argument("--num-images", type=int, default=None,
                     help="Number of images to process for visualization (None=all)")
 parser.add_argument("--random-select", action="store_true",
@@ -363,9 +366,10 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
         )
 
 
-def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, block_idx=-1):
+def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_indices=None, block_idx=-1):
     """
     返回列表 [(attn(B,N,Hh,T), spatial_shape(h,w), stage_info), ...]
+    stage_indices: list of int, or None for all stages
     """
     if hasattr(model, 'module'):
         actual_model = model.module
@@ -377,55 +381,137 @@ def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, b
     if vis_stage == "enc":
         backbone = actual_model.backbone
         if hasattr(backbone, 'encoder_sam_blocks'):
-            if stage_idx >= len(backbone.encoder_sam_blocks):
-                logger.warning(
-                    f"Encoder stage {stage_idx} not found! Available: 0-{len(backbone.encoder_sam_blocks) - 1}")
-                return [(None, None, "Invalid stage")]
+            # 如果没有指定 stage，提取所有
+            if stage_indices is None:
+                stage_indices = list(range(len(backbone.encoder_sam_blocks)))
 
-            blocks = backbone.encoder_sam_blocks[stage_idx]
-            if len(blocks) == 0:
-                logger.warning(f"Encoder stage {stage_idx} has no SAM blocks!")
-                return [(None, None, "No SAM blocks")]
+            for stage_idx in stage_indices:
+                if stage_idx >= len(backbone.encoder_sam_blocks):
+                    logger.warning(
+                        f"Encoder stage {stage_idx} not found! Available: 0-{len(backbone.encoder_sam_blocks) - 1}")
+                    continue
 
-            if block_idx == -1:
-                pick = len(blocks) - 1
-            else:
-                pick = min(block_idx, len(blocks) - 1)
+                blocks = backbone.encoder_sam_blocks[stage_idx]
+                if len(blocks) == 0:
+                    logger.warning(f"Encoder stage {stage_idx} has no SAM blocks!")
+                    continue
 
-            sam_block = blocks[pick]
-            if hasattr(sam_block, 'last_attention_map'):
-                attn = sam_block.last_attention_map
-                spatial_shape = getattr(sam_block, 'last_spatial_shape', None)
-                if attn is not None:
-                    stage_info = f"enc_stage{stage_idx}_block{pick}"
-                    attention_data.append((attn, spatial_shape, stage_info))
-                    logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
+                if block_idx == -1:
+                    pick = len(blocks) - 1
+                else:
+                    pick = min(block_idx, len(blocks) - 1)
+
+                sam_block = blocks[pick]
+                if hasattr(sam_block, 'last_attention_map'):
+                    attn = sam_block.last_attention_map
+                    spatial_shape = getattr(sam_block, 'last_spatial_shape', None)
+                    if attn is not None:
+                        stage_info = f"enc_stage{stage_idx}_block{pick}"
+                        attention_data.append((attn, spatial_shape, stage_info))
+                        logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
 
     elif vis_stage == "dec":
         decode_head = actual_model.decode_head
         if hasattr(decode_head, 'dec_sam_layers'):
-            if stage_idx >= len(decode_head.dec_sam_layers):
-                logger.warning(
-                    f"Decoder stage {stage_idx} not found! Available: 0-{len(decode_head.dec_sam_layers) - 1}")
-                return [(None, None, "Invalid stage")]
+            # 如果没有指定 stage，提取所有
+            if stage_indices is None:
+                stage_indices = list(range(len(decode_head.dec_sam_layers)))
 
-            sam_layer = decode_head.dec_sam_layers[stage_idx]
-            if sam_layer is None:
-                logger.warning(f"Decoder stage {stage_idx} has no SAM layer (disabled)!")
-                return [(None, None, "SAM disabled")]
+            for stage_idx in stage_indices:
+                if stage_idx >= len(decode_head.dec_sam_layers):
+                    logger.warning(
+                        f"Decoder stage {stage_idx} not found! Available: 0-{len(decode_head.dec_sam_layers) - 1}")
+                    continue
 
-            if hasattr(sam_layer, 'last_attention_map'):
-                attn = sam_layer.last_attention_map
-                spatial_shape = getattr(sam_layer, 'last_spatial_shape', None)
-                if attn is not None:
-                    stage_info = f"dec_stage{stage_idx}"
-                    attention_data.append((attn, spatial_shape, stage_info))
-                    logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
+                sam_layer = decode_head.dec_sam_layers[stage_idx]
+                if sam_layer is None:
+                    logger.warning(f"Decoder stage {stage_idx} has no SAM layer (disabled)!")
+                    continue
+
+                if hasattr(sam_layer, 'last_attention_map'):
+                    attn = sam_layer.last_attention_map
+                    spatial_shape = getattr(sam_layer, 'last_spatial_shape', None)
+                    if attn is not None:
+                        stage_info = f"dec_stage{stage_idx}"
+                        attention_data.append((attn, spatial_shape, stage_info))
+                        logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
 
     if not attention_data:
         return [(None, None, "No attention found")]
 
     return attention_data
+
+
+def aggregate_attention_maps(attn_list, mode="mean"):
+    """
+    聚合多个 stage 的 attention maps
+    attn_list: list of (attn, spatial_shape, stage_info)
+    mode: "mean", "max", or "weighted"
+    Returns: (aggregated_attn, spatial_shape, "aggregated")
+    """
+    if not attn_list or len(attn_list) == 0:
+        return None, None, "empty"
+
+    # 过滤掉 None
+    valid_attn = [(a, s, i) for a, s, i in attn_list if a is not None]
+    if len(valid_attn) == 0:
+        return None, None, "no_valid"
+
+    if len(valid_attn) == 1:
+        return valid_attn[0]
+
+    # 获取目标形状（使用第一个有效 attention 的形状）
+    target_attn, target_shape, _ = valid_attn[0]
+    B, N, H, T = target_attn.shape
+
+    # 调整所有 attention 到相同形状
+    normalized_attns = []
+    for attn, spatial_shape, _ in valid_attn:
+        # 如果形状不匹配，需要插值
+        if attn.shape != (B, N, H, T):
+            # 这里简化处理：如果token数不同，跳过
+            if attn.shape[0] != B or attn.shape[-1] != T:
+                logger.warning(f"Skipping attention with incompatible shape {attn.shape} vs {(B, N, H, T)}")
+                continue
+            # 如果空间大小不同，插值
+            if attn.shape[2] != H:
+                # 需要插值到目标大小
+                attn_reshaped = attn.reshape(B, N, int(np.sqrt(attn.shape[2])), int(np.sqrt(attn.shape[2])), T)
+                attn_reshaped = F.interpolate(
+                    attn_reshaped.permute(0, 1, 4, 2, 3),  # (B, N, T, h, w)
+                    size=(int(np.sqrt(H)), int(np.sqrt(H))),
+                    mode='bilinear',
+                    align_corners=False
+                ).permute(0, 1, 3, 4, 2).reshape(B, N, H, T)
+                normalized_attns.append(attn_reshaped)
+            else:
+                normalized_attns.append(attn)
+        else:
+            normalized_attns.append(attn)
+
+    if len(normalized_attns) == 0:
+        return valid_attn[0]
+
+    # 聚合
+    stacked = torch.stack(normalized_attns, dim=0)  # (num_stages, B, N, H, T)
+
+    if mode == "mean":
+        aggregated = stacked.mean(dim=0)
+    elif mode == "max":
+        aggregated = stacked.max(dim=0)[0]
+    elif mode == "weighted":
+        # 使用注意力强度作为权重
+        weights = stacked.sum(dim=(2, 3, 4), keepdim=True)  # (num_stages, B, 1, 1, 1)
+        weights = F.softmax(weights, dim=0)
+        aggregated = (stacked * weights).sum(dim=0)
+    else:
+        aggregated = stacked.mean(dim=0)
+
+    stage_names = "_".join([info.split("_")[-1] for _, _, info in valid_attn[:3]])
+    if len(valid_attn) > 3:
+        stage_names += f"_and_{len(valid_attn)-3}more"
+
+    return aggregated, target_shape, f"aggregated_{mode}_{stage_names}"
 
 
 def load_class_names(config):
@@ -443,20 +529,24 @@ def load_class_names(config):
 
 @torch.no_grad()
 def evaluate_with_attention(model, dataloader, config, device, engine,
-                            save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
+                            save_dir=None, vis_stage="enc", stage_indices=None, block_idx=-1,
                             num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
                             filter_tokens=None, competition_mode='softmax', competition_tau=2.0,
-                            colormap='turbo', gamma=0.75, enable_grid=False):
+                            colormap='turbo', gamma=0.75, enable_grid=False, save_predictions=True,
+                            aggregate_mode="none"):
     """
     注意力可视化 + 指标计算
+    stage_indices: list of int, or None for all stages
+    aggregate_mode: "none" (save separately), "mean", "max", "weighted"
     """
     from utils.metrics_new import Metrics
 
     logger.info("=" * 100)
     logger.info(f"Starting ENHANCED attention visualization")
     logger.info(f"  Stage: {vis_stage.upper()}")
-    logger.info(f"  Stage Index: {stage_idx}")
+    logger.info(f"  Stage Indices: {stage_indices if stage_indices else 'all'}")
     logger.info(f"  Block Index: {block_idx} (-1=last)")
+    logger.info(f"  Aggregate Mode: {aggregate_mode}")
     logger.info(f"  Num Images: {num_images if num_images else 'all'}")
     logger.info(f"  Alpha: {alpha}, Threshold: {threshold}, Smooth Sigma: {smooth_sigma}")
     logger.info(f"  Save Dir: {save_dir}")
@@ -521,13 +611,65 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         preds = model(images_gpu, modal_xs_gpu, text_features=text_feats)
 
         # 抽取注意力映射
-        attn_data = extract_attention_from_model_enhanced(model, vis_stage, stage_idx, block_idx)
+        attn_data = extract_attention_from_model_enhanced(model, vis_stage, stage_indices, block_idx)
+
+        # 如果需要聚合多个 stage 的 attention
+        if aggregate_mode != "none" and len(attn_data) > 1:
+            aggregated = aggregate_attention_maps(attn_data, mode=aggregate_mode)
+            # 保留聚合结果 + 原始结果
+            attn_data_to_save = [aggregated] + attn_data
+        else:
+            attn_data_to_save = attn_data
 
         # 更新指标
         metrics.update(preds.softmax(dim=1), labels_gpu)
 
-        # 可视化
-        if save_dir and attn_data[0][0] is not None:
+        # 保存分割预测结果
+        if save_dir and save_predictions:
+            pred_np = preds.argmax(dim=1).cpu().squeeze().numpy().astype(np.uint8)
+
+            # 获取NYU数据集的调色板
+            if config.dataset_name in ["NYUDepthv2", "SUNRGBD"]:
+                try:
+                    palette = np.load("./utils/nyucmap.npy")
+                except:
+                    # 如果找不到调色板文件，使用默认调色板
+                    palette = np.array([[i, i, i] for i in range(256)], dtype=np.uint8)
+            else:
+                # 其他数据集使用默认调色板
+                palette = np.array([
+                    [128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156],
+                    [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0],
+                    [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60],
+                    [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100],
+                    [0, 80, 100], [0, 0, 230], [119, 11, 32],
+                ] + [[i, i, i] for i in range(19, 256)], dtype=np.uint8)
+
+            # 为batch中的每张图保存预测结果
+            for b in range(images_gpu.shape[0]):
+                if "fn" in minibatch and len(minibatch["fn"]) > b:
+                    fn = minibatch["fn"][b]
+                    fn = fn.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
+                    fn = re.sub(r"[\\/]+", "_", fn)
+                else:
+                    fn = f"batch{idx:04d}_img{b}"
+
+                pred_save_dir = os.path.join(save_dir, "predictions")
+                os.makedirs(pred_save_dir, exist_ok=True)
+                pred_save_path = os.path.join(pred_save_dir, f"{fn}_pred.png")
+
+                # 应用调色板
+                pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]
+
+                # 保存
+                import matplotlib.pyplot as plt
+                plt.imsave(pred_save_path, pred_colored)
+
+                if b == 0:  # 只在第一张图时打印
+                    logger.info(f"Saved prediction to {pred_save_path}")
+
+        # Attention可视化
+        if save_dir and attn_data_to_save[0][0] is not None:
             B = images_gpu.shape[0]
             for b in range(B):
                 # 反规范化得到 RGB 原图（H,W,3）uint8
@@ -558,16 +700,41 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                             meta = json.loads(raw_meta)
                             meta_token_names = meta.get("names") or None
                             meta_token_types = meta.get("types") or None
+
+                            # 保存 token 信息到文件
+                            token_info_dir = os.path.join(save_dir, "token_info")
+                            os.makedirs(token_info_dir, exist_ok=True)
+                            token_info_path = os.path.join(token_info_dir, f"{fn}_tokens.json")
+
+                            token_info = {
+                                "image": fn,
+                                "num_tokens": len(meta_token_names) if meta_token_names else 0,
+                                "tokens": []
+                            }
+
+                            if meta_token_names:
+                                for i, name in enumerate(meta_token_names):
+                                    token_type = meta_token_types[i] if meta_token_types and i < len(meta_token_types) else "unknown"
+                                    token_info["tokens"].append({
+                                        "index": i,
+                                        "name": name,
+                                        "type": token_type
+                                    })
+
+                            with open(token_info_path, 'w', encoding='utf-8') as f:
+                                json.dump(token_info, f, indent=2, ensure_ascii=False)
+
                             # DEBUG: 打印实际获取的标签
                             if idx == 0 and b == 0:
                                 logger.info(
                                     f"[DEBUG] Sample image token names: {meta_token_names[:5] if meta_token_names else 'None'}...")
                                 logger.info(
                                     f"[DEBUG] Sample image token types: {meta_token_types[:5] if meta_token_types else 'None'}...")
+                                logger.info(f"[DEBUG] Token info saved to {token_info_path}")
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
-                for (attn_map, spatial_shape, stage_info) in attn_data:
+                for (attn_map, spatial_shape, stage_info) in attn_data_to_save:
                     if attn_map is None:
                         logger.warning(f"Attention map is None for {fn}, reason: {stage_info}")
                         continue
@@ -866,6 +1033,20 @@ with Engine(custom_parser=parser) as engine:
         if args.filter_tokens:
             filter_tokens_list = [t.strip() for t in args.filter_tokens.split(',') if t.strip()]
             logger.info(f"Filtering tokens: {filter_tokens_list}")
+
+        # 解析 stage indices
+        stage_indices = None
+        if args.vis_stage_idx.lower() == 'all':
+            stage_indices = None  # Extract all stages
+            logger.info("Extracting attention from ALL stages")
+        else:
+            try:
+                stage_indices = [int(i.strip()) for i in args.vis_stage_idx.split(',')]
+                logger.info(f"Extracting attention from stages: {stage_indices}")
+            except ValueError as e:
+                logger.error(f"Invalid stage indices format: {e}")
+                sys.exit(1)
+
         with torch.no_grad():
             model.eval()
             # Note: num_images is now handled by dataset filtering above
@@ -877,7 +1058,7 @@ with Engine(custom_parser=parser) as engine:
                 engine,
                 save_dir=args.save_path,
                 vis_stage=args.vis_stage,
-                stage_idx=args.vis_stage_idx,
+                stage_indices=stage_indices,
                 block_idx=args.vis_block_idx,
                 num_images=None,  # Dataset already filtered
                 alpha=args.attention_alpha,
@@ -890,6 +1071,7 @@ with Engine(custom_parser=parser) as engine:
                 colormap=args.vis_colormap,
                 gamma=args.vis_gamma,
                 enable_grid=args.vis_grid,
+                aggregate_mode=args.vis_aggregate,
             )
 
             if engine.distributed:
