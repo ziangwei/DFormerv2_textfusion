@@ -75,6 +75,7 @@ with Engine(custom_parser=parser) as engine:
     config.pad = args.pad_SUNRGBD
 
     # ---- 文本特征准备（优先：classbank → 其次：per-image 多标签 → 否则：旧单句） ----
+    classbank_KD = None  # 默认值，避免未定义错误
     if getattr(config, "classbank_labels_txt", None):
         prep = prepare_classbank_prompts(
             config.classbank_labels_txt,
@@ -91,9 +92,24 @@ with Engine(custom_parser=parser) as engine:
             register_set_name="eval-ml",
         )
         prompt_mode = "multilabel"
-    else:
+    elif getattr(config, "prompt_json", None):
         prepare_eval_prompts(config.eval_source, config.prompt_json)
         prompt_mode = "single"
+    else:
+        # 如果没有配置任何文本引导方式，使用标签文件作为后备
+        logger.warning("No prompt configuration found (classbank_labels_txt, topk_json, or prompt_json). "
+                      "Using label-based prompts as fallback.")
+        if getattr(config, "label_txt_path", None):
+            prep = prepare_classbank_prompts(
+                config.label_txt_path,
+                max_templates_per_label = getattr(config, "max_templates_per_label", 3),
+                register_set_name = "classbank",
+            )
+            classbank_KD = prep["embeds"]  # (K,D)
+            prompt_mode = "classbank"
+        else:
+            raise ValueError("No valid prompt configuration found. Please set one of: "
+                           "classbank_labels_txt, topk_json, prompt_json, or label_txt_path")
 
     cudnn.benchmark = True
     if config.dataset_name != "SUNRGBD":
