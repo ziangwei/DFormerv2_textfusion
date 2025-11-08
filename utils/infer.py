@@ -79,6 +79,12 @@ parser.add_argument("--save-attention", action="store_true",
                     help="Save attention maps for visualization")
 parser.add_argument("--save-predictions", action="store_true",
                     help="Save segmentation predictions (works without text guidance)")
+parser.add_argument("--dual-model", action="store_true",
+                    help="Load two different models and run both on the same images (model1=text-guided, model2=visual-only)")
+parser.add_argument("--model2-path", type=str, default=None,
+                    help="Path to second model checkpoint for dual-model comparison (required if --dual-model is set)")
+parser.add_argument("--model2-save-path", type=str, default=None,
+                    help="Output path for second model (default: <save_path>_model2)")
 parser.add_argument("--vis-stage", type=str, default="enc",
                     choices=["enc", "dec"],
                     help="Visualize encoder or decoder attention")
@@ -854,6 +860,38 @@ with Engine(custom_parser=parser) as engine:
     if args.superpower is not None:
         config.superpower = bool(args.superpower)
 
+    # ★ 验证双模型模式参数
+    if args.dual_model:
+        if not args.model2_path:
+            logger.error("--dual-model requires --model2-path to be specified!")
+            sys.exit(1)
+        if not os.path.exists(args.model2_path):
+            logger.error(f"Model 2 checkpoint not found: {args.model2_path}")
+            sys.exit(1)
+
+        # 双模型模式：强制设置模式1为 attention，模式2为 predictions
+        args.save_attention = True
+        args.save_predictions = False  # 模型1不保存predictions
+
+        # 设置默认输出路径
+        if not args.save_path:
+            args.save_path = "./dual_model_model1_attention"
+            logger.info(f"Model 1 output path not specified, using default: {args.save_path}")
+
+        if not args.model2_save_path:
+            args.model2_save_path = args.save_path.rstrip('/') + "_model2_visual"
+            logger.info(f"Model 2 output path not specified, using default: {args.model2_save_path}")
+
+        logger.info("=" * 80)
+        logger.info("DUAL-MODEL COMPARISON MODE ENABLED")
+        logger.info(f"Model 1 (Text-Guided): {args.continue_fpath}")
+        logger.info(f"  Output: {args.save_path}")
+        logger.info(f"  Mode: Attention visualization (--save-attention)")
+        logger.info(f"Model 2 (Visual-Only): {args.model2_path}")
+        logger.info(f"  Output: {args.model2_save_path}")
+        logger.info(f"  Mode: Prediction only (--save-predictions)")
+        logger.info("=" * 80)
+
     # ★ 为可视化强制开启 text guidance（不影响评测）
     if args.save_attention:
         logger.info("Forcing enable_text_guidance=True for attention visualization")
@@ -1004,6 +1042,23 @@ with Engine(custom_parser=parser) as engine:
         args.save_path = "./infer_predictions"
         logger.info(f"--save-predictions enabled but no --save_path specified, using default: {args.save_path}")
 
+    # ★★★ 双模型对比模式 ★★★
+    if args.dual_model:
+        logger.info("=" * 100)
+        logger.info("RUNNING DUAL-MODEL COMPARISON MODE")
+        logger.info("=" * 100)
+
+        # === STEP 1: Run Model 1 (Text-Guided) ===
+        logger.info("\n" + "=" * 100)
+        logger.info("STEP 1/2: Running Model 1 (Text-Guided + Attention Visualization)")
+        logger.info(f"Checkpoint: {args.continue_fpath}")
+        logger.info(f"Output: {args.save_path}")
+        logger.info("=" * 100 + "\n")
+
+        # 模型1已经加载，直接运行 attention 可视化
+        # 这里会执行下面的 args.save_attention 分支
+        pass  # 继续执行下面的正常流程
+
     if args.save_attention:
         # 注意力可视化模式
         # 解析 filter_tokens 参数
@@ -1067,6 +1122,120 @@ with Engine(custom_parser=parser) as engine:
                 acc, macc = metric.compute_pixel_acc()
                 f1, mf1 = metric.compute_f1()
                 logger.info(f"mIoU: {miou:.4f}")
+
+        # === STEP 2: Run Model 2 (Visual-Only) for dual-model mode ===
+        if args.dual_model:
+            logger.info("\n" + "=" * 100)
+            logger.info("STEP 2/2: Running Model 2 (Visual-Only + Prediction Saving)")
+            logger.info(f"Checkpoint: {args.model2_path}")
+            logger.info(f"Output: {args.model2_save_path}")
+            logger.info("=" * 100 + "\n")
+
+            # 清理模型1，释放显存
+            logger.info("Clearing Model 1 from GPU memory...")
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.info("✓ Model 1 cleared\n")
+
+            # 重新配置 config 为纯视觉模式
+            logger.info("Reconfiguring for visual-only mode...")
+            config.enable_text_guidance = False
+            logger.info("✓ config.enable_text_guidance = False\n")
+
+            # 重新创建模型2
+            logger.info("Loading Model 2...")
+            BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
+            model2 = segmodel(cfg=config, norm_layer=BatchNorm2d)
+
+            # 加载模型2的权重
+            weight2 = torch.load(args.model2_path, map_location="cpu")["model"]
+            logger.info("Loading Model 2 weights...")
+            model2.load_state_dict(weight2, strict=False)
+
+            # 将模型2移到设备
+            if engine.distributed:
+                if torch.cuda.is_available():
+                    model2.cuda()
+                    model2 = DistributedDataParallel(
+                        model2,
+                        device_ids=[engine.local_rank],
+                        output_device=engine.local_rank,
+                        find_unused_parameters=True,
+                    )
+            else:
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                model2.to(device)
+
+            logger.info("✓ Model 2 loaded successfully\n")
+
+            # 重新创建 dataloader（使用相同的 selected_indices）
+            logger.info("Recreating dataloader with same image selection...")
+            # val_loader 已经是筛选后的，直接使用
+            logger.info(f"✓ Using same {len(val_loader.dataset)} images\n")
+
+            # 运行模型2的多尺度评估
+            logger.info("Running multi-scale+flip evaluation for Model 2...")
+            scales = [0.5, 0.75, 1.0, 1.25, 1.5]
+            flip = True
+
+            if engine.distributed:
+                with torch.no_grad():
+                    model2.eval()
+                    all_metrics_m2 = evaluate_msf(
+                        model2,
+                        val_loader,
+                        config,
+                        device,
+                        scales,
+                        flip,
+                        engine,
+                        save_dir=args.model2_save_path,
+                    )
+                    if engine.local_rank == 0:
+                        metric_m2 = all_metrics_m2[0]
+                        for other_metric in all_metrics_m2[1:]:
+                            metric_m2.update_hist(other_metric.hist)
+                        ious_m2, miou_m2 = metric_m2.compute_iou()
+                        acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+                        f1_m2, mf1_m2 = metric_m2.compute_f1()
+
+                        logger.info("\n" + "=" * 100)
+                        logger.info("MODEL 2 RESULTS (Visual-Only):")
+                        logger.info(f"mIoU: {miou_m2:.4f}")
+                        logger.info(f"mAcc: {macc_m2:.4f}")
+                        logger.info(f"mF1: {mf1_m2:.4f}")
+                        logger.info("=" * 100)
+            else:
+                with torch.no_grad():
+                    model2.eval()
+                    metric_m2 = evaluate_msf(
+                        model2,
+                        val_loader,
+                        config,
+                        device,
+                        scales,
+                        flip,
+                        engine,
+                        save_dir=args.model2_save_path,
+                    )
+                    ious_m2, miou_m2 = metric_m2.compute_iou()
+                    acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+                    f1_m2, mf1_m2 = metric_m2.compute_f1()
+
+                    logger.info("\n" + "=" * 100)
+                    logger.info("MODEL 2 RESULTS (Visual-Only):")
+                    logger.info(f"mIoU: {miou_m2:.4f}")
+                    logger.info(f"mAcc: {macc_m2:.4f}")
+                    logger.info(f"mF1: {mf1_m2:.4f}")
+                    logger.info("=" * 100)
+
+            logger.info("\n" + "=" * 100)
+            logger.info("DUAL-MODEL COMPARISON COMPLETED")
+            logger.info("=" * 100)
+            logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
+            logger.info(f"Model 2 (Visual-Only) outputs: {args.model2_save_path}")
+            logger.info("=" * 100 + "\n")
 
     else:
         # 标准多尺度评估 (使用和eval.py相同的配置以获得一致的mIoU)
