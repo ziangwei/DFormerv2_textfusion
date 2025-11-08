@@ -624,29 +624,28 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         # 更新指标
         metrics.update(preds.softmax(dim=1), labels_gpu)
 
-        # 保存分割预测结果
-        if save_dir and save_predictions:
-            pred_np = preds.argmax(dim=1).cpu().squeeze().numpy().astype(np.uint8)
+        # 获取调色板（提前准备，后面保存分割结果时用）
+        if config.dataset_name in ["NYUDepthv2", "SUNRGBD"]:
+            try:
+                palette = np.load("./utils/nyucmap.npy")
+            except:
+                palette = np.array([[i, i, i] for i in range(256)], dtype=np.uint8)
+        else:
+            palette = np.array([
+                [128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156],
+                [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0],
+                [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60],
+                [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100],
+                [0, 80, 100], [0, 0, 230], [119, 11, 32],
+            ] + [[i, i, i] for i in range(19, 256)], dtype=np.uint8)
 
-            # 获取NYU数据集的调色板
-            if config.dataset_name in ["NYUDepthv2", "SUNRGBD"]:
-                try:
-                    palette = np.load("./utils/nyucmap.npy")
-                except:
-                    # 如果找不到调色板文件，使用默认调色板
-                    palette = np.array([[i, i, i] for i in range(256)], dtype=np.uint8)
-            else:
-                # 其他数据集使用默认调色板
-                palette = np.array([
-                    [128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156],
-                    [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0],
-                    [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60],
-                    [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100],
-                    [0, 80, 100], [0, 0, 230], [119, 11, 32],
-                ] + [[i, i, i] for i in range(19, 256)], dtype=np.uint8)
+        # 为每张图创建独立文件夹并保存所有可视化结果
+        if save_dir and attn_data_to_save[0][0] is not None:
+            B = images_gpu.shape[0]
+            pred_np = preds.argmax(dim=1).cpu().numpy().astype(np.uint8)
 
-            # 为batch中的每张图保存预测结果
-            for b in range(images_gpu.shape[0]):
+            for b in range(B):
+                # 获取文件名
                 if "fn" in minibatch and len(minibatch["fn"]) > b:
                     fn = minibatch["fn"][b]
                     fn = fn.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
@@ -654,25 +653,11 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 else:
                     fn = f"batch{idx:04d}_img{b}"
 
-                pred_save_dir = os.path.join(save_dir, "predictions")
-                os.makedirs(pred_save_dir, exist_ok=True)
-                pred_save_path = os.path.join(pred_save_dir, f"{fn}_pred.png")
+                # 为每张图创建独立文件夹
+                img_output_dir = os.path.join(save_dir, fn)
+                os.makedirs(img_output_dir, exist_ok=True)
 
-                # 应用调色板
-                pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]
-
-                # 保存
-                import matplotlib.pyplot as plt
-                plt.imsave(pred_save_path, pred_colored)
-
-                if b == 0:  # 只在第一张图时打印
-                    logger.info(f"Saved prediction to {pred_save_path}")
-
-        # Attention可视化
-        if save_dir and attn_data_to_save[0][0] is not None:
-            B = images_gpu.shape[0]
-            for b in range(B):
-                # 反规范化得到 RGB 原图（H,W,3）uint8
+                # 1. 保存原始图片（反规范化）
                 rgb_tensor = images[b]
                 rgb_np = rgb_tensor.permute(1, 2, 0).cpu().numpy()
                 mean = np.array(config.norm_mean).reshape(1, 1, 3)
@@ -681,15 +666,16 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 rgb_np = (rgb_np * 255).clip(0, 255).astype(np.uint8)
                 H_img, W_img = rgb_np.shape[:2]
 
-                # 文件名
-                if "fn" in minibatch and len(minibatch["fn"]) > b:
-                    fn = minibatch["fn"][b]
-                    fn = fn.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
-                    fn = re.sub(r"[\\/]+", "_", fn)
-                else:
-                    fn = f"batch{idx:04d}_img{b}"
+                import matplotlib.pyplot as plt
+                original_path = os.path.join(img_output_dir, "00_original.png")
+                plt.imsave(original_path, rgb_np)
 
-                # 解析该图的 token 名称/类型（来自 dataset 的 text_token_meta）
+                # 2. 保存分割结果
+                pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]
+                seg_path = os.path.join(img_output_dir, "01_segmentation.png")
+                plt.imsave(seg_path, pred_colored)
+
+                # 解析该图的 token 名称/类型
                 meta_token_names, meta_token_types = None, None
                 if token_meta_batch is not None:
                     raw_meta = token_meta_batch[b] if isinstance(token_meta_batch, (list, tuple)) else token_meta_batch
@@ -700,43 +686,14 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                             meta = json.loads(raw_meta)
                             meta_token_names = meta.get("names") or None
                             meta_token_types = meta.get("types") or None
-
-                            # 保存 token 信息到文件
-                            token_info_dir = os.path.join(save_dir, "token_info")
-                            os.makedirs(token_info_dir, exist_ok=True)
-                            token_info_path = os.path.join(token_info_dir, f"{fn}_tokens.json")
-
-                            token_info = {
-                                "image": fn,
-                                "num_tokens": len(meta_token_names) if meta_token_names else 0,
-                                "tokens": []
-                            }
-
-                            if meta_token_names:
-                                for i, name in enumerate(meta_token_names):
-                                    token_type = meta_token_types[i] if meta_token_types and i < len(meta_token_types) else "unknown"
-                                    token_info["tokens"].append({
-                                        "index": i,
-                                        "name": name,
-                                        "type": token_type
-                                    })
-
-                            with open(token_info_path, 'w', encoding='utf-8') as f:
-                                json.dump(token_info, f, indent=2, ensure_ascii=False)
-
-                            # DEBUG: 打印实际获取的标签
-                            if idx == 0 and b == 0:
-                                logger.info(
-                                    f"[DEBUG] Sample image token names: {meta_token_names[:5] if meta_token_names else 'None'}...")
-                                logger.info(
-                                    f"[DEBUG] Sample image token types: {meta_token_types[:5] if meta_token_types else 'None'}...")
-                                logger.info(f"[DEBUG] Token info saved to {token_info_path}")
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
+                # 3. 保存每个token的attention可视化
+                token_counter = 2  # 从02开始编号（00是原图，01是分割）
+
                 for (attn_map, spatial_shape, stage_info) in attn_data_to_save:
                     if attn_map is None:
-                        logger.warning(f"Attention map is None for {fn}, reason: {stage_info}")
                         continue
 
                     # attn_map: (B, N, Hh, T) 或 (B, N, T)
@@ -745,20 +702,17 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         # 对每个token选响应最大的head
                         attn_single = attn_single.max(dim=1)[0]
                     elif attn_single.dim() != 2:
-                        logger.warning(f"Unsupported attention shape: {tuple(attn_single.shape)}")
                         continue
 
                     N, T = attn_single.shape
 
                     # 还原空间网格
-                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(
-                            spatial_shape) == 2:
+                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(spatial_shape) == 2:
                         h_attn, w_attn = int(spatial_shape[0]), int(spatial_shape[1])
                     else:
                         h_attn = int(np.sqrt(N))
                         w_attn = h_attn
                     if h_attn * w_attn != N:
-                        logger.warning(f"Spatial shape mismatch: {h_attn}x{w_attn}!={N}, skip {fn}.")
                         continue
 
                     attn_2d = attn_single.reshape(h_attn, w_attn, T)  # (H', W', T)
@@ -771,49 +725,66 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         align_corners=False
                     ).squeeze(0).permute(1, 2, 0)  # (H, W, T)
 
-                    # 选择名称来源：先用 per-image meta；没有再用全局 label list；最后回退 tok{t}
+                    # 获取token名称
                     if meta_token_names is not None and len(meta_token_names) > 0:
                         token_names = list(meta_token_names)
                         token_types = list(meta_token_types) if meta_token_types else None
-                        if idx == 0 and b == 0:
-                            logger.info(f"[DEBUG] Using per-image token names (source: dataset metadata)")
                     elif global_token_names:
                         token_names = global_token_names[:T]
                         token_types = None
-                        if idx == 0 and b == 0:
-                            logger.warning(
-                                f"[WARNING] Falling back to global label list! This may not match per-image labels.")
-                            logger.warning(
-                                f"[WARNING] Check if --text-source=imglabels and --image-labels-json-path are set correctly.")
                     else:
                         token_names = [f"tok{t}" for t in range(T)]
                         token_types = None
-                        if idx == 0 and b == 0:
-                            logger.warning(
-                                f"[WARNING] Using generic token names (tok0, tok1, ...). No label information available!")
 
-                    save_prefix = os.path.join(save_dir, "attention", stage_info, fn)
-                    os.makedirs(os.path.dirname(save_prefix), exist_ok=True)
+                    # 为每个token保存attention map
+                    pad_markers = {"", "<pad>", "[pad]", "pad", "<none>", "none"}
 
-                    visualize_attention_maps_enhanced(
-                        attn_resized,
-                        rgb_np,
-                        save_prefix,
-                        token_names=token_names,
-                        token_types=token_types,
-                        alpha=alpha,
-                        threshold=threshold,
-                        smooth_sigma=smooth_sigma,
-                        max_tokens=max_token_vis,
-                        filter_tokens=filter_tokens,
-                        competition_mode=competition_mode,
-                        competition_tau=competition_tau,
-                        colormap=colormap,
-                        gamma=gamma,
-                        enable_grid=enable_grid
-                    )
+                    # 如果有filter_tokens，只保存指定的tokens
+                    if filter_tokens is not None and len(filter_tokens) > 0:
+                        filter_set = {ft.lower().strip() for ft in filter_tokens}
+                        tokens_to_save = []
+                        for t in range(T):
+                            nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+                            if nm.lower() in filter_set and nm.lower() not in pad_markers:
+                                tokens_to_save.append(t)
+                    else:
+                        # 保存所有非padding的tokens
+                        tokens_to_save = []
+                        for t in range(T):
+                            nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+                            if nm.lower() not in pad_markers:
+                                tokens_to_save.append(t)
 
-                    logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
+                    # 保存每个token
+                    for t in tokens_to_save:
+                        nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+
+                        # 应用竞争性归一化（如果启用）
+                        if competition_mode and competition_mode.lower() != 'none':
+                            a = compute_competitive_map(attn_resized.cpu().numpy(), t, mode=competition_mode, tau=competition_tau)
+                        else:
+                            a = _normalize01(attn_resized[..., t].cpu().numpy())
+
+                        # 保存文件，使用编号前缀
+                        file_name = f"{token_counter:02d}_attn_{_slugify(nm)}.png"
+                        file_path = os.path.join(img_output_dir, file_name)
+
+                        _save_single_token_map(
+                            a, rgb_np, file_path.replace("_attn.png", ""),
+                            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma,
+                            colormap=colormap, gamma=gamma, enable_grid=enable_grid
+                        )
+
+                        token_counter += 1
+
+                    # 如果是第一张图，打印示例信息
+                    if idx == 0 and b == 0:
+                        logger.info(f"✓ Saved visualization for image '{fn}':")
+                        logger.info(f"  - 00_original.png")
+                        logger.info(f"  - 01_segmentation.png")
+                        logger.info(f"  - {len(tokens_to_save)} attention maps (02-{token_counter-1:02d})")
+                        if token_names:
+                            logger.info(f"  - Tokens: {[token_names[t] for t in tokens_to_save[:5]]}{'...' if len(tokens_to_save) > 5 else ''}")
 
                 processed_images += 1
 

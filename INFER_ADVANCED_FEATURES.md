@@ -31,20 +31,24 @@ python utils/infer.py \
     --num-images 10
 ```
 
-**输出文件结构：**
+**新版输出文件结构（每张图一个文件夹）：**
 ```
 output/
-├── predictions/          # 分割结果
-│   ├── RGB_0_pred.png
-│   ├── RGB_1_pred.png
+├── RGB_0/                      # 第一张图片的所有输出
+│   ├── 00_original.png         # 原始图片
+│   ├── 01_segmentation.png     # 分割结果
+│   ├── 02_attn_wall.png        # Token: wall
+│   ├── 03_attn_floor.png       # Token: floor
+│   ├── 04_attn_ceiling.png     # Token: ceiling
+│   └── ...                     # 其他tokens
+├── RGB_1/                      # 第二张图片的所有输出
+│   ├── 00_original.png
+│   ├── 01_segmentation.png
+│   ├── 02_attn_wall.png
 │   └── ...
-├── attention/           # Attention 可视化
-│   └── enc_stage0_block2/
-│       ├── RGB_0__imglabel_wall_attn.png
-│       └── ...
-└── token_info/          # Token 信息
-    ├── RGB_0_tokens.json
-    └── ...
+└── ...
+
+详细说明请参考：INFER_OUTPUT_STRUCTURE.md
 ```
 
 ### 调色板支持
