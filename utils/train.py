@@ -48,6 +48,7 @@ parser.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction
 parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument("--use_seed", default=True, action=argparse.BooleanOptionalAction)
+parser.add_argument("--seed", type=int, default=None, help="Random seed (overrides config.seed if provided)")
 parser.add_argument("--local-rank", default=0)
 
 # --- text guidance runtime switches ---
@@ -226,10 +227,11 @@ with Engine(custom_parser=parser) as engine:
 
         # === Seed Configuration ===
         if args.use_seed:
-            # Deterministic mode: use config seed
-            actual_seed = config.seed
+            # Deterministic mode: use CLI seed if provided, otherwise use config seed
+            actual_seed = args.seed if args.seed is not None else config.seed
             set_seed(actual_seed)
-            logger.info(f"✓ Deterministic training enabled with seed: {actual_seed}")
+            seed_source = "CLI argument" if args.seed is not None else "config file"
+            logger.info(f"✓ Deterministic training enabled with seed: {actual_seed} (from {seed_source})")
         else:
             # Non-deterministic mode: generate 5-digit random seed for logging/reproducibility
             # IMPORTANT: In distributed training, rank 0 generates seed and broadcasts to others

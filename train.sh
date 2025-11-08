@@ -49,7 +49,9 @@ PYTHONPATH="$(dirname $0)/..":"$(dirname $0)":$PYTHONPATH \
 # 例子: 1，3的时候 decoder启用了对于H/8和H/32的stage输出的decoder内的SAM
 # --superpower \ 代指block内部的结构
 
-
+# --use_seed \
+# --seed 12345 \
+# 用来在use_seed模式下传参传入seed值
 
 # config for DFormers on NYUDepthv2
 # local_configs.NYUDepthv2.DFormer_Large

@@ -24,10 +24,9 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --no-compile \
     --syncbn \
     --mst \
-    --compile_mode="reduce-overhead" \
     --amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/NYUDepthv2_DFormerv2_S_CLIPsoftmax(2)_60.66/epoch-508_miou_60.5.pth"
+    --continue_fpath="checkpoints/NYU_S_57.53_seed53384_clip_ori/epoch-251_miou_57.49.pth"
 
 
 # choose the dataset and DFormer for evaluating

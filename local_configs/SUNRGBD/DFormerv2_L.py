@@ -24,7 +24,7 @@ C.max_image_labels = 6
 # 具体模型名（留空走默认：clip→openai/clip-vit-base-patch16；jinaclip→jinaai/jina-clip-v2）
 C.text_encoder_name = None
 # 标签与描述数据
-C.image_labels_json_path = "datasets/SUNRGBD/out.json"
+C.image_labels_json_path = "datasets/SUNRGBD/out2.json"
 
 # 模板与数量（对“类名→多模板短句”的扩写）
 C.text_template_set = "clip"           # clip / none
@@ -52,7 +52,7 @@ C.sam_use_topk = (C.text_source != "imglabels")
 C.sam_top_m = 5
 
 """Train Config"""
-C.lr = 8e-5
+C.lr = 6e-5
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
@@ -66,7 +66,7 @@ C.warm_up_epoch = 10
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.drop_path_rate = 0.27
+C.drop_path_rate = 0.2
 C.aux_rate = 0.0
 
 """Eval Config"""

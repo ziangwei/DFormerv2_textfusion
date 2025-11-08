@@ -2,7 +2,6 @@ import argparse
 import pprint
 import time
 from importlib import import_module
-from prompt_utils import prepare_eval_prompts, prepare_eval_prompts_multilabel, prepare_classbank_prompts
 import json
 from pathlib import Path
 import torch
@@ -11,7 +10,7 @@ import torch.nn as nn
 from models.builder import EncoderDecoder as segmodel
 from tensorboardX import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
-from val_mm import evaluate, evaluate_msf
+from utils.val_mm import evaluate, evaluate_msf
 from utils.dataloader.dataloader import get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.engine.engine import Engine
@@ -24,7 +23,6 @@ torch.backends.cudnn.benchmark = True
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", help="used gpu number")
-# parser.add_argument('-d', '--devices', default='0,1', type=str)
 parser.add_argument("-v", "--verbose", default=False, action="store_true")
 parser.add_argument("--epochs", default=0)
 parser.add_argument("--show_image", "-s", default=False, action="store_true")
@@ -39,31 +37,84 @@ parser.add_argument("--mst", default=True, action=argparse.BooleanOptionalAction
 parser.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
-# parser.add_argument('--save_path', '-p', default=None)
-parser.add_argument("--topk_json", default=None, type=str)
-parser.add_argument("--topk_K", default=5, type=int)
-parser.add_argument("--max_templates_per_label", default=3, type=int)
 
+# --- text guidance runtime switches ---
+parser.add_argument("--text-source", choices=["labels", "captions", "both", "imglabels"])
+parser.add_argument("--text-encoder", choices=["clip", "jinaclip"])
+parser.add_argument("--text-encoder-name", type=str)
+parser.add_argument("--text-feature-dim", type=int)
+parser.add_argument("--label-txt-path", type=str)
+parser.add_argument("--caption-json-path", type=str)
+parser.add_argument("--text-template-set", choices=["clip", "jinaclip", "none"])
+parser.add_argument("--max-templates-per-label", type=int)
+parser.add_argument("--max-caption-sentences", type=int)
+parser.add_argument("--caption-topk", type=int)
+parser.add_argument("--caption-topk-mode", choices=["class_sim", "firstk", "lenk"])
+parser.add_argument("--image-labels-json-path", type=str)
 
-# os.environ['MASTER_PORT'] = '169710'
+# --- SAM per-stage switches ---
+parser.add_argument("--sam-enc-stages", type=str, default="1,2,3", help="Comma separated, e.g., 0,2")
+parser.add_argument("--sam-dec-stages", type=str, default="1,2,3", help="Comma separated, e.g., 1,3")
+
 torch.set_float32_matmul_precision("high")
 import torch._dynamo
-
 torch._dynamo.config.suppress_errors = True
-# torch._dynamo.config.automatic_dynamic_shapes = False
 
+
+def _parse_stages(s: str):
+    if s is None:
+        return [0,1,2,3]
+    s = str(s).strip()
+    if not s:
+        return []
+    out = []
+    for x in s.split(","):
+        x = x.strip()
+        if x == "":
+            continue
+        try:
+            out.append(int(x))
+        except:
+            pass
+    return out
 
 
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
     config = getattr(import_module(args.config), "C")
 
-    if args.topk_json:
-        config.topk_json = args.topk_json
-        config.topk_K = args.topk_K
-        config.max_templates_per_label = args.max_templates_per_label
+    # === override text guidance config by CLI (if provided) ===
+    if args.text_source is not None:
+        config.text_source = args.text_source
+    if args.text_encoder is not None:
+        config.text_encoder = args.text_encoder
+    if args.text_encoder_name is not None:
+        config.text_encoder_name = args.text_encoder_name
+    if args.text_feature_dim is not None:
+        config.text_feature_dim = int(args.text_feature_dim)
+    if args.label_txt_path is not None:
+        config.label_txt_path = args.label_txt_path
+    if args.caption_json_path is not None:
+        config.caption_json_path = args.caption_json_path
+    if args.text_template_set is not None:
+        config.text_template_set = args.text_template_set
+    if args.max_templates_per_label is not None:
+        config.max_templates_per_label = int(args.max_templates_per_label)
+    if args.max_caption_sentences is not None:
+        config.max_caption_sentences = int(args.max_caption_sentences)
+    if args.caption_topk is not None:
+        config.caption_topk = int(args.caption_topk)
+    if args.caption_topk_mode is not None:
+        config.caption_topk_mode = args.caption_topk_mode
+    if args.image_labels_json_path is not None:
+        config.image_labels_json_path = args.image_labels_json_path
+
+    # === SAM per-stage ===
+    config.sam_enc_stages = _parse_stages(args.sam_enc_stages)
+    config.sam_dec_stages = _parse_stages(args.sam_dec_stages)
 
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
+
     # check if pad_SUNRGBD is used correctly
     if args.pad_SUNRGBD and config.dataset_name != "SUNRGBD":
         args.pad_SUNRGBD = False
@@ -73,27 +124,6 @@ with Engine(custom_parser=parser) as engine:
     if (not args.pad_SUNRGBD) and config.backbone.startswith("DFormerv2") and config.dataset_name == "SUNRGBD":
         raise ValueError("DFormerv2 is not recommended without pad_SUNRGBD")
     config.pad = args.pad_SUNRGBD
-
-    # ---- 文本特征准备（优先：classbank → 其次：per-image 多标签 → 否则：旧单句） ----
-    if getattr(config, "classbank_labels_txt", None):
-        prep = prepare_classbank_prompts(
-            config.classbank_labels_txt,
-            max_templates_per_label = getattr(config, "max_templates_per_label", 3),
-            register_set_name = "classbank",
-        )
-        classbank_KD = prep["embeds"]  # (K,D)
-        prompt_mode = "classbank"
-    elif getattr(config, "topk_json", None):
-        prepare_eval_prompts_multilabel(
-            config.eval_source, config.topk_json,
-            K=getattr(config, "topk_K", 5),
-            max_templates_per_label=getattr(config, "max_templates_per_label", 3),
-            register_set_name="eval-ml",
-        )
-        prompt_mode = "multilabel"
-    else:
-        prepare_eval_prompts(config.eval_source, config.prompt_json)
-        prompt_mode = "single"
 
     cudnn.benchmark = True
     if config.dataset_name != "SUNRGBD":
@@ -191,8 +221,6 @@ with Engine(custom_parser=parser) as engine:
                             True,
                             engine,
                             sliding=args.sliding,
-                            classbank_KD=classbank_KD,
-                            prompt_mode = prompt_mode,
                         )
                     else:
                         all_metrics = evaluate(
@@ -202,8 +230,6 @@ with Engine(custom_parser=parser) as engine:
                             device,
                             engine,
                             sliding=args.sliding,
-                            classbank_KD=classbank_KD,
-                            prompt_mode=prompt_mode,
                         )
                     if engine.local_rank == 0:
                         metric = all_metrics[0]
@@ -230,8 +256,6 @@ with Engine(custom_parser=parser) as engine:
                             True,
                             engine,
                             sliding=args.sliding,
-                            classbank_KD=classbank_KD,
-                            prompt_mode=prompt_mode,
                         )
                     else:
                         metric = evaluate(
@@ -241,8 +265,6 @@ with Engine(custom_parser=parser) as engine:
                             device,
                             engine,
                             sliding=args.sliding,
-                            classbank_KD=classbank_KD,
-                            prompt_mode=prompt_mode,
                         )
                     ious, miou = metric.compute_iou()
                     acc, macc = metric.compute_pixel_acc()
@@ -264,8 +286,6 @@ with Engine(custom_parser=parser) as engine:
                         True,
                         engine,
                         sliding=args.sliding,
-                        classbank_KD=classbank_KD,
-                        prompt_mode=prompt_mode,
                     )
                 else:
                     all_metrics = evaluate(
@@ -275,8 +295,6 @@ with Engine(custom_parser=parser) as engine:
                         device,
                         engine,
                         sliding=args.sliding,
-                        classbank_KD=classbank_KD,
-                        prompt_mode=prompt_mode,
                     )
                 if engine.local_rank == 0:
                     metric = all_metrics[0]
@@ -303,8 +321,6 @@ with Engine(custom_parser=parser) as engine:
                         True,
                         engine,
                         sliding=args.sliding,
-                        classbank_KD=classbank_KD,
-                        prompt_mode=prompt_mode,
                     )
                 else:
                     metric = evaluate(
@@ -314,8 +330,6 @@ with Engine(custom_parser=parser) as engine:
                         device,
                         engine,
                         sliding=args.sliding,
-                        classbank_KD=classbank_KD,
-                        prompt_mode=prompt_mode,
                     )
                 ious, miou = metric.compute_iou()
                 acc, macc = metric.compute_pixel_acc()

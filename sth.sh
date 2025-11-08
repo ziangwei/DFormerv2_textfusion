@@ -17,10 +17,10 @@
 #  --out datasets/NYUDepthv2/topk_labels6_text_internvl3.json
 
 # 取多个大模型生成的文本的交集
-python intersect_labels.py \
-    datasets/SUNRGBD/out.json \
-    datasets/SUNRGBD/sunrgbd_image_labels_internvl3.json \
-    datasets/SUNRGBD/sunrgbd_image_labels_qwen3vl.json
+#python intersect_labels.py \
+#    datasets/SUNRGBD/out2.json \
+#    datasets/SUNRGBD/sunrgbd_image_labels_internvl3.json \
+#    datasets/SUNRGBD/sunrgbd_image_labels2_qwen3vl.json
 
 # 计算某json与真值标签的重合度
 #python compare_json_overlap.py \
@@ -28,7 +28,8 @@ python intersect_labels.py \
 #    datasets/NYUDepthv2/top5_labels_per_image.json
 
 # 计算某json的标签平均数
-#python stats_labels.py datasets/NYUDepthv2/out.json
+
+#python stats_labels.py datasets/SUNRGBD/out2.json
 
 # 画图
 #python nyu_overlay.py \
@@ -37,3 +38,9 @@ python intersect_labels.py \
 #  --colormap utils/nyucmap.npy \
 #  --style paper-soft \
 #  --out out/f2.png
+
+python utils/benchmark.py \
+  --config local_configs.NYUDepthv2.DFormerv2_S \
+  --height 480 --width 640 \
+  --device cpu \
+  --detailed

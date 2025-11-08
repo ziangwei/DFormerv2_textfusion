@@ -651,7 +651,7 @@ class dformerv2(nn.Module):
                 return 8
             if embed_dim >= 320:  # B模型
                 return 4
-            return 2
+            return 4
 
         if depth >= 6 and embed_dim >= 640:  # L模型Stage 3
             return 4  # 从8降到4

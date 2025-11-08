@@ -24,21 +24,22 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --master_port=$PORT \
     utils/infer.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S \
-    --continue_fpath=checkpoints/NYUDepthv2_DFormerv2_S_20251105-115814/epoch-339_miou_57.48.pth \
-    --save_path output/enc_stage2 \
+    --continue_fpath=checkpoints/NYU_S_57.53_seed53384_clip_ori/epoch-251_miou_57.49.pth \
+    --save_path output \
     --gpus=$GPUS \
     --text-source imglabels \
     --image-labels-json-path datasets/NYUDepthv2/out.json \
-    --text-encoder jinaclip \
+    --text-encoder clip \
     --sam-enc-stages 1,2,3 \
     --sam-dec-stages 1,2,3 \
     --superpower \
     --save-attention \
     --vis-stage dec \
-    --vis-stage-idx 1 \
-    --vis-block-idx 0 \
+    --vis-stage-idx 2 \
+    --vis-block-idx -1 \
     --num-images 3
 
+#   --random-sample \
 # choose the dataset and DFormer for evaluating
 
 # NYUv2 DFormers

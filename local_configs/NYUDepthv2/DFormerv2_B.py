@@ -3,7 +3,6 @@ from .._base_.datasets.NYUDepthv2 import *
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = "DFormerv2_B"  # Remember change the path below.
 C.pretrained_model = "checkpoints/pretrained/DFormerv2_Base_pretrained.pth"
-# C.decoder = "ham"
 C.decoder = "HSGHead"
 C.decoder_embed_dim = 512
 C.optimizer = "AdamW"
@@ -61,7 +60,7 @@ C.lr = 6e-5
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
-C.batch_size = 8
+C.batch_size = 16
 C.nepochs = 500
 C.niters_per_epoch = C.num_train_imgs // C.batch_size + 1
 C.num_workers = 0

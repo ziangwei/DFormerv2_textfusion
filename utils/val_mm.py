@@ -72,6 +72,10 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         #     metrics.update(preds[i].unsqueeze(0), labels[i].unsqueeze(0))
         # metrics.update(preds, labels)
 
+        # 安全释放eval缓存：在no_grad上下文中清理，不影响训练
+        # 每处理完一个batch就清理，防止内存累积导致OOM
+        torch.cuda.empty_cache()
+
         if save_dir is not None:
             palette = [
                 [128, 64, 128],
@@ -337,6 +341,9 @@ def evaluate_msf(
 
         metrics.update(scaled_logits, labels)
 
+        # 安全释放eval缓存：在no_grad上下文中清理，不影响训练
+        # MSF模式下每个图像内存消耗更大（多尺度+flip），必须及时清理
+        torch.cuda.empty_cache()
 
     # ious, miou = metrics.compute_iou()
     # acc, macc = metrics.compute_pixel_acc()

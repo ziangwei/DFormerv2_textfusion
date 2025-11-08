@@ -36,7 +36,7 @@ C.max_templates_per_label = 3
 # 描述最多切几句送进模型（上限，进一步可用 caption_topk 再筛）
 C.max_caption_sentences = 10
 # 单条描述的 Top-K 预筛（0 表示不开）
-C.caption_topk = 6
+C.caption_topk = 0
 # 句子 Top-K 选择策略：class_sim / firstk / lenk
 # - class_sim：和全类原型库的最大相似度（推荐，轻量稳定）
 # - firstk：按句序取前 K
