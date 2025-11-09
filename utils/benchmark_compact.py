@@ -145,8 +145,10 @@ def analyze_flops_simple(model, config, inputs, inputs_no_text, device, has_text
                 model.backbone.cfg.enable_text_guidance = False
 
         with torch.no_grad():
-            macs_visual, _ = profile(model, inputs=inputs_no_text, custom_ops=custom_ops, verbose=False)
+            macs_visual, params_from_profile = profile(model, inputs=inputs_no_text, custom_ops=custom_ops, verbose=False)
         results['visual'] = macs_visual * 2  # MACs to FLOPs
+        results['visual_macs'] = macs_visual  # Store MACs separately for debugging
+        results['params_from_profile'] = params_from_profile
 
         if original_text_setting:
             # Restore text guidance settings
@@ -281,6 +283,12 @@ def main():
                     print(f"{'Text (SAM overhead)':<25} {humanize(flops_stats['text']):>15} {text_pct:>11.1f}%")
                 print("-" * 70)
                 print(f"{'Total FLOPs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
+                print("-" * 70)
+                # Debug info
+                print(f"\n  DEBUG INFO:")
+                print(f"    Visual MACs (raw):  {humanize(flops_stats['visual_macs'])} ({flops_stats['visual_macs']/1e9:.2f}G)")
+                print(f"    Visual FLOPs (×2):  {humanize(flops_stats['visual'])} ({flops_stats['visual']/1e9:.2f}G)")
+                print(f"    Params (profile):   {humanize(flops_stats['params_from_profile'])}")
                 print("-" * 70)
                 if enable_text:
                     print("  Note: Visual = model without text features")
