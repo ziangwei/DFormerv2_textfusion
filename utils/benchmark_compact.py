@@ -84,16 +84,15 @@ def count_sam_params(model):
     return encoder_sam, decoder_sam
 
 
-def analyze_flops_by_component(model, inputs, device):
+def analyze_flops_simple(model, inputs, device, param_stats):
     """
-    Analyze FLOPs by manually profiling each major component
-    Note: This is approximate as text tokens participate in cross-attention
+    Simplified FLOPs analysis - just compute total and estimate breakdown
     """
     results = {}
 
     # Custom ops for common layers
     custom_ops = {
-        nn.LayerNorm: lambda m, x, y: x[0].numel() * 4,  # mean, var, scale, shift
+        nn.LayerNorm: lambda m, x, y: x[0].numel() * 4,
         nn.GELU: lambda m, x, y: x[0].numel() * 8,
         nn.BatchNorm2d: lambda m, x, y: x[0].numel() * 4,
         nn.SyncBatchNorm: lambda m, x, y: x[0].numel() * 4,
@@ -110,65 +109,23 @@ def analyze_flops_by_component(model, inputs, device):
 
     model.eval()
 
-    # Profile backbone (mostly visual, but includes encoder SAMs)
-    if hasattr(model, 'backbone'):
-        try:
-            # Create a wrapper to profile just backbone
-            class BackboneWrapper(nn.Module):
-                def __init__(self, backbone):
-                    super().__init__()
-                    self.backbone = backbone
-
-                def forward(self, rgb, depth, *args):
-                    return self.backbone(rgb, depth, *args)
-
-            wrapper = BackboneWrapper(model.backbone).to(device).eval()
-            with torch.no_grad():
-                macs, _ = profile(wrapper, inputs=inputs, custom_ops=custom_ops, verbose=False)
-            results['backbone'] = macs * 2  # MACs to FLOPs
-            del wrapper
-        except Exception as e:
-            results['backbone'] = 0
-            print(f"Warning: Failed to profile backbone: {e}")
-
-    # Profile decode_head (mostly visual, but includes decoder SAMs)
-    if hasattr(model, 'decode_head'):
-        try:
-            # Get backbone features first
-            with torch.no_grad():
-                if len(inputs) == 4:  # (rgb, depth, None, text)
-                    rgb, depth, _, text = inputs
-                    backbone_out = model.backbone(rgb, depth, None, text)
-                else:
-                    rgb, depth = inputs
-                    backbone_out = model.backbone(rgb, depth)
-
-            # Profile decoder with backbone features
-            class DecoderWrapper(nn.Module):
-                def __init__(self, decoder):
-                    super().__init__()
-                    self.decoder = decoder
-
-                def forward(self, features):
-                    return self.decoder(features)
-
-            wrapper = DecoderWrapper(model.decode_head).to(device).eval()
-            with torch.no_grad():
-                macs, _ = profile(wrapper, inputs=(backbone_out,), custom_ops=custom_ops, verbose=False)
-            results['decoder'] = macs * 2
-            del wrapper
-        except Exception as e:
-            results['decoder'] = 0
-            print(f"Warning: Failed to profile decoder: {e}")
-
-    # Total model FLOPs
+    # Compute total FLOPs
     try:
         with torch.no_grad():
             macs, _ = profile(model, inputs=inputs, custom_ops=custom_ops, verbose=False)
-        results['total'] = macs * 2
+        results['total'] = macs * 2  # MACs to FLOPs
+
+        # Estimate visual vs text FLOPs based on parameter ratio
+        # This is approximate but reasonable
+        text_ratio = param_stats['text'] / param_stats['total'] if param_stats['total'] > 0 else 0
+        results['text_estimated'] = results['total'] * text_ratio
+        results['visual_estimated'] = results['total'] * (1 - text_ratio)
+
     except Exception as e:
-        results['total'] = sum(results.values())
-        print(f"Warning: Failed to profile total model: {e}")
+        results['total'] = 0
+        results['text_estimated'] = 0
+        results['visual_estimated'] = 0
+        print(f"Warning: Failed to profile model: {e}")
 
     return results
 
@@ -257,37 +214,26 @@ def main():
         print("\n⚡ FLOPS ANALYSIS:")
         print("-" * 70)
         try:
-            flops_stats = analyze_flops_by_component(model, inputs, device)
+            flops_stats = analyze_flops_simple(model, inputs, device, param_stats)
 
-            # Estimate text portion (SAM modules + text encoder if exists)
-            # This is approximate as SAMs do cross-attention with visual features
-            text_flops_estimate = 0
-            if enable_text and text_tokens > 0:
-                # Rough estimate: attention in SAMs scales with text_tokens
-                # Each SAM attention: O(HW * text_tokens * dim)
-                # This is a simplification
-                text_ratio = param_stats['text'] / param_stats['total']
-                text_flops_estimate = flops_stats.get('total', 0) * text_ratio
-
-            visual_flops = flops_stats.get('total', 0) - text_flops_estimate
-
-            print(f"{'Component':<25} {'FLOPs':>15} {'Percentage':>12}")
-            print("-" * 70)
-            print(f"{'Backbone (incl Enc SAM)':<25} {humanize(flops_stats.get('backbone', 0)):>15}")
-            print(f"{'Decoder (incl Dec SAM)':<25} {humanize(flops_stats.get('decoder', 0)):>15}")
-            print("-" * 70)
-
-            if enable_text:
-                visual_pct = 100 * visual_flops / flops_stats['total'] if flops_stats['total'] > 0 else 0
-                text_pct = 100 * text_flops_estimate / flops_stats['total'] if flops_stats['total'] > 0 else 0
-                print(f"{'Visual (estimated)':<25} {humanize(visual_flops):>15} {visual_pct:>11.1f}%")
-                print(f"{'Text (estimated)':<25} {humanize(text_flops_estimate):>15} {text_pct:>11.1f}%")
+            if flops_stats['total'] > 0:
+                print(f"{'Component':<25} {'FLOPs':>15} {'Percentage':>12}")
                 print("-" * 70)
 
-            print(f"{'Total FLOPs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
-            print("-" * 70)
-            print("  Note: Text FLOPs are estimated based on parameter ratio")
-            print("        Actual text processing includes cross-attention with visual features")
+                # Show visual vs text breakdown
+                visual_pct = 100 * flops_stats['visual_estimated'] / flops_stats['total']
+                text_pct = 100 * flops_stats['text_estimated'] / flops_stats['total']
+
+                print(f"{'Visual (estimated)':<25} {humanize(flops_stats['visual_estimated']):>15} {visual_pct:>11.1f}%")
+                if enable_text:
+                    print(f"{'Text (estimated)':<25} {humanize(flops_stats['text_estimated']):>15} {text_pct:>11.1f}%")
+                print("-" * 70)
+                print(f"{'Total FLOPs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
+                print("-" * 70)
+                print("  Note: Visual/Text FLOPs estimated from parameter ratio")
+                print("        Text tokens participate in cross-attention with visual features")
+            else:
+                print("ERROR: FLOPs = 0, calculation may have failed")
         except Exception as e:
             print(f"ERROR: FLOPs calculation failed: {e}")
             print("Try running with --skip-flops or --device cpu")
@@ -299,8 +245,12 @@ def main():
     # Quick summary
     print("\n📝 SUMMARY:")
     print(f"  Total Params: {humanize(param_stats['total'])} = {humanize(param_stats['visual'])} (visual) + {humanize(param_stats['text'])} (text)")
-    if not args.skip_flops and 'total' in locals() and flops_stats.get('total', 0) > 0:
-        print(f"  Total FLOPs:  {humanize(flops_stats['total'])}")
+    if not args.skip_flops:
+        try:
+            if flops_stats.get('total', 0) > 0:
+                print(f"  Total FLOPs:  {humanize(flops_stats['total'])}")
+        except NameError:
+            pass
     if total_sam > 0:
         print(f"  SAM Params:   {humanize(total_sam)} ({100*total_sam/param_stats['total']:.1f}% of total)")
     print()
