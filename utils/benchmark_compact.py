@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""
+Compact Benchmark: Visual vs Text Component Analysis
+精简的参数和FLOPs统计工具，区分视觉部分和文本部分
+"""
+import os
+import sys
+import argparse
+import importlib
+import torch
+import torch.nn as nn
+from thop import profile
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(THIS_DIR)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from models.builder import EncoderDecoder as segmodel
+
+
+def humanize(num):
+    """Convert number to human-readable format"""
+    if num < 1e6:
+        return f"{num/1e3:.2f}K"
+    if num < 1e9:
+        return f"{num/1e6:.2f}M"
+    return f"{num/1e9:.2f}G"
+
+
+def is_text_related(name):
+    """Check if a parameter/module is text-related"""
+    text_keywords = [
+        'text_encoder', 'text_proj', 'text_embed',
+        'sam', 'semantic_alignment',  # SAM modules are text-related
+        'caption', 'label_embed'
+    ]
+    name_lower = name.lower()
+    return any(keyword in name_lower for keyword in text_keywords)
+
+
+def analyze_params(model):
+    """Separate visual and text parameters"""
+    visual_params = 0
+    text_params = 0
+
+    for name, param in model.named_parameters():
+        if is_text_related(name):
+            text_params += param.numel()
+        else:
+            visual_params += param.numel()
+
+    total = visual_params + text_params
+    return {
+        'visual': visual_params,
+        'text': text_params,
+        'total': total,
+        'visual_pct': 100 * visual_params / total if total > 0 else 0,
+        'text_pct': 100 * text_params / total if total > 0 else 0,
+    }
+
+
+def count_sam_params(model):
+    """Count SAM module parameters separately"""
+    encoder_sam = 0
+    decoder_sam = 0
+
+    try:
+        from models.blocks.semantic_alignment import SemanticAlignmentModule
+        for name, module in model.named_modules():
+            if isinstance(module, SemanticAlignmentModule):
+                params = sum(p.numel() for p in module.parameters())
+                if 'backbone' in name or 'encoder' in name:
+                    encoder_sam += params
+                elif 'decode_head' in name or 'decoder' in name:
+                    decoder_sam += params
+    except ImportError:
+        pass
+
+    return encoder_sam, decoder_sam
+
+
+def analyze_flops_by_component(model, inputs, device):
+    """
+    Analyze FLOPs by manually profiling each major component
+    Note: This is approximate as text tokens participate in cross-attention
+    """
+    results = {}
+
+    # Custom ops for common layers
+    custom_ops = {
+        nn.LayerNorm: lambda m, x, y: x[0].numel() * 4,  # mean, var, scale, shift
+        nn.GELU: lambda m, x, y: x[0].numel() * 8,
+        nn.BatchNorm2d: lambda m, x, y: x[0].numel() * 4,
+        nn.SyncBatchNorm: lambda m, x, y: x[0].numel() * 4,
+        nn.Dropout: lambda m, x, y: 0,
+        nn.Dropout2d: lambda m, x, y: 0,
+        nn.Identity: lambda m, x, y: 0,
+    }
+
+    try:
+        from models.encoders.DFormerv2 import LayerNorm2d
+        custom_ops[LayerNorm2d] = lambda m, x, y: x[0].numel() * 4
+    except ImportError:
+        pass
+
+    model.eval()
+
+    # Profile backbone (mostly visual, but includes encoder SAMs)
+    if hasattr(model, 'backbone'):
+        try:
+            # Create a wrapper to profile just backbone
+            class BackboneWrapper(nn.Module):
+                def __init__(self, backbone):
+                    super().__init__()
+                    self.backbone = backbone
+
+                def forward(self, rgb, depth, *args):
+                    return self.backbone(rgb, depth, *args)
+
+            wrapper = BackboneWrapper(model.backbone).to(device).eval()
+            with torch.no_grad():
+                macs, _ = profile(wrapper, inputs=inputs, custom_ops=custom_ops, verbose=False)
+            results['backbone'] = macs * 2  # MACs to FLOPs
+            del wrapper
+        except Exception as e:
+            results['backbone'] = 0
+            print(f"Warning: Failed to profile backbone: {e}")
+
+    # Profile decode_head (mostly visual, but includes decoder SAMs)
+    if hasattr(model, 'decode_head'):
+        try:
+            # Get backbone features first
+            with torch.no_grad():
+                if len(inputs) == 4:  # (rgb, depth, None, text)
+                    rgb, depth, _, text = inputs
+                    backbone_out = model.backbone(rgb, depth, None, text)
+                else:
+                    rgb, depth = inputs
+                    backbone_out = model.backbone(rgb, depth)
+
+            # Profile decoder with backbone features
+            class DecoderWrapper(nn.Module):
+                def __init__(self, decoder):
+                    super().__init__()
+                    self.decoder = decoder
+
+                def forward(self, features):
+                    return self.decoder(features)
+
+            wrapper = DecoderWrapper(model.decode_head).to(device).eval()
+            with torch.no_grad():
+                macs, _ = profile(wrapper, inputs=(backbone_out,), custom_ops=custom_ops, verbose=False)
+            results['decoder'] = macs * 2
+            del wrapper
+        except Exception as e:
+            results['decoder'] = 0
+            print(f"Warning: Failed to profile decoder: {e}")
+
+    # Total model FLOPs
+    try:
+        with torch.no_grad():
+            macs, _ = profile(model, inputs=inputs, custom_ops=custom_ops, verbose=False)
+        results['total'] = macs * 2
+    except Exception as e:
+        results['total'] = sum(results.values())
+        print(f"Warning: Failed to profile total model: {e}")
+
+    return results
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Compact benchmark: Visual vs Text analysis")
+    parser.add_argument("--config", required=True, help="Config module path (e.g., local_configs.NYUDepthv2.DFormerv2_S)")
+    parser.add_argument("--height", type=int, default=480, help="Input height")
+    parser.add_argument("--width", type=int, default=640, help="Input width")
+    parser.add_argument("--device", type=str, default="cpu", help="Device: cpu, cuda:0, etc.")
+    parser.add_argument("--skip-flops", action="store_true", help="Skip FLOPs calculation (faster)")
+    args = parser.parse_args()
+
+    device = torch.device(args.device if torch.cuda.is_available() and 'cuda' in args.device else "cpu")
+
+    # Load config and build model
+    C = getattr(importlib.import_module(args.config), "C")
+    C.pretrained_model = None  # Don't load pretrained for benchmark
+
+    criterion = nn.CrossEntropyLoss(reduction="mean", ignore_index=C.background)
+    model = segmodel(cfg=C, criterion=criterion, norm_layer=nn.BatchNorm2d)
+    model.eval().to(device)
+
+    # Prepare inputs
+    rgb = torch.randn(1, 3, args.height, args.width, device=device)
+    depth = torch.randn(1, 1, args.height, args.width, device=device)
+
+    enable_text = getattr(C, "enable_text_guidance", False)
+    text_tokens = 0
+
+    if enable_text:
+        # Determine text token count
+        src = getattr(C, "text_source", "both")
+        if src == "labels":
+            text_tokens = C.num_classes
+        elif src == "captions":
+            text_tokens = getattr(C, "max_caption_sentences", 0)
+        elif src == "imglabels":
+            text_tokens = getattr(C, "max_image_labels", 8)
+        elif src == "both":
+            text_tokens = C.num_classes + getattr(C, "max_caption_sentences", 0)
+
+        text_dim = getattr(C, "text_feature_dim", 512)
+        text_features = torch.randn(1, text_tokens, text_dim, device=device)
+        inputs = (rgb, depth, None, text_features)
+    else:
+        inputs = (rgb, depth)
+
+    # ========== Print Results ==========
+    print("\n" + "=" * 70)
+    print("COMPACT BENCHMARK: Visual vs Text Component Analysis")
+    print("=" * 70)
+    print(f"Config:       {args.config}")
+    print(f"Input size:   {args.height}x{args.width}")
+    print(f"Text guidance: {'Enabled' if enable_text else 'Disabled'}")
+    if enable_text:
+        print(f"Text tokens:  {text_tokens} (source: {getattr(C, 'text_source', 'N/A')})")
+    print(f"Device:       {device}")
+    print("-" * 70)
+
+    # Analyze parameters
+    param_stats = analyze_params(model)
+    encoder_sam, decoder_sam = count_sam_params(model)
+    total_sam = encoder_sam + decoder_sam
+
+    print("\n📊 PARAMETER ANALYSIS:")
+    print("-" * 70)
+    print(f"{'Component':<25} {'Parameters':>15} {'Percentage':>12}")
+    print("-" * 70)
+    print(f"{'Visual (Pure)':<25} {humanize(param_stats['visual']):>15} {param_stats['visual_pct']:>11.1f}%")
+    print(f"{'Text-related (incl SAM)':<25} {humanize(param_stats['text']):>15} {param_stats['text_pct']:>11.1f}%")
+    print("-" * 70)
+    print(f"{'Total':<25} {humanize(param_stats['total']):>15} {'100.0%':>12}")
+    print("-" * 70)
+
+    # SAM breakdown
+    if total_sam > 0:
+        sam_pct = 100 * total_sam / param_stats['total']
+        print(f"\n  SAM Module Breakdown:")
+        print(f"  {'- Encoder SAM:':<23} {humanize(encoder_sam):>15} ({100*encoder_sam/param_stats['total']:>5.1f}%)")
+        print(f"  {'- Decoder SAM:':<23} {humanize(decoder_sam):>15} ({100*decoder_sam/param_stats['total']:>5.1f}%)")
+        print(f"  {'- SAM Total:':<23} {humanize(total_sam):>15} ({sam_pct:>5.1f}%)")
+
+    # FLOPs analysis
+    if not args.skip_flops:
+        print("\n⚡ FLOPS ANALYSIS:")
+        print("-" * 70)
+        try:
+            flops_stats = analyze_flops_by_component(model, inputs, device)
+
+            # Estimate text portion (SAM modules + text encoder if exists)
+            # This is approximate as SAMs do cross-attention with visual features
+            text_flops_estimate = 0
+            if enable_text and text_tokens > 0:
+                # Rough estimate: attention in SAMs scales with text_tokens
+                # Each SAM attention: O(HW * text_tokens * dim)
+                # This is a simplification
+                text_ratio = param_stats['text'] / param_stats['total']
+                text_flops_estimate = flops_stats.get('total', 0) * text_ratio
+
+            visual_flops = flops_stats.get('total', 0) - text_flops_estimate
+
+            print(f"{'Component':<25} {'FLOPs':>15} {'Percentage':>12}")
+            print("-" * 70)
+            print(f"{'Backbone (incl Enc SAM)':<25} {humanize(flops_stats.get('backbone', 0)):>15}")
+            print(f"{'Decoder (incl Dec SAM)':<25} {humanize(flops_stats.get('decoder', 0)):>15}")
+            print("-" * 70)
+
+            if enable_text:
+                visual_pct = 100 * visual_flops / flops_stats['total'] if flops_stats['total'] > 0 else 0
+                text_pct = 100 * text_flops_estimate / flops_stats['total'] if flops_stats['total'] > 0 else 0
+                print(f"{'Visual (estimated)':<25} {humanize(visual_flops):>15} {visual_pct:>11.1f}%")
+                print(f"{'Text (estimated)':<25} {humanize(text_flops_estimate):>15} {text_pct:>11.1f}%")
+                print("-" * 70)
+
+            print(f"{'Total FLOPs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
+            print("-" * 70)
+            print("  Note: Text FLOPs are estimated based on parameter ratio")
+            print("        Actual text processing includes cross-attention with visual features")
+        except Exception as e:
+            print(f"ERROR: FLOPs calculation failed: {e}")
+            print("Try running with --skip-flops or --device cpu")
+    else:
+        print("\nℹ️  FLOPs calculation skipped (use without --skip-flops to enable)")
+
+    print("\n" + "=" * 70)
+
+    # Quick summary
+    print("\n📝 SUMMARY:")
+    print(f"  Total Params: {humanize(param_stats['total'])} = {humanize(param_stats['visual'])} (visual) + {humanize(param_stats['text'])} (text)")
+    if not args.skip_flops and 'total' in locals() and flops_stats.get('total', 0) > 0:
+        print(f"  Total FLOPs:  {humanize(flops_stats['total'])}")
+    if total_sam > 0:
+        print(f"  SAM Params:   {humanize(total_sam)} ({100*total_sam/param_stats['total']:.1f}% of total)")
+    print()
+
+
+if __name__ == "__main__":
+    main()

@@ -510,6 +510,7 @@ class dformerv2(nn.Module):
                         encoder_use_cosine=sam_encoder_use_cosine,
                         encoder_learnable_temp=sam_encoder_learnable_temp,
                         encoder_logit_scale_init=sam_encoder_logit_init,
+                        mode='encoder',  # ★ 只创建 encoder 需要的参数
                     )
                     for _ in range(num_units)
                 ])
