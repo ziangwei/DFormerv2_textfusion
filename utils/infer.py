@@ -1319,13 +1319,40 @@ with Engine(custom_parser=parser) as engine:
                 logger.error("")
                 raise
 
-            # 加载模型2的权重（使用 strict=False 允许部分加载）
+            # 加载模型2的权重（强制跳过维度不匹配的参数）
             # weight2 已经在上面加载过了（用于检测 SAM FFN ratio）
-            logger.info("Loading Model 2 weights (strict=False, ignoring mismatched keys)...")
+            logger.info("Loading Model 2 weights (force loading, skipping mismatched dimensions)...")
 
-            missing_keys, unexpected_keys = model2.load_state_dict(weight2, strict=False)
+            # 手动过滤：只加载形状匹配的参数
+            model2_state_dict = model2.state_dict()
+            filtered_checkpoint = {}
+            mismatched_keys = []
+
+            for key, value in weight2.items():
+                if key in model2_state_dict:
+                    if model2_state_dict[key].shape == value.shape:
+                        # 形状匹配，加载
+                        filtered_checkpoint[key] = value
+                    else:
+                        # 形状不匹配，跳过
+                        mismatched_keys.append(
+                            f"{key}: checkpoint{list(value.shape)} vs model{list(model2_state_dict[key].shape)}"
+                        )
+
+            # 加载过滤后的 checkpoint
+            missing_keys, unexpected_keys = model2.load_state_dict(filtered_checkpoint, strict=False)
 
             # 输出加载信息
+            if mismatched_keys:
+                logger.warning(f"  ⚠️  Mismatched keys (skipped due to shape mismatch): {len(mismatched_keys)}")
+                if len(mismatched_keys) <= 10:
+                    for key_info in mismatched_keys:
+                        logger.warning(f"    - {key_info}")
+                else:
+                    for key_info in mismatched_keys[:10]:
+                        logger.warning(f"    - {key_info}")
+                    logger.warning(f"    ... and {len(mismatched_keys) - 10} more")
+
             if missing_keys:
                 logger.info(f"  Missing keys (not loaded from checkpoint): {len(missing_keys)}")
                 if len(missing_keys) <= 10:
@@ -1342,10 +1369,21 @@ with Engine(custom_parser=parser) as engine:
                 else:
                     logger.info(f"    - (showing first 10) {unexpected_keys[:10]}")
 
-            if not missing_keys and not unexpected_keys:
+            # 总结加载结果
+            total_params_in_checkpoint = len(weight2)
+            loaded_params = len(filtered_checkpoint)
+            logger.info("")
+            logger.info(f"  Summary:")
+            logger.info(f"    Total params in checkpoint: {total_params_in_checkpoint}")
+            logger.info(f"    Successfully loaded: {loaded_params}")
+            logger.info(f"    Skipped (shape mismatch): {len(mismatched_keys)}")
+            logger.info(f"    Missing in checkpoint: {len(missing_keys)}")
+            logger.info(f"    Unexpected in checkpoint: {len(unexpected_keys)}")
+
+            if not missing_keys and not unexpected_keys and not mismatched_keys:
                 logger.info("  ✓ All keys matched perfectly!")
             else:
-                logger.info("  ✓ Weights loaded with partial matching (this is expected for different architectures)")
+                logger.info("  ✓ Weights loaded successfully (skipped mismatched parameters)")
 
 
             # 将模型2移到设备
