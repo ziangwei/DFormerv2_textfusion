@@ -229,11 +229,26 @@ def evaluate_msf(
     n_classes = config.num_classes
     metrics = Metrics(n_classes, config.background, device)
 
+    # 防止 dataloader 为空导致除零错误
+    dataloader_len = len(dataloader)
+    if dataloader_len == 0:
+        if (engine.distributed and engine.local_rank == 0) or not engine.distributed:
+            print("⚠️  WARNING: Dataloader is empty! No data to evaluate.")
+        return {
+            'mIoU': 0.0,
+            'Acc': 0.0,
+            'per_class_iou': [0.0] * n_classes,
+            'per_class_acc': [0.0] * n_classes,
+        }
+
+    # 设置进度打印间隔（避免除零）
+    print_interval = max(1, int(dataloader_len * 0.5))
+
     for idx, minibatch in enumerate(dataloader):
-        if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
+        if ((idx + 1) % print_interval == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
         ):
-            print(f"Validation Iter: {idx + 1} / {len(dataloader)}")
+            print(f"Validation Iter: {idx + 1} / {dataloader_len}")
 
         images = minibatch["data"]
         labels = minibatch["label"]
