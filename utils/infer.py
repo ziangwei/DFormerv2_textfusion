@@ -1457,8 +1457,12 @@ with Engine(custom_parser=parser) as engine:
                         preds = model2(images, modal_xs)
                         preds = preds.argmax(dim=1).cpu().numpy()[0]
 
+                        # 提取纯文件名（去掉路径和扩展名）
+                        # img_name 可能是 "datasets/NYUDepthv2/RGB/471.jpg"，我们只需要 "471"
+                        img_name_only = os.path.splitext(os.path.basename(img_name))[0]
+
                         # 直接保存到Model 1的文件夹：<save_path>/<img_name>/03_pred_model2_visual.png
-                        img_folder = os.path.join(args.save_path, img_name)
+                        img_folder = os.path.join(args.save_path, img_name_only)
                         if os.path.exists(img_folder):
                             pred_file = os.path.join(img_folder, "03_pred_model2_visual.png")
 
@@ -1467,10 +1471,10 @@ with Engine(custom_parser=parser) as engine:
                             pred_colored = palette[preds]
                             Image.fromarray(pred_colored.astype(np.uint8)).save(pred_file)
                         else:
-                            logger.warning(f"  ⚠ Folder not found for {img_name}, skipping Model 2 prediction")
+                            logger.warning(f"  ⚠ Folder not found for {img_name_only}, skipping Model 2 prediction")
 
                         if idx % 10 == 0:
-                            logger.info(f"  Processed {idx+1}/{len(val_loader)}: {img_name}")
+                            logger.info(f"  Processed {idx+1}/{len(val_loader)}: {img_name_only}")
 
                     logger.info(f"✓ Model 2 predictions saved directly to {args.save_path}/<image_name>/03_pred_model2_visual.png")
                     logger.info("  Note: mIoU calculation skipped (single-scale inference only)")
