@@ -1425,28 +1425,12 @@ with Engine(custom_parser=parser) as engine:
             # val_loader 已经是筛选后的，直接使用
             logger.info(f"✓ Using same {len(val_loader.dataset)} images\n")
 
-            # 运行模型2的多尺度评估
-            logger.info("Running multi-scale+flip evaluation for Model 2...")
-            scales = [0.5, 0.75, 1.0, 1.25, 1.5]
-            flip = True
-
-            # 集成模式：使用临时目录，之后会合并到模型1的文件夹
-            integrated_mode = (args.model2_save_path is None)
-            if integrated_mode:
-                model2_temp_dir = args.save_path + "_model2_temp"
-                logger.info(f"  Integrated mode: using temporary directory {model2_temp_dir}")
-            else:
-                model2_temp_dir = args.model2_save_path
-
             # ============================================================
-            # Model 2: 仅生成分割图（不计算mIoU，避免evaluate_msf错误）
+            # Model 2: 直接生成分割图到Model 1的文件夹（不计算mIoU）
             # ============================================================
             logger.info("\n" + "=" * 100)
             logger.info("Generating Model 2 predictions (single-scale inference, no mIoU calculation)")
             logger.info("=" * 100)
-
-            # 确保临时目录存在
-            os.makedirs(model2_temp_dir, exist_ok=True)
 
             with torch.no_grad():
                 model2.eval()
@@ -1473,18 +1457,22 @@ with Engine(custom_parser=parser) as engine:
                         preds = model2(images, modal_xs)
                         preds = preds.argmax(dim=1).cpu().numpy()[0]
 
-                        # 保存预测图（与Model 1格式一致）
-                        pred_file = os.path.join(model2_temp_dir, f"{img_name}_pred.png")
+                        # 直接保存到Model 1的文件夹：<save_path>/<img_name>/03_pred_model2_visual.png
+                        img_folder = os.path.join(args.save_path, img_name)
+                        if os.path.exists(img_folder):
+                            pred_file = os.path.join(img_folder, "03_pred_model2_visual.png")
 
-                        # 转换为彩色图（使用palette）
-                        palette = np.load("./utils/nyucmap.npy")
-                        pred_colored = palette[preds]
-                        Image.fromarray(pred_colored.astype(np.uint8)).save(pred_file)
+                            # 转换为彩色图（使用palette）
+                            palette = np.load("./utils/nyucmap.npy")
+                            pred_colored = palette[preds]
+                            Image.fromarray(pred_colored.astype(np.uint8)).save(pred_file)
+                        else:
+                            logger.warning(f"  ⚠ Folder not found for {img_name}, skipping Model 2 prediction")
 
                         if idx % 10 == 0:
                             logger.info(f"  Processed {idx+1}/{len(val_loader)}: {img_name}")
 
-                    logger.info(f"✓ Model 2 predictions saved to {model2_temp_dir}")
+                    logger.info(f"✓ Model 2 predictions saved directly to {args.save_path}/<image_name>/03_pred_model2_visual.png")
                     logger.info("  Note: mIoU calculation skipped (single-scale inference only)")
                 else:
                     logger.info("  Skipping on non-master rank in distributed mode")
@@ -1554,53 +1542,18 @@ with Engine(custom_parser=parser) as engine:
             #         logger.info(f"mF1: {mf1_m2:.4f}")
             #         logger.info("=" * 100)
 
-            # 集成模式：将模型2的预测合并到模型1的文件夹
-            if integrated_mode and os.path.exists(model2_temp_dir):
-                logger.info("\n" + "=" * 80)
-                logger.info("Merging Model 2 predictions into Model 1 folders...")
-                import shutil
-                import glob
-
-                # 遍历临时目录中的所有 _pred.png 文件
-                model2_files = glob.glob(os.path.join(model2_temp_dir, "*_pred.png"))
-                for src_file in model2_files:
-                    # 提取图片名称（去掉 _pred.png 后缀）
-                    base_name = os.path.basename(src_file).replace("_pred.png", "")
-
-                    # 找到对应的模型1文件夹
-                    model1_folder = os.path.join(args.save_path, base_name)
-                    if os.path.exists(model1_folder):
-                        # 读取模型2的预测图片
-                        from PIL import Image
-                        model2_pred = Image.open(src_file)
-
-                        # 保存为 03_pred_model2_visual.png
-                        dest_file = os.path.join(model1_folder, "03_pred_model2_visual.png")
-                        model2_pred.save(dest_file)
-                        logger.info(f"  ✓ Merged {base_name}")
-                    else:
-                        logger.warning(f"  ⚠ Model 1 folder not found for {base_name}")
-
-                # 删除临时目录
-                shutil.rmtree(model2_temp_dir)
-                logger.info(f"✓ Cleaned up temporary directory: {model2_temp_dir}")
-                logger.info("=" * 80 + "\n")
-
+            # 完成提示（不再需要合并，已直接保存）
             logger.info("\n" + "=" * 100)
             logger.info("DUAL-MODEL MODE COMPLETED")
             logger.info("=" * 100)
-            if integrated_mode:
-                logger.info(f"Integrated outputs (GT + Model1 + Model2 + Attention): {args.save_path}")
-                logger.info("  Each image folder contains:")
-                logger.info("    - 00_original.png")
-                logger.info("    - 01_GT.png")
-                logger.info("    - 02_pred_model1_text.png")
-                logger.info("    - 03_pred_model2_visual.png")
-                logger.info("    - 04+ attention maps")
-                logger.info("  Note: Model 2 used single-scale inference (no mIoU)")
-            else:
-                logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
-                logger.info(f"Model 2 (Visual-Only) outputs: {args.model2_save_path}")
+            logger.info(f"All outputs saved to: {args.save_path}")
+            logger.info("  Each image folder contains:")
+            logger.info("    - 00_original.png")
+            logger.info("    - 01_GT.png")
+            logger.info("    - 02_pred_model1_text.png")
+            logger.info("    - 03_pred_model2_visual.png")
+            logger.info("    - 04+ attention maps")
+            logger.info("  Note: Model 2 used single-scale inference (no mIoU)")
             logger.info("=" * 100 + "\n")
 
     else:
