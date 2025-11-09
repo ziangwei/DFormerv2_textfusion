@@ -1447,10 +1447,11 @@ with Engine(custom_parser=parser) as engine:
                 model2_temp_dir = args.model2_save_path
 
             if engine.distributed:
-                # 检查dataloader是否为空
-                if len(val_loader) == 0:
+                # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+                # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+                if len(val_loader) < 3:
                     if engine.local_rank == 0:
-                        logger.warning("val_loader is empty, skipping Model 2 evaluation")
+                        logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
                 else:
                     with torch.no_grad():
                         model2.eval()
@@ -1479,9 +1480,10 @@ with Engine(custom_parser=parser) as engine:
                             logger.info(f"mF1: {mf1_m2:.4f}")
                             logger.info("=" * 100)
             else:
-                # 检查dataloader是否为空
-                if len(val_loader) == 0:
-                    logger.warning("val_loader is empty, skipping Model 2 evaluation")
+                # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+                # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+                if len(val_loader) < 3:
+                    logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
                     metric_m2 = None
                 else:
                     with torch.no_grad():
@@ -1574,10 +1576,11 @@ with Engine(custom_parser=parser) as engine:
 
         if engine.distributed:
             print("Multi GPU test")
-            # 检查dataloader是否为空
-            if len(val_loader) == 0:
+            # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            if len(val_loader) < 3:
                 if engine.local_rank == 0:
-                    logger.warning("val_loader is empty, skipping Model 1 evaluation")
+                    logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 1 evaluation")
             else:
                 with torch.no_grad():
                     model.eval()
@@ -1607,9 +1610,10 @@ with Engine(custom_parser=parser) as engine:
                         logger.info("=" * 80)
                         print(f"mIoU: {miou:.4f}")
         else:
-            # 检查dataloader是否为空
-            if len(val_loader) == 0:
-                logger.warning("val_loader is empty, skipping Model 1 evaluation")
+            # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            if len(val_loader) < 3:
+                logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 1 evaluation")
             else:
                 with torch.no_grad():
                     model.eval()
