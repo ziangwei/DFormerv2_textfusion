@@ -274,13 +274,13 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # Step 7: Apply colormap (彻底去掉紫色，从深蓝开始)
-    # 将 attn [0,1] 映射到 colormap 的 [0.25, 1.0] 范围
-    # 0.25 对应深蓝色，避免任何紫色
+    # Step 7: Apply colormap (更深的蓝色，但避免紫色)
+    # 将 attn [0,1] 映射到 colormap 的 [0.18, 1.0] 范围
+    # 0.18 对应更深的蓝色，同时避免紫色污染
     cmap = plt.get_cmap(colormap)
     if colormap in ['turbo', 'jet']:
-        # turbo 和 jet 的低值是紫色，从 0.25 开始是纯蓝色
-        attn_remapped = attn * 0.75 + 0.25  # [0,1] -> [0.25, 1.0]
+        # turbo 和 jet 的低值是紫色，从 0.18 开始是深蓝色（比0.25更深）
+        attn_remapped = attn * 0.82 + 0.18  # [0,1] -> [0.18, 1.0]
     else:
         # 其他 colormap 保持原样
         attn_remapped = attn
@@ -1445,48 +1445,49 @@ with Engine(custom_parser=parser) as engine:
             logger.info("Generating Model 2 predictions (single-scale inference, no mIoU calculation)")
             logger.info("=" * 100)
 
+            # 确保临时目录存在
+            os.makedirs(model2_temp_dir, exist_ok=True)
+
             with torch.no_grad():
                 model2.eval()
                 from PIL import Image
                 import numpy as np
 
-                # 遍历dataloader，单尺度推理
-                for idx, minibatch in enumerate(val_loader):
-                    images = minibatch["data"]
-                    modal_xs = minibatch["modal_x"]
-                    img_name = minibatch.get("fn", [f"image_{idx}"])[0]
+                # 只在主进程或非分布式模式下生成
+                if (not engine.distributed) or (engine.distributed and engine.local_rank == 0):
+                    # 遍历dataloader，单尺度推理
+                    for idx, minibatch in enumerate(val_loader):
+                        images = minibatch["data"]
+                        modal_xs = minibatch["modal_x"]
+                        img_name = minibatch.get("fn", [f"image_{idx}"])[0]
 
-                    if len(images.shape) == 3:
-                        images = images.unsqueeze(0)
-                    if len(modal_xs.shape) == 3:
-                        modal_xs = modal_xs.unsqueeze(0)
+                        if len(images.shape) == 3:
+                            images = images.unsqueeze(0)
+                        if len(modal_xs.shape) == 3:
+                            modal_xs = modal_xs.unsqueeze(0)
 
-                    images = images.to(device)
-                    modal_xs = modal_xs.to(device)
+                        images = images.to(device)
+                        modal_xs = modal_xs.to(device)
 
-                    # 单尺度推理（scale=1.0）
-                    preds = model2(images, modal_xs)
-                    preds = preds.argmax(dim=1).cpu().numpy()[0]
+                        # 单尺度推理（scale=1.0）
+                        preds = model2(images, modal_xs)
+                        preds = preds.argmax(dim=1).cpu().numpy()[0]
 
-                    # 保存预测图（与Model 1格式一致）
-                    # 先保存到临时目录
-                    if integrated_mode:
-                        pred_file = os.path.join(model2_temp_dir, f"{img_name}_pred.png")
-                    else:
+                        # 保存预测图（与Model 1格式一致）
                         pred_file = os.path.join(model2_temp_dir, f"{img_name}_pred.png")
 
-                    os.makedirs(os.path.dirname(pred_file), exist_ok=True)
+                        # 转换为彩色图（使用palette）
+                        palette = np.load("./utils/nyucmap.npy")
+                        pred_colored = palette[preds]
+                        Image.fromarray(pred_colored.astype(np.uint8)).save(pred_file)
 
-                    # 转换为彩色图（使用palette）
-                    palette = np.load("./utils/nyucmap.npy")
-                    pred_colored = palette[preds]
-                    Image.fromarray(pred_colored.astype(np.uint8)).save(pred_file)
+                        if idx % 10 == 0:
+                            logger.info(f"  Processed {idx+1}/{len(val_loader)}: {img_name}")
 
-                    if idx % 10 == 0:
-                        logger.info(f"  Processed {idx+1}/{len(val_loader)}: {img_name}")
-
-                logger.info(f"✓ Model 2 predictions saved to {model2_temp_dir}")
-                logger.info("  Note: mIoU calculation skipped (single-scale inference only)")
+                    logger.info(f"✓ Model 2 predictions saved to {model2_temp_dir}")
+                    logger.info("  Note: mIoU calculation skipped (single-scale inference only)")
+                else:
+                    logger.info("  Skipping on non-master rank in distributed mode")
                 logger.info("=" * 100)
 
             # if engine.distributed:
