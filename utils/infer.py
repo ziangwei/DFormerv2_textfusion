@@ -1446,116 +1446,130 @@ with Engine(custom_parser=parser) as engine:
             else:
                 model2_temp_dir = args.model2_save_path
 
-            if engine.distributed:
-                # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
-                # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
-                if len(val_loader) < 3:
-                    if engine.local_rank == 0:
-                        logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
-                else:
-                    with torch.no_grad():
-                        model2.eval()
-                        all_metrics_m2 = evaluate_msf(
-                            model2,
-                            val_loader,
-                            config,
-                            device,
-                            scales,
-                            flip,
-                            engine,
-                            save_dir=model2_temp_dir,
-                        )
-                        if engine.local_rank == 0:
-                            metric_m2 = all_metrics_m2[0]
-                            for other_metric in all_metrics_m2[1:]:
-                                metric_m2.update_hist(other_metric.hist)
-                            ious_m2, miou_m2 = metric_m2.compute_iou()
-                            acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
-                            f1_m2, mf1_m2 = metric_m2.compute_f1()
+            # ============================================================
+            # Model 2 评估已禁用（跳过以避免潜在错误）
+            # ============================================================
+            logger.info("\n" + "=" * 100)
+            logger.info("⚠️  Model 2 evaluation DISABLED (skipped to avoid errors)")
+            logger.info("=" * 100)
 
-                            logger.info("\n" + "=" * 100)
-                            logger.info("MODEL 2 RESULTS (Visual-Only):")
-                            logger.info(f"mIoU: {miou_m2:.4f}")
-                            logger.info(f"mAcc: {macc_m2:.4f}")
-                            logger.info(f"mF1: {mf1_m2:.4f}")
-                            logger.info("=" * 100)
-            else:
-                # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
-                # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
-                if len(val_loader) < 3:
-                    logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
-                    metric_m2 = None
-                else:
-                    with torch.no_grad():
-                        model2.eval()
-                        metric_m2 = evaluate_msf(
-                            model2,
-                            val_loader,
-                            config,
-                            device,
-                            scales,
-                            flip,
-                            engine,
-                            save_dir=model2_temp_dir,
-                        )
-                if metric_m2 is not None:
-                    ious_m2, miou_m2 = metric_m2.compute_iou()
-                    acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
-                    f1_m2, mf1_m2 = metric_m2.compute_f1()
+            # if engine.distributed:
+            #     # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            #     # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            #     if len(val_loader) < 3:
+            #         if engine.local_rank == 0:
+            #             logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
+            #     else:
+            #         with torch.no_grad():
+            #             model2.eval()
+            #             all_metrics_m2 = evaluate_msf(
+            #                 model2,
+            #                 val_loader,
+            #                 config,
+            #                 device,
+            #                 scales,
+            #                 flip,
+            #                 engine,
+            #                 save_dir=model2_temp_dir,
+            #             )
+            #             if engine.local_rank == 0:
+            #                 metric_m2 = all_metrics_m2[0]
+            #                 for other_metric in all_metrics_m2[1:]:
+            #                     metric_m2.update_hist(other_metric.hist)
+            #                 ious_m2, miou_m2 = metric_m2.compute_iou()
+            #                 acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+            #                 f1_m2, mf1_m2 = metric_m2.compute_f1()
+            #
+            #                 logger.info("\n" + "=" * 100)
+            #                 logger.info("MODEL 2 RESULTS (Visual-Only):")
+            #                 logger.info(f"mIoU: {miou_m2:.4f}")
+            #                 logger.info(f"mAcc: {macc_m2:.4f}")
+            #                 logger.info(f"mF1: {mf1_m2:.4f}")
+            #                 logger.info("=" * 100)
+            # else:
+            #     # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            #     # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            #     if len(val_loader) < 3:
+            #         logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
+            #         metric_m2 = None
+            #     else:
+            #         with torch.no_grad():
+            #             model2.eval()
+            #             metric_m2 = evaluate_msf(
+            #                 model2,
+            #                 val_loader,
+            #                 config,
+            #                 device,
+            #                 scales,
+            #                 flip,
+            #                 engine,
+            #                 save_dir=model2_temp_dir,
+            #             )
+            #     if metric_m2 is not None:
+            #         ious_m2, miou_m2 = metric_m2.compute_iou()
+            #         acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+            #         f1_m2, mf1_m2 = metric_m2.compute_f1()
+            #
+            #         logger.info("\n" + "=" * 100)
+            #         logger.info("MODEL 2 RESULTS (Visual-Only):")
+            #         logger.info(f"mIoU: {miou_m2:.4f}")
+            #         logger.info(f"mAcc: {macc_m2:.4f}")
+            #         logger.info(f"mF1: {mf1_m2:.4f}")
+            #         logger.info("=" * 100)
 
-                    logger.info("\n" + "=" * 100)
-                    logger.info("MODEL 2 RESULTS (Visual-Only):")
-                    logger.info(f"mIoU: {miou_m2:.4f}")
-                    logger.info(f"mAcc: {macc_m2:.4f}")
-                    logger.info(f"mF1: {mf1_m2:.4f}")
-                    logger.info("=" * 100)
-
-            # 集成模式：将模型2的预测合并到模型1的文件夹
-            if integrated_mode and os.path.exists(model2_temp_dir):
-                logger.info("\n" + "=" * 80)
-                logger.info("Merging Model 2 predictions into Model 1 folders...")
-                import shutil
-                import glob
-
-                # 遍历临时目录中的所有 _pred.png 文件
-                model2_files = glob.glob(os.path.join(model2_temp_dir, "*_pred.png"))
-                for src_file in model2_files:
-                    # 提取图片名称（去掉 _pred.png 后缀）
-                    base_name = os.path.basename(src_file).replace("_pred.png", "")
-
-                    # 找到对应的模型1文件夹
-                    model1_folder = os.path.join(args.save_path, base_name)
-                    if os.path.exists(model1_folder):
-                        # 读取模型2的预测图片
-                        from PIL import Image
-                        model2_pred = Image.open(src_file)
-
-                        # 保存为 03_pred_model2_visual.png
-                        dest_file = os.path.join(model1_folder, "03_pred_model2_visual.png")
-                        model2_pred.save(dest_file)
-                        logger.info(f"  ✓ Merged {base_name}")
-                    else:
-                        logger.warning(f"  ⚠ Model 1 folder not found for {base_name}")
-
-                # 删除临时目录
-                shutil.rmtree(model2_temp_dir)
-                logger.info(f"✓ Cleaned up temporary directory: {model2_temp_dir}")
-                logger.info("=" * 80 + "\n")
+            # 集成模式：将模型2的预测合并到模型1的文件夹（已禁用）
+            # if integrated_mode and os.path.exists(model2_temp_dir):
+            #     logger.info("\n" + "=" * 80)
+            #     logger.info("Merging Model 2 predictions into Model 1 folders...")
+            #     import shutil
+            #     import glob
+            #
+            #     # 遍历临时目录中的所有 _pred.png 文件
+            #     model2_files = glob.glob(os.path.join(model2_temp_dir, "*_pred.png"))
+            #     for src_file in model2_files:
+            #         # 提取图片名称（去掉 _pred.png 后缀）
+            #         base_name = os.path.basename(src_file).replace("_pred.png", "")
+            #
+            #         # 找到对应的模型1文件夹
+            #         model1_folder = os.path.join(args.save_path, base_name)
+            #         if os.path.exists(model1_folder):
+            #             # 读取模型2的预测图片
+            #             from PIL import Image
+            #             model2_pred = Image.open(src_file)
+            #
+            #             # 保存为 03_pred_model2_visual.png
+            #             dest_file = os.path.join(model1_folder, "03_pred_model2_visual.png")
+            #             model2_pred.save(dest_file)
+            #             logger.info(f"  ✓ Merged {base_name}")
+            #         else:
+            #             logger.warning(f"  ⚠ Model 1 folder not found for {base_name}")
+            #
+            #     # 删除临时目录
+            #     shutil.rmtree(model2_temp_dir)
+            #     logger.info(f"✓ Cleaned up temporary directory: {model2_temp_dir}")
+            #     logger.info("=" * 80 + "\n")
 
             logger.info("\n" + "=" * 100)
-            logger.info("DUAL-MODEL COMPARISON COMPLETED")
+            logger.info("DUAL-MODEL MODE COMPLETED (Model 2 evaluation skipped)")
             logger.info("=" * 100)
-            if integrated_mode:
-                logger.info(f"Integrated outputs (GT + Model1 + Model2 + Attention): {args.save_path}")
-                logger.info("  Each image folder contains:")
-                logger.info("    - 00_original.png")
-                logger.info("    - 01_GT.png")
-                logger.info("    - 02_pred_model1_text.png")
-                logger.info("    - 03_pred_model2_visual.png")
-                logger.info("    - 04+ attention maps")
-            else:
-                logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
-                logger.info(f"Model 2 (Visual-Only) outputs: {args.model2_save_path}")
+            logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
+            logger.info("  Each image folder contains:")
+            logger.info("    - 00_original.png")
+            logger.info("    - 01_GT.png")
+            logger.info("    - 02_pred_model1_text.png")
+            logger.info("    - 04+ attention maps")
+            logger.info("  Note: Model 2 output (03_pred_model2_visual.png) skipped")
+            # if integrated_mode:
+            #     logger.info(f"Integrated outputs (GT + Model1 + Model2 + Attention): {args.save_path}")
+            #     logger.info("  Each image folder contains:")
+            #     logger.info("    - 00_original.png")
+            #     logger.info("    - 01_GT.png")
+            #     logger.info("    - 02_pred_model1_text.png")
+            #     logger.info("    - 03_pred_model2_visual.png")
+            #     logger.info("    - 04+ attention maps")
+            # else:
+            #     logger.info(f"Model 1 (Text-Guided) outputs: {args.save_path}")
+            #     logger.info(f"Model 2 (Visual-Only) outputs: {args.model2_save_path}")
             logger.info("=" * 100 + "\n")
 
     else:
