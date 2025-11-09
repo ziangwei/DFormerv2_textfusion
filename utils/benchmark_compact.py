@@ -146,8 +146,7 @@ def analyze_flops_simple(model, config, inputs, inputs_no_text, device, has_text
 
         with torch.no_grad():
             macs_visual, params_from_profile = profile(model, inputs=inputs_no_text, custom_ops=custom_ops, verbose=False)
-        results['visual'] = macs_visual * 2  # MACs to FLOPs
-        results['visual_macs'] = macs_visual  # Store MACs separately for debugging
+        results['visual'] = macs_visual  # Keep as MACs (match baseline convention)
         results['params_from_profile'] = params_from_profile
 
         if original_text_setting:
@@ -160,12 +159,12 @@ def analyze_flops_simple(model, config, inputs, inputs_no_text, device, has_text
             if hasattr(model, 'backbone') and hasattr(model.backbone, 'cfg'):
                 model.backbone.cfg.enable_text_guidance = True
 
-        # 2. If text is enabled, compute total FLOPs (with text)
+        # 2. If text is enabled, compute total MACs (with text)
         if has_text:
             with torch.no_grad():
                 macs_total, _ = profile(model, inputs=inputs, custom_ops=custom_ops, verbose=False)
-            results['total'] = macs_total * 2
-            results['text'] = results['total'] - results['visual']  # Text overhead
+            results['total'] = macs_total  # Keep as MACs
+            results['text'] = results['total'] - results['visual']  # Text overhead (MACs)
         else:
             results['total'] = results['visual']
             results['text'] = 0
@@ -263,15 +262,15 @@ def main():
         print(f"  {'- Decoder SAM:':<23} {humanize(decoder_sam):>15} ({100*decoder_sam/param_stats['total']:>5.1f}%)")
         print(f"  {'- SAM Total:':<23} {humanize(total_sam):>15} ({sam_pct:>5.1f}%)")
 
-    # FLOPs analysis
+    # MACs analysis (matching baseline convention)
     if not args.skip_flops:
-        print("\n⚡ FLOPS ANALYSIS:")
+        print("\n⚡ MACs ANALYSIS:")
         print("-" * 70)
         try:
             flops_stats = analyze_flops_simple(model, C, inputs, inputs_no_text, device, enable_text)
 
             if flops_stats['total'] > 0:
-                print(f"{'Component':<25} {'FLOPs':>15} {'Percentage':>12}")
+                print(f"{'Component':<25} {'MACs':>15} {'Percentage':>12}")
                 print("-" * 70)
 
                 # Show visual vs text breakdown (exact, not estimated)
@@ -282,26 +281,22 @@ def main():
                     text_pct = 100 * flops_stats['text'] / flops_stats['total']
                     print(f"{'Text (SAM overhead)':<25} {humanize(flops_stats['text']):>15} {text_pct:>11.1f}%")
                 print("-" * 70)
-                print(f"{'Total FLOPs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
+                print(f"{'Total MACs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
                 print("-" * 70)
-                # Debug info
-                print(f"\n  DEBUG INFO:")
-                print(f"    Visual MACs (raw):  {humanize(flops_stats['visual_macs'])} ({flops_stats['visual_macs']/1e9:.2f}G)")
-                print(f"    Visual FLOPs (×2):  {humanize(flops_stats['visual'])} ({flops_stats['visual']/1e9:.2f}G)")
-                print(f"    Params (profile):   {humanize(flops_stats['params_from_profile'])}")
-                print("-" * 70)
+                print(f"\n  Note: Reporting MACs to match baseline convention")
+                print(f"        FLOPs ≈ 2 × MACs = {humanize(flops_stats['total'] * 2)} ({flops_stats['total'] * 2 / 1e9:.2f}G)")
                 if enable_text:
-                    print("  Note: Visual = model without text features")
-                    print("        Text = additional FLOPs from SAM cross-attention")
+                    print(f"        Visual MACs = model without text features")
+                    print(f"        Text MACs = additional overhead from SAM modules")
                 else:
-                    print("  Note: Pure visual model (no text guidance)")
+                    print(f"        Pure visual model (no text guidance)")
             else:
-                print("ERROR: FLOPs = 0, calculation may have failed")
+                print("ERROR: MACs = 0, calculation may have failed")
         except Exception as e:
-            print(f"ERROR: FLOPs calculation failed: {e}")
+            print(f"ERROR: MACs calculation failed: {e}")
             print("Try running with --skip-flops or --device cpu")
     else:
-        print("\nℹ️  FLOPs calculation skipped (use without --skip-flops to enable)")
+        print("\nℹ️  MACs calculation skipped (use without --skip-flops to enable)")
 
     print("\n" + "=" * 70)
 
