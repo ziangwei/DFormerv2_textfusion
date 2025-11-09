@@ -246,33 +246,43 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
 
     H, W = attn.shape
 
-    # Step 1: Gaussian smoothing (reduce pixel-level noise)
+    # Step 1: 先做一次强模糊，让整体柔和
+    attn = gaussian_filter(attn, sigma=2.5)  # 增强模糊，消除锐利边界
+    attn = _normalize01(attn)
+
+    # Step 2: Gaussian smoothing (reduce pixel-level noise) - 用户自定义
     if smooth_sigma and smooth_sigma > 0.0:
         attn = gaussian_filter(attn, sigma=float(smooth_sigma))
         attn = _normalize01(attn)
 
-    # Step 2: 强化对比度 - 压低中低值，突出高值
-    # 使用 power 函数：gamma > 1 会压低低值
-    # 用户希望"黄色更偏蓝"，意味着只有很红的部分才应该突出
-    contrast_power = 1.8  # 更高的值 = 更强的对比度
-    attn = np.power(attn, contrast_power)
+    # Step 3: 温和的对比度增强 - 使用 sigmoid 曲线而不是 power
+    # sigmoid 在整个范围内变化都比较平缓，不会造成局部锐利
+    # 调整中心点和陡度来控制对比度
+    def sigmoid_contrast(x, center=0.4, steepness=8):
+        """
+        使用 sigmoid 函数进行对比度增强
+        center: 中心点（低于此值被压暗，高于此值被提亮）
+        steepness: 陡度（越大对比度越强，但整体保持平滑）
+        """
+        return 1.0 / (1.0 + np.exp(-steepness * (x - center)))
+
+    attn = sigmoid_contrast(attn, center=0.35, steepness=6)
     attn = _normalize01(attn)
 
-    # Step 3: 额外柔化（减少锐利边界）
-    # 在应用颜色映射前再做一次轻微模糊
-    attn = gaussian_filter(attn, sigma=1.5)  # 固定轻微模糊
+    # Step 4: 再次轻微模糊，确保过渡柔和
+    attn = gaussian_filter(attn, sigma=1.2)
     attn = _normalize01(attn)
 
-    # Step 4: Gamma correction (enhance visibility) - 用户设置
+    # Step 5: Gamma correction (enhance visibility) - 用户设置
     if gamma and gamma > 0.0 and gamma != 1.0:
         attn = np.power(attn, gamma)
         attn = _normalize01(attn)
 
-    # Step 5: Threshold low responses
+    # Step 6: Threshold low responses
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # Step 6: Apply colormap (彻底去掉紫色，从深蓝开始)
+    # Step 7: Apply colormap (彻底去掉紫色，从深蓝开始)
     # 将 attn [0,1] 映射到 colormap 的 [0.25, 1.0] 范围
     # 0.25 对应深蓝色，避免任何紫色
     cmap = plt.get_cmap(colormap)
@@ -660,6 +670,10 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         if config.dataset_name in ["NYUDepthv2", "SUNRGBD"]:
             try:
                 palette = np.load("./utils/nyucmap.npy")
+                # 将 background 类别的颜色设为黑色，避免白色边框
+                bg_idx = getattr(config, 'background', 255)
+                if bg_idx < len(palette):
+                    palette[bg_idx] = [0, 0, 0]  # 黑色
             except:
                 palette = np.array([[i, i, i] for i in range(256)], dtype=np.uint8)
         else:
