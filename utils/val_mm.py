@@ -27,6 +27,15 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     n_classes = config.num_classes
     metrics = Metrics(n_classes, config.background, device)
 
+    # 防止 dataloader 为空
+    if len(dataloader) == 0:
+        logger.warning("Dataloader is empty, returning zero metrics")
+        return {
+            'mIoU': 0.0,
+            'Acc': 0.0,
+            'per_class_iou': [0.0] * n_classes,
+            'per_class_acc': [0.0] * n_classes,
+        }
 
     for idx, minibatch in enumerate(dataloader):
 
