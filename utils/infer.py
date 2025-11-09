@@ -251,34 +251,46 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
         attn = gaussian_filter(attn, sigma=float(smooth_sigma))
         attn = _normalize01(attn)
 
-    # Step 2: Gamma correction (enhance visibility)
+    # Step 2: 强化对比度 - 压低中低值，突出高值
+    # 使用 power 函数：gamma > 1 会压低低值
+    # 用户希望"黄色更偏蓝"，意味着只有很红的部分才应该突出
+    contrast_power = 1.8  # 更高的值 = 更强的对比度
+    attn = np.power(attn, contrast_power)
+    attn = _normalize01(attn)
+
+    # Step 3: 额外柔化（减少锐利边界）
+    # 在应用颜色映射前再做一次轻微模糊
+    attn = gaussian_filter(attn, sigma=1.5)  # 固定轻微模糊
+    attn = _normalize01(attn)
+
+    # Step 4: Gamma correction (enhance visibility) - 用户设置
     if gamma and gamma > 0.0 and gamma != 1.0:
         attn = np.power(attn, gamma)
         attn = _normalize01(attn)
 
-    # Step 3: Threshold low responses
+    # Step 5: Threshold low responses
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # Step 4: Apply colormap (避免紫色，从蓝色开始)
-    # 将 attn [0,1] 重新映射到 colormap 的 [0.15, 1.0] 范围
-    # 这样最低值显示蓝色而不是紫色
+    # Step 6: Apply colormap (彻底去掉紫色，从深蓝开始)
+    # 将 attn [0,1] 映射到 colormap 的 [0.25, 1.0] 范围
+    # 0.25 对应深蓝色，避免任何紫色
     cmap = plt.get_cmap(colormap)
     if colormap in ['turbo', 'jet']:
-        # turbo 和 jet 的低值是紫色，从 0.15 开始是蓝色
-        attn_remapped = attn * 0.85 + 0.15  # [0,1] -> [0.15, 1.0]
+        # turbo 和 jet 的低值是紫色，从 0.25 开始是纯蓝色
+        attn_remapped = attn * 0.75 + 0.25  # [0,1] -> [0.25, 1.0]
     else:
         # 其他 colormap 保持原样
         attn_remapped = attn
     heat_color = (cmap(attn_remapped)[:, :, :3] * 255).astype(np.uint8)  # RGB
 
-    # Step 5: Blend with original image
+    # Step 7: Blend with original image
     overlay = (alpha * heat_color + (1 - alpha) * rgb).astype(np.uint8)
 
-    # Step 6: Slight contrast enhancement (CVPR-style)
+    # Step 8: Slight contrast enhancement (CVPR-style)
     overlay = cv2.convertScaleAbs(overlay, alpha=1.05, beta=5)
 
-    # Step 7: Optional grid overlay
+    # Step 9: Optional grid overlay
     if enable_grid:
         grid_step = 16
         grid_color = 255
