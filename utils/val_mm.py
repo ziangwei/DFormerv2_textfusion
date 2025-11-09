@@ -33,7 +33,8 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         logger.info(f"[evaluate] Batch {idx}/{len(dataloader)}, keys={list(minibatch.keys())}")
         for h in logger.handlers: h.flush()
 
-        if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
+        print_interval = max(1, int(len(dataloader) * 0.5))
+        if ((idx + 1) % print_interval == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
         ):
             print(f"Validation Iter: {idx + 1} / {len(dataloader)}")
