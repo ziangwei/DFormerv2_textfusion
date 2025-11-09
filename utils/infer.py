@@ -85,6 +85,8 @@ parser.add_argument("--dual-model", action="store_true",
                     help="Load two different models and run both on the same images (model1=text-guided, model2=visual-only)")
 parser.add_argument("--model2-path", type=str, default=None,
                     help="Path to second model checkpoint for dual-model comparison (required if --dual-model is set)")
+parser.add_argument("--model2-config", type=str, default=None,
+                    help="Optional: separate config file for model2 (useful if models have different architectures)")
 parser.add_argument("--model2-save-path", type=str, default=None,
                     help="Output path for second model (default: same as model1, integrated output)")
 parser.add_argument("--vis-stage", type=str, default="enc",
@@ -1162,20 +1164,91 @@ with Engine(custom_parser=parser) as engine:
                 torch.cuda.empty_cache()
             logger.info("✓ Model 1 cleared\n")
 
-            # 重新配置 config 为纯视觉模式
-            logger.info("Reconfiguring for visual-only mode...")
-            config.enable_text_guidance = False
-            logger.info("✓ config.enable_text_guidance = False\n")
+            # 为模型2准备配置
+            if args.model2_config:
+                # 使用独立的配置文件
+                logger.info(f"Loading separate config for Model 2: {args.model2_config}")
+                from importlib import import_module
+                config_model2 = getattr(import_module(args.model2_config), "C")
+                logger.info("✓ Model 2 config loaded from separate file\n")
+            else:
+                # 使用相同的 config，但深度清理文本相关配置
+                logger.info("Reconfiguring shared config for visual-only mode...")
+                logger.info("  Removing all text-related configurations...")
 
-            # 重新创建模型2
-            logger.info("Loading Model 2...")
+                # 完全禁用文本引导
+                config.enable_text_guidance = False
+
+                # 清理所有文本相关配置，避免模型创建时初始化文本模块
+                # 这些配置即使存在，也不应该影响纯视觉模型的创建
+                if hasattr(config, 'text_source'):
+                    config.text_source = None
+                if hasattr(config, 'text_encoder'):
+                    config.text_encoder = None
+                if hasattr(config, 'text_encoder_name'):
+                    config.text_encoder_name = None
+                if hasattr(config, 'text_feature_dim'):
+                    # 保留维度设置，但设为 0 或 None
+                    pass  # 某些模型可能需要这个字段存在
+                if hasattr(config, 'label_txt_path'):
+                    config.label_txt_path = None
+                if hasattr(config, 'image_labels_json_path'):
+                    config.image_labels_json_path = None
+                if hasattr(config, 'caption_json_path'):
+                    config.caption_json_path = None
+                if hasattr(config, 'text_template_set'):
+                    config.text_template_set = None
+
+                logger.info("✓ config.enable_text_guidance = False")
+                logger.info("✓ All text-related configs cleared")
+                config_model2 = config
+                logger.info("")
+
+            # 重新创建模型2（纯视觉架构）
+            logger.info("Creating Model 2 architecture...")
             BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
-            model2 = segmodel(cfg=config, norm_layer=BatchNorm2d)
 
-            # 加载模型2的权重
+            try:
+                model2 = segmodel(cfg=config_model2, norm_layer=BatchNorm2d)
+                logger.info("✓ Model 2 architecture created successfully")
+            except Exception as e:
+                logger.error(f"✗ Failed to create Model 2 architecture: {e}")
+                logger.error("")
+                logger.error("Possible solutions:")
+                logger.error("  1. Use --model2-config to specify a separate config file for model2")
+                logger.error("  2. Ensure your visual-only model was trained with enable_text_guidance=False")
+                logger.error("  3. Check that the model architecture is compatible")
+                logger.error("")
+                raise
+
+            # 加载模型2的权重（使用 strict=False 允许部分加载）
             weight2 = torch.load(args.model2_path, map_location="cpu")["model"]
-            logger.info("Loading Model 2 weights...")
-            model2.load_state_dict(weight2, strict=False)
+            logger.info("Loading Model 2 weights (strict=False, ignoring mismatched keys)...")
+
+            missing_keys, unexpected_keys = model2.load_state_dict(weight2, strict=False)
+
+            # 输出加载信息
+            if missing_keys:
+                logger.info(f"  Missing keys (not loaded from checkpoint): {len(missing_keys)}")
+                if len(missing_keys) <= 10:
+                    for key in missing_keys:
+                        logger.info(f"    - {key}")
+                else:
+                    logger.info(f"    - (showing first 10) {missing_keys[:10]}")
+
+            if unexpected_keys:
+                logger.info(f"  Unexpected keys (in checkpoint but not in model): {len(unexpected_keys)}")
+                if len(unexpected_keys) <= 10:
+                    for key in unexpected_keys:
+                        logger.info(f"    - {key}")
+                else:
+                    logger.info(f"    - (showing first 10) {unexpected_keys[:10]}")
+
+            if not missing_keys and not unexpected_keys:
+                logger.info("  ✓ All keys matched perfectly!")
+            else:
+                logger.info("  ✓ Weights loaded with partial matching (this is expected for different architectures)")
+
 
             # 将模型2移到设备
             if engine.distributed:
