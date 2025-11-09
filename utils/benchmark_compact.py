@@ -3,7 +3,11 @@
 Compact Benchmark: Visual vs Text Component Analysis
 精简的参数和FLOPs统计工具，区分视觉部分和文本部分
 """
+# 设置无头模式，避免 OpenGL 依赖
 import os
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '0'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 import sys
 import argparse
 import importlib

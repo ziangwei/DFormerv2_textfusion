@@ -1,7 +1,12 @@
 # benchmark.py  —— 需要已安装 thop
 # 用法示例：
 #   python utils/benchmark.py --config local_configs.NYUDepthv2.DFormerv2_S --height 480 --width 640 --device cpu
+
+# 设置无头模式，避免 OpenGL 依赖
 import os
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '0'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 import sys
 import argparse
 import importlib
