@@ -236,7 +236,10 @@ class SemanticAlignmentModule(nn.Module):
         q_full = self.q_proj(x)
 
         # (1) 统一成 (B,T,Ct)
-        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B, T, Ct]
+        # FIX: 确保text_features与visual_features在同一设备和数据类型
+        text_b = self._ensure_batched_text(text_features, B).to(
+            device=visual_features.device, dtype=visual_features.dtype
+        )  # [B, T, Ct]
         pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
 
         # (2) 动态裁短到本 batch 的最大有效长度（仅统计非 padding token）

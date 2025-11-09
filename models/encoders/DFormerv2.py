@@ -580,7 +580,16 @@ class dformerv2(nn.Module):
         key = str(stage_idx)
         if key not in self.encoder_sam_stage_modules:
             spec = self._encoder_sam_stage_specs[stage_idx]
-            self.encoder_sam_stage_modules[key] = SemanticAlignmentModule(**spec)
+            sam_module = SemanticAlignmentModule(**spec)
+            # FIX: 确保新创建的SAM模块与主干网络在同一设备上
+            # 使用第一层参数的设备作为参考
+            try:
+                device = next(self.parameters()).device
+                sam_module = sam_module.to(device)
+            except StopIteration:
+                # 如果模型还没有参数，保持默认设备
+                pass
+            self.encoder_sam_stage_modules[key] = sam_module
         return self.encoder_sam_stage_modules[key]
 
     def forward(self, x, x_e, text_features=None):
