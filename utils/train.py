@@ -52,6 +52,7 @@ parser.add_argument("--seed", type=int, default=None, help="Random seed (overrid
 parser.add_argument("--local-rank", default=0)
 
 # --- text guidance runtime switches ---
+parser.add_argument("--enable-text-guidance", dest="enable_text_guidance", default=None, action=argparse.BooleanOptionalAction, help="Enable/disable text guidance (overrides config)")
 parser.add_argument("--text-source", choices=["labels", "captions", "both", "imglabels"])
 parser.add_argument("--text-encoder", choices=["clip", "jinaclip"])
 parser.add_argument("--text-encoder-name", type=str)
@@ -170,6 +171,8 @@ with Engine(custom_parser=parser) as engine:
         config = getattr(import_module(args.config), "C")
         # === override text guidance config by CLI (if provided) ===
 
+        if args.enable_text_guidance is not None:
+            config.enable_text_guidance = args.enable_text_guidance
         if args.text_source is not None:
             config.text_source = args.text_source
         if args.text_encoder is not None:
