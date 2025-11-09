@@ -90,20 +90,34 @@ def analyze_flops_simple(model, inputs, device, param_stats):
     """
     results = {}
 
-    # Custom ops for common layers
+    # Custom ops for common layers - safe version that handles non-tensor inputs
+    def safe_counter(multiplier):
+        def counter_hook(module, input, output):
+            try:
+                if isinstance(input, tuple) and len(input) > 0:
+                    input_tensor = input[0]
+                    if hasattr(input_tensor, 'numel'):
+                        flops = int(input_tensor.numel() * multiplier)
+                        if not hasattr(module, '__flops__'):
+                            module.__flops__ = 0
+                        module.__flops__ += flops
+            except Exception:
+                pass  # Silently ignore errors
+        return counter_hook
+
     custom_ops = {
-        nn.LayerNorm: lambda m, x, y: x[0].numel() * 4,
-        nn.GELU: lambda m, x, y: x[0].numel() * 8,
-        nn.BatchNorm2d: lambda m, x, y: x[0].numel() * 4,
-        nn.SyncBatchNorm: lambda m, x, y: x[0].numel() * 4,
-        nn.Dropout: lambda m, x, y: 0,
-        nn.Dropout2d: lambda m, x, y: 0,
-        nn.Identity: lambda m, x, y: 0,
+        nn.LayerNorm: safe_counter(4),
+        nn.GELU: safe_counter(8),
+        nn.BatchNorm2d: safe_counter(4),
+        nn.SyncBatchNorm: safe_counter(4),
+        nn.Dropout: safe_counter(0),
+        nn.Dropout2d: safe_counter(0),
+        nn.Identity: safe_counter(0),
     }
 
     try:
         from models.encoders.DFormerv2 import LayerNorm2d
-        custom_ops[LayerNorm2d] = lambda m, x, y: x[0].numel() * 4
+        custom_ops[LayerNorm2d] = safe_counter(4)
     except ImportError:
         pass
 
