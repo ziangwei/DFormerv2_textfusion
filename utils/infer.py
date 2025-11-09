@@ -1447,45 +1447,56 @@ with Engine(custom_parser=parser) as engine:
                 model2_temp_dir = args.model2_save_path
 
             if engine.distributed:
-                with torch.no_grad():
-                    model2.eval()
-                    all_metrics_m2 = evaluate_msf(
-                        model2,
-                        val_loader,
-                        config,
-                        device,
-                        scales,
-                        flip,
-                        engine,
-                        save_dir=model2_temp_dir,
-                    )
+                # 检查dataloader是否为空
+                if len(val_loader) == 0:
                     if engine.local_rank == 0:
-                        metric_m2 = all_metrics_m2[0]
-                        for other_metric in all_metrics_m2[1:]:
-                            metric_m2.update_hist(other_metric.hist)
-                        ious_m2, miou_m2 = metric_m2.compute_iou()
-                        acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
-                        f1_m2, mf1_m2 = metric_m2.compute_f1()
+                        logger.warning("val_loader is empty, skipping Model 2 evaluation")
+                else:
+                    with torch.no_grad():
+                        model2.eval()
+                        all_metrics_m2 = evaluate_msf(
+                            model2,
+                            val_loader,
+                            config,
+                            device,
+                            scales,
+                            flip,
+                            engine,
+                            save_dir=model2_temp_dir,
+                        )
+                        if engine.local_rank == 0:
+                            metric_m2 = all_metrics_m2[0]
+                            for other_metric in all_metrics_m2[1:]:
+                                metric_m2.update_hist(other_metric.hist)
+                            ious_m2, miou_m2 = metric_m2.compute_iou()
+                            acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+                            f1_m2, mf1_m2 = metric_m2.compute_f1()
 
-                        logger.info("\n" + "=" * 100)
-                        logger.info("MODEL 2 RESULTS (Visual-Only):")
-                        logger.info(f"mIoU: {miou_m2:.4f}")
-                        logger.info(f"mAcc: {macc_m2:.4f}")
-                        logger.info(f"mF1: {mf1_m2:.4f}")
-                        logger.info("=" * 100)
+                            logger.info("\n" + "=" * 100)
+                            logger.info("MODEL 2 RESULTS (Visual-Only):")
+                            logger.info(f"mIoU: {miou_m2:.4f}")
+                            logger.info(f"mAcc: {macc_m2:.4f}")
+                            logger.info(f"mF1: {mf1_m2:.4f}")
+                            logger.info("=" * 100)
             else:
-                with torch.no_grad():
-                    model2.eval()
-                    metric_m2 = evaluate_msf(
-                        model2,
-                        val_loader,
-                        config,
-                        device,
-                        scales,
-                        flip,
-                        engine,
-                        save_dir=model2_temp_dir,
-                    )
+                # 检查dataloader是否为空
+                if len(val_loader) == 0:
+                    logger.warning("val_loader is empty, skipping Model 2 evaluation")
+                    metric_m2 = None
+                else:
+                    with torch.no_grad():
+                        model2.eval()
+                        metric_m2 = evaluate_msf(
+                            model2,
+                            val_loader,
+                            config,
+                            device,
+                            scales,
+                            flip,
+                            engine,
+                            save_dir=model2_temp_dir,
+                        )
+                if metric_m2 is not None:
                     ious_m2, miou_m2 = metric_m2.compute_iou()
                     acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
                     f1_m2, mf1_m2 = metric_m2.compute_f1()
@@ -1563,22 +1574,55 @@ with Engine(custom_parser=parser) as engine:
 
         if engine.distributed:
             print("Multi GPU test")
-            with torch.no_grad():
-                model.eval()
-                all_metrics = evaluate_msf(
-                    model,
-                    val_loader,
-                    config,
-                    device,
-                    scales,
-                    flip,
-                    engine,
-                    save_dir=save_dir_for_eval,
-                )
+            # 检查dataloader是否为空
+            if len(val_loader) == 0:
                 if engine.local_rank == 0:
-                    metric = all_metrics[0]
-                    for other_metric in all_metrics[1:]:
-                        metric.update_hist(other_metric.hist)
+                    logger.warning("val_loader is empty, skipping Model 1 evaluation")
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    all_metrics = evaluate_msf(
+                        model,
+                        val_loader,
+                        config,
+                        device,
+                        scales,
+                        flip,
+                        engine,
+                        save_dir=save_dir_for_eval,
+                    )
+                    if engine.local_rank == 0:
+                        metric = all_metrics[0]
+                        for other_metric in all_metrics[1:]:
+                            metric.update_hist(other_metric.hist)
+                        ious, miou = metric.compute_iou()
+                        acc, macc = metric.compute_pixel_acc()
+                        f1, mf1 = metric.compute_f1()
+                        logger.info("=" * 80)
+                        logger.info("FINAL RESULTS (Multi-Scale + Flip):")
+                        logger.info(f"mIoU: {miou:.4f}")
+                        logger.info(f"mAcc: {macc:.4f}")
+                        logger.info(f"mF1: {mf1:.4f}")
+                        logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
+                        logger.info("=" * 80)
+                        print(f"mIoU: {miou:.4f}")
+        else:
+            # 检查dataloader是否为空
+            if len(val_loader) == 0:
+                logger.warning("val_loader is empty, skipping Model 1 evaluation")
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    metric = evaluate_msf(
+                        model,
+                        val_loader,
+                        config,
+                        device,
+                        scales,
+                        flip,
+                        engine,
+                        save_dir=save_dir_for_eval,
+                    )
                     ious, miou = metric.compute_iou()
                     acc, macc = metric.compute_pixel_acc()
                     f1, mf1 = metric.compute_f1()
@@ -1590,27 +1634,3 @@ with Engine(custom_parser=parser) as engine:
                     logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
                     logger.info("=" * 80)
                     print(f"mIoU: {miou:.4f}")
-        else:
-            with torch.no_grad():
-                model.eval()
-                metric = evaluate_msf(
-                    model,
-                    val_loader,
-                    config,
-                    device,
-                    scales,
-                    flip,
-                    engine,
-                    save_dir=save_dir_for_eval,
-                )
-                ious, miou = metric.compute_iou()
-                acc, macc = metric.compute_pixel_acc()
-                f1, mf1 = metric.compute_f1()
-                logger.info("=" * 80)
-                logger.info("FINAL RESULTS (Multi-Scale + Flip):")
-                logger.info(f"mIoU: {miou:.4f}")
-                logger.info(f"mAcc: {macc:.4f}")
-                logger.info(f"mF1: {mf1:.4f}")
-                logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
-                logger.info("=" * 80)
-                print(f"mIoU: {miou:.4f}")
