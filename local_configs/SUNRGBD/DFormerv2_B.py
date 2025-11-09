@@ -4,7 +4,7 @@ from .._base_.datasets.SUNRGBD import *
 C.backbone = "DFormerv2_B"  # Remember change the path below.
 C.pretrained_model = "checkpoints/pretrained/DFormerv2_Base_pretrained.pth"
 C.decoder = "HSGHead"
-C.decoder_embed_dim = 512
+C.decoder_embed_dim = 1024
 C.optimizer = "AdamW"
 
 
