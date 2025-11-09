@@ -134,8 +134,11 @@ def analyze_flops_simple(model, config, inputs, inputs_no_text, device, has_text
         original_text_setting = getattr(config, 'enable_text_guidance', False)
 
         if original_text_setting:
-            # Disable text guidance in both config and model's internal cfg
+            # CRITICAL: Disable text guidance in model instance (not just config)
+            # The model copies enable_text_guidance to self.enable_text_guidance during __init__
             config.enable_text_guidance = False
+            if hasattr(model, 'enable_text_guidance'):
+                model.enable_text_guidance = False
             if hasattr(model, 'cfg'):
                 model.cfg.enable_text_guidance = False
             if hasattr(model, 'backbone') and hasattr(model.backbone, 'cfg'):
@@ -148,6 +151,8 @@ def analyze_flops_simple(model, config, inputs, inputs_no_text, device, has_text
         if original_text_setting:
             # Restore text guidance settings
             config.enable_text_guidance = True
+            if hasattr(model, 'enable_text_guidance'):
+                model.enable_text_guidance = True
             if hasattr(model, 'cfg'):
                 model.cfg.enable_text_guidance = True
             if hasattr(model, 'backbone') and hasattr(model.backbone, 'cfg'):
