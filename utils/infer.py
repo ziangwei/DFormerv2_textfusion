@@ -260,9 +260,17 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # Step 4: Apply colormap
+    # Step 4: Apply colormap (避免紫色，从蓝色开始)
+    # 将 attn [0,1] 重新映射到 colormap 的 [0.15, 1.0] 范围
+    # 这样最低值显示蓝色而不是紫色
     cmap = plt.get_cmap(colormap)
-    heat_color = (cmap(attn)[:, :, :3] * 255).astype(np.uint8)  # RGB
+    if colormap in ['turbo', 'jet']:
+        # turbo 和 jet 的低值是紫色，从 0.15 开始是蓝色
+        attn_remapped = attn * 0.85 + 0.15  # [0,1] -> [0.15, 1.0]
+    else:
+        # 其他 colormap 保持原样
+        attn_remapped = attn
+    heat_color = (cmap(attn_remapped)[:, :, :3] * 255).astype(np.uint8)  # RGB
 
     # Step 5: Blend with original image
     overlay = (alpha * heat_color + (1 - alpha) * rgb).astype(np.uint8)
@@ -678,9 +686,9 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 rgb_np = (rgb_np * 255).clip(0, 255).astype(np.uint8)
                 H_img, W_img = rgb_np.shape[:2]
 
-                import matplotlib.pyplot as plt
+                # 保存原始图像
                 original_path = os.path.join(img_output_dir, "00_original.png")
-                plt.imsave(original_path, rgb_np)
+                cv2.imwrite(original_path, cv2.cvtColor(rgb_np, cv2.COLOR_RGB2BGR))
 
                 file_counter = 1  # 用于动态分配文件编号
 
@@ -688,20 +696,22 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 if save_gt:
                     label_np = labels[b].cpu().numpy().astype(np.uint8)
                     # 使用相同的 palette 进行颜色映射
-                    gt_colored = palette[label_np]
+                    gt_colored = palette[label_np]  # (H, W, 3) RGB
                     gt_path = os.path.join(img_output_dir, f"{file_counter:02d}_GT.png")
-                    plt.imsave(gt_path, gt_colored)
+                    # 使用 cv2 保存，确保颜色精确一致
+                    cv2.imwrite(gt_path, cv2.cvtColor(gt_colored, cv2.COLOR_RGB2BGR))
                     file_counter += 1
 
                 # 3. 保存分割结果（模型预测）
-                pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]
+                pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]  # (H, W, 3) RGB
                 # 根据 model_name 添加后缀
                 if model_name:
                     seg_filename = f"{file_counter:02d}_pred_{model_name}.png"
                 else:
                     seg_filename = f"{file_counter:02d}_segmentation.png"
                 seg_path = os.path.join(img_output_dir, seg_filename)
-                plt.imsave(seg_path, pred_colored)
+                # 使用 cv2 保存，确保与 GT 颜色映射完全一致
+                cv2.imwrite(seg_path, cv2.cvtColor(pred_colored, cv2.COLOR_RGB2BGR))
                 file_counter += 1
 
                 # 解析该图的 token 名称/类型
