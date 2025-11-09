@@ -619,10 +619,11 @@ class dformerv2(nn.Module):
                 )
 
                 # 2) 仅当启用并有文本时，对 x_out 做一次 SAM
+                # 注意：encoder SAM 应该使用 forward_ssa() 而不是 forward()
                 if use_text_guidance and (i in self._sam_enc_enabled):
                     sam_module = self._get_encoder_stage_sam(i)
                     if sam_module is not None:
-                        x_out = sam_module(x_out, text_features)
+                        x_out = sam_module.forward_ssa(x_out, text_features)
 
             if i in self.out_indices:
                 if i != 0:
