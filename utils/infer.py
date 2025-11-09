@@ -1034,10 +1034,40 @@ with Engine(custom_parser=parser) as engine:
         engine.link_tb(tb_dir, generate_tb_dir)
 
     BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
+
+    # 预加载 checkpoint 以检测 SAM FFN 维度
+    if args.continue_fpath:
+        weight = torch.load(args.continue_fpath, map_location="cpu")["model"]
+
+        # 检测 SAM FFN 维度是否匹配
+        # 检查一个典型的 SAM FFN 层
+        sample_key = "backbone.encoder_sam_blocks.1.0.ffn.0.weight"
+        if sample_key in weight:
+            checkpoint_ffn_dim = weight[sample_key].shape[0]  # 实际的 FFN 隐藏维度
+            checkpoint_embed_dim = weight[sample_key].shape[1]  # 输入维度
+
+            # 推断 FFN ratio
+            checkpoint_ffn_ratio = checkpoint_ffn_dim // checkpoint_embed_dim
+
+            # 检查 config 中的设置
+            config_ffn_ratio = getattr(config, 'sam_ffn_ratio', 4)
+
+            if checkpoint_ffn_ratio != config_ffn_ratio:
+                logger.warning("=" * 80)
+                logger.warning(f"⚠️  SAM FFN ratio mismatch detected!")
+                logger.warning(f"  Checkpoint FFN ratio: {checkpoint_ffn_ratio}")
+                logger.warning(f"  Config FFN ratio: {config_ffn_ratio}")
+                logger.warning(f"  Auto-adjusting config to match checkpoint...")
+
+                # 自动修正配置
+                config.sam_ffn_ratio = checkpoint_ffn_ratio
+
+                logger.warning(f"✓ Config updated: sam_ffn_ratio = {checkpoint_ffn_ratio}")
+                logger.warning("=" * 80 + "\n")
+
     model = segmodel(cfg=config, norm_layer=BatchNorm2d)
 
     if args.continue_fpath:
-        weight = torch.load(args.continue_fpath, map_location="cpu")["model"]
         print("Loading model weights...")
         model.load_state_dict(weight, strict=False)
 
