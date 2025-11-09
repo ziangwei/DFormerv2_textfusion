@@ -84,9 +84,13 @@ def count_sam_params(model):
     return encoder_sam, decoder_sam
 
 
-def analyze_flops_simple(model, inputs, inputs_no_text, device, has_text):
+def analyze_flops_simple(model, config, inputs, inputs_no_text, device, has_text):
     """
     Simplified FLOPs analysis - compute visual-only and total separately
+
+    Key insight: When computing visual-only FLOPs, we need to temporarily
+    disable text guidance in the config to prevent the model from requiring
+    text_features.
     """
     results = {}
 
@@ -126,9 +130,28 @@ def analyze_flops_simple(model, inputs, inputs_no_text, device, has_text):
     # Compute FLOPs
     try:
         # 1. Always compute visual-only FLOPs (without text)
+        # Temporarily disable text guidance to allow visual-only inference
+        original_text_setting = getattr(config, 'enable_text_guidance', False)
+
+        if original_text_setting:
+            # Disable text guidance in both config and model's internal cfg
+            config.enable_text_guidance = False
+            if hasattr(model, 'cfg'):
+                model.cfg.enable_text_guidance = False
+            if hasattr(model, 'backbone') and hasattr(model.backbone, 'cfg'):
+                model.backbone.cfg.enable_text_guidance = False
+
         with torch.no_grad():
             macs_visual, _ = profile(model, inputs=inputs_no_text, custom_ops=custom_ops, verbose=False)
         results['visual'] = macs_visual * 2  # MACs to FLOPs
+
+        if original_text_setting:
+            # Restore text guidance settings
+            config.enable_text_guidance = True
+            if hasattr(model, 'cfg'):
+                model.cfg.enable_text_guidance = True
+            if hasattr(model, 'backbone') and hasattr(model.backbone, 'cfg'):
+                model.backbone.cfg.enable_text_guidance = True
 
         # 2. If text is enabled, compute total FLOPs (with text)
         if has_text:
@@ -145,6 +168,8 @@ def analyze_flops_simple(model, inputs, inputs_no_text, device, has_text):
         results['visual'] = 0
         results['text'] = 0
         print(f"Warning: Failed to profile model: {e}")
+        import traceback
+        traceback.print_exc()
 
     return results
 
@@ -236,7 +261,7 @@ def main():
         print("\n⚡ FLOPS ANALYSIS:")
         print("-" * 70)
         try:
-            flops_stats = analyze_flops_simple(model, inputs, inputs_no_text, device, enable_text)
+            flops_stats = analyze_flops_simple(model, C, inputs, inputs_no_text, device, enable_text)
 
             if flops_stats['total'] > 0:
                 print(f"{'Component':<25} {'FLOPs':>15} {'Percentage':>12}")
