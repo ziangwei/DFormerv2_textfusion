@@ -84,9 +84,9 @@ def count_sam_params(model):
     return encoder_sam, decoder_sam
 
 
-def analyze_flops_simple(model, inputs, device, param_stats):
+def analyze_flops_simple(model, inputs, inputs_no_text, device, has_text):
     """
-    Simplified FLOPs analysis - just compute total and estimate breakdown
+    Simplified FLOPs analysis - compute visual-only and total separately
     """
     results = {}
 
@@ -123,22 +123,27 @@ def analyze_flops_simple(model, inputs, device, param_stats):
 
     model.eval()
 
-    # Compute total FLOPs
+    # Compute FLOPs
     try:
+        # 1. Always compute visual-only FLOPs (without text)
         with torch.no_grad():
-            macs, _ = profile(model, inputs=inputs, custom_ops=custom_ops, verbose=False)
-        results['total'] = macs * 2  # MACs to FLOPs
+            macs_visual, _ = profile(model, inputs=inputs_no_text, custom_ops=custom_ops, verbose=False)
+        results['visual'] = macs_visual * 2  # MACs to FLOPs
 
-        # Estimate visual vs text FLOPs based on parameter ratio
-        # This is approximate but reasonable
-        text_ratio = param_stats['text'] / param_stats['total'] if param_stats['total'] > 0 else 0
-        results['text_estimated'] = results['total'] * text_ratio
-        results['visual_estimated'] = results['total'] * (1 - text_ratio)
+        # 2. If text is enabled, compute total FLOPs (with text)
+        if has_text:
+            with torch.no_grad():
+                macs_total, _ = profile(model, inputs=inputs, custom_ops=custom_ops, verbose=False)
+            results['total'] = macs_total * 2
+            results['text'] = results['total'] - results['visual']  # Text overhead
+        else:
+            results['total'] = results['visual']
+            results['text'] = 0
 
     except Exception as e:
         results['total'] = 0
-        results['text_estimated'] = 0
-        results['visual_estimated'] = 0
+        results['visual'] = 0
+        results['text'] = 0
         print(f"Warning: Failed to profile model: {e}")
 
     return results
@@ -170,6 +175,9 @@ def main():
     enable_text = getattr(C, "enable_text_guidance", False)
     text_tokens = 0
 
+    # Visual-only inputs (always needed for accurate FLOPs calculation)
+    inputs_no_text = (rgb, depth)
+
     if enable_text:
         # Determine text token count
         src = getattr(C, "text_source", "both")
@@ -186,7 +194,7 @@ def main():
         text_features = torch.randn(1, text_tokens, text_dim, device=device)
         inputs = (rgb, depth, None, text_features)
     else:
-        inputs = (rgb, depth)
+        inputs = inputs_no_text
 
     # ========== Print Results ==========
     print("\n" + "=" * 70)
@@ -228,24 +236,27 @@ def main():
         print("\n⚡ FLOPS ANALYSIS:")
         print("-" * 70)
         try:
-            flops_stats = analyze_flops_simple(model, inputs, device, param_stats)
+            flops_stats = analyze_flops_simple(model, inputs, inputs_no_text, device, enable_text)
 
             if flops_stats['total'] > 0:
                 print(f"{'Component':<25} {'FLOPs':>15} {'Percentage':>12}")
                 print("-" * 70)
 
-                # Show visual vs text breakdown
-                visual_pct = 100 * flops_stats['visual_estimated'] / flops_stats['total']
-                text_pct = 100 * flops_stats['text_estimated'] / flops_stats['total']
+                # Show visual vs text breakdown (exact, not estimated)
+                visual_pct = 100 * flops_stats['visual'] / flops_stats['total']
 
-                print(f"{'Visual (estimated)':<25} {humanize(flops_stats['visual_estimated']):>15} {visual_pct:>11.1f}%")
-                if enable_text:
-                    print(f"{'Text (estimated)':<25} {humanize(flops_stats['text_estimated']):>15} {text_pct:>11.1f}%")
+                print(f"{'Visual (pure backbone)':<25} {humanize(flops_stats['visual']):>15} {visual_pct:>11.1f}%")
+                if enable_text and flops_stats['text'] > 0:
+                    text_pct = 100 * flops_stats['text'] / flops_stats['total']
+                    print(f"{'Text (SAM overhead)':<25} {humanize(flops_stats['text']):>15} {text_pct:>11.1f}%")
                 print("-" * 70)
                 print(f"{'Total FLOPs':<25} {humanize(flops_stats['total']):>15} {'100.0%':>12}")
                 print("-" * 70)
-                print("  Note: Visual/Text FLOPs estimated from parameter ratio")
-                print("        Text tokens participate in cross-attention with visual features")
+                if enable_text:
+                    print("  Note: Visual = model without text features")
+                    print("        Text = additional FLOPs from SAM cross-attention")
+                else:
+                    print("  Note: Pure visual model (no text guidance)")
             else:
                 print("ERROR: FLOPs = 0, calculation may have failed")
         except Exception as e:
@@ -262,6 +273,9 @@ def main():
     if not args.skip_flops:
         try:
             if flops_stats.get('total', 0) > 0:
+                print(f"  Visual FLOPs: {humanize(flops_stats['visual'])} (pure backbone)")
+                if enable_text and flops_stats.get('text', 0) > 0:
+                    print(f"  Text FLOPs:   {humanize(flops_stats['text'])} (SAM overhead)")
                 print(f"  Total FLOPs:  {humanize(flops_stats['total'])}")
         except NameError:
             pass
