@@ -1242,6 +1242,56 @@ with Engine(custom_parser=parser) as engine:
                 config_model2 = config
                 logger.info("")
 
+            # 预加载 model2 checkpoint 以检测 SAM FFN 维度
+            logger.info("Pre-loading Model 2 checkpoint to detect SAM FFN ratio...")
+            weight2 = torch.load(args.model2_path, map_location="cpu")["model"]
+
+            # 检测 SAM FFN 维度（encoder 和 decoder）
+            detected_ffn_ratio = None
+
+            # 尝试从 encoder SAM 检测
+            for key in weight2.keys():
+                if "encoder_sam_blocks" in key and "ffn.0.weight" in key:
+                    checkpoint_ffn_dim = weight2[key].shape[0]
+                    checkpoint_embed_dim = weight2[key].shape[1]
+                    detected_ffn_ratio = checkpoint_ffn_dim // checkpoint_embed_dim
+                    logger.info(f"  Detected from encoder SAM: {key}")
+                    logger.info(f"    FFN: {checkpoint_embed_dim} → {checkpoint_ffn_dim} (ratio={detected_ffn_ratio})")
+                    break
+
+            # 如果 encoder SAM 没找到，尝试从 decoder SAM 检测
+            if detected_ffn_ratio is None:
+                for key in weight2.keys():
+                    if "dec_sam_layers" in key and "ffn.0.weight" in key:
+                        checkpoint_ffn_dim = weight2[key].shape[0]
+                        checkpoint_embed_dim = weight2[key].shape[1]
+                        detected_ffn_ratio = checkpoint_ffn_dim // checkpoint_embed_dim
+                        logger.info(f"  Detected from decoder SAM: {key}")
+                        logger.info(f"    FFN: {checkpoint_embed_dim} → {checkpoint_ffn_dim} (ratio={detected_ffn_ratio})")
+                        break
+
+            # 如果检测到 FFN ratio，更新 config
+            if detected_ffn_ratio is not None:
+                config_ffn_ratio = getattr(config_model2, 'sam_ffn_ratio', 4)
+
+                if detected_ffn_ratio != config_ffn_ratio:
+                    logger.warning("=" * 80)
+                    logger.warning(f"⚠️  Model 2: SAM FFN ratio mismatch detected!")
+                    logger.warning(f"  Checkpoint FFN ratio: {detected_ffn_ratio}")
+                    logger.warning(f"  Config FFN ratio: {config_ffn_ratio}")
+                    logger.warning(f"  Auto-adjusting config_model2 to match checkpoint...")
+
+                    config_model2.sam_ffn_ratio = detected_ffn_ratio
+
+                    logger.warning(f"✓ Config updated: sam_ffn_ratio = {detected_ffn_ratio}")
+                    logger.warning("=" * 80)
+                else:
+                    logger.info(f"✓ SAM FFN ratio matches: {detected_ffn_ratio}")
+            else:
+                logger.info("  No SAM layers found in checkpoint (pure visual model?)")
+
+            logger.info("")
+
             # 重新创建模型2（纯视觉架构）
             logger.info("Creating Model 2 architecture...")
             BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
@@ -1260,7 +1310,7 @@ with Engine(custom_parser=parser) as engine:
                 raise
 
             # 加载模型2的权重（使用 strict=False 允许部分加载）
-            weight2 = torch.load(args.model2_path, map_location="cpu")["model"]
+            # weight2 已经在上面加载过了（用于检测 SAM FFN ratio）
             logger.info("Loading Model 2 weights (strict=False, ignoring mismatched keys)...")
 
             missing_keys, unexpected_keys = model2.load_state_dict(weight2, strict=False)
