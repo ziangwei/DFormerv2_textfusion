@@ -1,6 +1,11 @@
 # benchmark.py  —— 需要已安装 thop
 # 用法示例：
 #   python utils/benchmark.py --config local_configs.NYUDepthv2.DFormerv2_S --height 480 --width 640 --device cpu
+#
+# 注意：如果遇到 "ImportError: libGL.so.1: cannot open shared object file" 错误
+#      这是因为opencv-python依赖系统GUI库。解决方案（二选一）：
+#      1. 安装系统库（需要管理员权限）：sudo apt-get install libgl1-mesa-glx
+#      2. 换用headless版本：pip uninstall opencv-python && pip install opencv-python-headless
 import os
 import sys
 import argparse
