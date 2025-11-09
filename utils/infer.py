@@ -754,16 +754,24 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         align_corners=False
                     ).squeeze(0).permute(1, 2, 0)  # (H, W, T)
 
-                    # 获取token名称
+                    # 获取token名称，确保长度匹配T
                     if meta_token_names is not None and len(meta_token_names) > 0:
                         token_names = list(meta_token_names)
                         token_types = list(meta_token_types) if meta_token_types else None
                     elif global_token_names:
-                        token_names = global_token_names[:T]
+                        if len(global_token_names) >= T:
+                            token_names = global_token_names[:T]
+                        else:
+                            # 不足的部分用padding token填充
+                            token_names = list(global_token_names) + [f"<pad_{i}>" for i in range(T - len(global_token_names))]
                         token_types = None
                     else:
                         token_names = [f"tok{t}" for t in range(T)]
                         token_types = None
+
+                    # 二次检查：确保token_names长度至少为T（防御性编程）
+                    if len(token_names) < T:
+                        token_names = token_names + [f"<pad_{i}>" for i in range(len(token_names), T)]
 
                     # 为每个token保存attention map
                     pad_markers = {"", "<pad>", "[pad]", "pad", "<none>", "none"}
