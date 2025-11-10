@@ -630,7 +630,7 @@ with Engine(custom_parser=parser) as engine:
                                     if args.mst:
                                         all_metrics = evaluate_msf(
                                             model, val_loader, config, device,
-                                            [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
+                                            getattr(config, "eval_scale_array", [0.5, 0.75, 1.0, 1.25, 1.5]), True, engine,
                                             sliding=args.sliding,
                                         )
                                     else:
@@ -642,7 +642,7 @@ with Engine(custom_parser=parser) as engine:
                                 if args.mst:
                                     all_metrics = evaluate_msf(
                                         model, val_loader, config, device,
-                                        [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
+                                        getattr(config, "eval_scale_array", [0.5, 0.75, 1.0, 1.25, 1.5]), True, engine,
                                         sliding=args.sliding,
                                     )
                                 else:
@@ -676,7 +676,7 @@ with Engine(custom_parser=parser) as engine:
                                     if args.mst:
                                         metric = evaluate_msf(
                                             model, val_loader, config, device,
-                                            [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
+                                            getattr(config, "eval_scale_array", [0.5, 0.75, 1.0, 1.25, 1.5]), True, engine,
                                             sliding=args.sliding,
                                         )
                                     else:
@@ -688,7 +688,7 @@ with Engine(custom_parser=parser) as engine:
                                 if args.mst:
                                     metric = evaluate_msf(
                                         model, val_loader, config, device,
-                                        [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
+                                        getattr(config, "eval_scale_array", [0.5, 0.75, 1.0, 1.25, 1.5]), True, engine,
                                         sliding=args.sliding,
                                     )
                                 else:
