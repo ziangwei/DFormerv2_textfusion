@@ -55,6 +55,35 @@ parser.add_argument("--image-labels-json-path", type=str)
 # --- SAM per-stage switches ---
 parser.add_argument("--sam-enc-stages", type=str, default="1,2,3", help="Comma separated, e.g., 0,2")
 parser.add_argument("--sam-dec-stages", type=str, default="1,2,3", help="Comma separated, e.g., 1,3")
+parser.add_argument("--superpower", default=False, action=argparse.BooleanOptionalAction)
+
+# --- SAM temperature & attention styles ---
+parser.add_argument(
+    "--sam-decoder-use-cosine",
+    dest="sam_decoder_use_cosine",
+    default=None,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument(
+    "--sam-decoder-learnable-temp",
+    dest="sam_decoder_learnable_temp",
+    default=None,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument("--sam-decoder-logit-init", type=float, default=None)
+parser.add_argument(
+    "--sam-encoder-use-cosine",
+    dest="sam_encoder_use_cosine",
+    default=None,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument(
+    "--sam-encoder-learnable-temp",
+    dest="sam_encoder_learnable_temp",
+    default=None,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument("--sam-encoder-logit-init", type=float, default=None)
 
 torch.set_float32_matmul_precision("high")
 import torch._dynamo
@@ -112,6 +141,21 @@ with Engine(custom_parser=parser) as engine:
     # === SAM per-stage ===
     config.sam_enc_stages = _parse_stages(args.sam_enc_stages)
     config.sam_dec_stages = _parse_stages(args.sam_dec_stages)
+    config.superpower = bool(getattr(args, "superpower", False))
+
+    # === SAM temperature & attention styles ===
+    if args.sam_decoder_use_cosine is not None:
+        config.sam_decoder_use_cosine = bool(args.sam_decoder_use_cosine)
+    if args.sam_decoder_learnable_temp is not None:
+        config.sam_decoder_learnable_temp = bool(args.sam_decoder_learnable_temp)
+    if args.sam_decoder_logit_init is not None:
+        config.sam_decoder_logit_init = float(args.sam_decoder_logit_init)
+    if args.sam_encoder_use_cosine is not None:
+        config.sam_encoder_use_cosine = bool(args.sam_encoder_use_cosine)
+    if args.sam_encoder_learnable_temp is not None:
+        config.sam_encoder_learnable_temp = bool(args.sam_encoder_learnable_temp)
+    if args.sam_encoder_logit_init is not None:
+        config.sam_encoder_logit_init = float(args.sam_encoder_logit_init)
 
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
 
