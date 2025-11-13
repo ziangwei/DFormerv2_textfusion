@@ -31,6 +31,19 @@ from utils.pyt_utils import all_reduce_tensor, ensure_dir, link_file, load_model
 from utils.val_mm import evaluate, evaluate_msf
 from utils.visualize import print_iou, show_img
 
+
+class SubsetDataset(torch.utils.data.Dataset):
+    """Wrapper to select a subset of dataset by indices"""
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        return self.dataset[self.indices[idx]]
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", help="used gpu number")
@@ -64,15 +77,36 @@ parser.add_argument("--superpower", default=None, action=argparse.BooleanOptiona
 # --- Attention visualization switches (Enhanced) ---
 parser.add_argument("--save-attention", action="store_true",
                     help="Save attention maps for visualization")
+parser.add_argument("--save-predictions", action="store_true",
+                    help="Save segmentation predictions (works without text guidance)")
+parser.add_argument("--save-gt", action="store_true",
+                    help="Save Ground Truth labels with color mapping (useful for comparison)")
+parser.add_argument("--dual-model", action="store_true",
+                    help="Load two different models and run both on the same images (model1=text-guided, model2=visual-only)")
+parser.add_argument("--model2-path", type=str, default=None,
+                    help="Path to second model checkpoint for dual-model comparison (required if --dual-model is set)")
+parser.add_argument("--model2-config", type=str, default=None,
+                    help="Optional: separate config file for model2 (useful if models have different architectures)")
+parser.add_argument("--model2-save-path", type=str, default=None,
+                    help="Output path for second model (default: same as model1, integrated output)")
 parser.add_argument("--vis-stage", type=str, default="enc",
                     choices=["enc", "dec"],
                     help="Visualize encoder or decoder attention")
-parser.add_argument("--vis-stage-idx", type=int, default=0,
-                    help="Which stage index to visualize (0,1,2,3 for encoder; 0,1,2 for decoder)")
+parser.add_argument("--vis-stage-idx", type=str, default="0",
+                    help="Which stage index(es) to visualize. Single: '0', Multiple: '0,1,2', All: 'all'")
 parser.add_argument("--vis-block-idx", type=int, default=-1,
                     help="Which block in the stage (-1 for last block)")
+parser.add_argument("--vis-aggregate", type=str, default="none",
+                    choices=["none", "mean", "max", "weighted"],
+                    help="How to aggregate attention from multiple stages (none=save separately)")
 parser.add_argument("--num-images", type=int, default=None,
                     help="Number of images to process for visualization (None=all)")
+parser.add_argument("--random-select", action="store_true",
+                    help="Randomly select images instead of sequential selection")
+parser.add_argument("--image-indices", type=str, default=None,
+                    help="Comma-separated list of image indices to process (e.g., '0,5,10')")
+parser.add_argument("--image-paths", type=str, default=None,
+                    help="Path to text file containing image paths to process (one per line)")
 parser.add_argument("--attention-alpha", type=float, default=0.6,
                     help="Alpha blending factor for overlay visualization (0-1)")
 parser.add_argument("--attention-threshold", type=float, default=0.15,
@@ -212,31 +246,53 @@ def _save_single_token_map(attn: np.ndarray, rgb: np.ndarray, out_prefix: str,
 
     H, W = attn.shape
 
-    # Step 1: Gaussian smoothing (reduce pixel-level noise)
+    # Step 1: 先做一次强模糊，让整体柔和
+    attn = gaussian_filter(attn, sigma=2.5)  # 增强模糊，消除锐利边界
+    attn = _normalize01(attn)
+
+    # Step 2: Gaussian smoothing (reduce pixel-level noise) - 用户自定义
     if smooth_sigma and smooth_sigma > 0.0:
         attn = gaussian_filter(attn, sigma=float(smooth_sigma))
         attn = _normalize01(attn)
 
-    # Step 2: Gamma correction (enhance visibility)
+    # Step 3: 温和的对比度增强 - 使用 power 曲线
+    # power=1.5 能提升高响应，同时保持中低响应的区分度
+    # 不会像sigmoid那样把黄色也变成红色
+    attn = np.power(attn, 1.5)
+    attn = _normalize01(attn)
+
+    # Step 4: 再次轻微模糊，确保过渡柔和
+    attn = gaussian_filter(attn, sigma=1.2)
+    attn = _normalize01(attn)
+
+    # Step 5: Gamma correction (enhance visibility) - 用户设置
     if gamma and gamma > 0.0 and gamma != 1.0:
         attn = np.power(attn, gamma)
         attn = _normalize01(attn)
 
-    # Step 3: Threshold low responses
+    # Step 6: Threshold low responses
     if threshold and threshold > 0.0:
         attn = np.where(attn >= threshold, attn, 0.0)
 
-    # Step 4: Apply colormap
+    # Step 7: Apply colormap (更深的蓝色，但避免紫色)
+    # 将 attn [0,1] 映射到 colormap 的 [0.18, 1.0] 范围
+    # 0.18 对应更深的蓝色，同时避免紫色污染
     cmap = plt.get_cmap(colormap)
-    heat_color = (cmap(attn)[:, :, :3] * 255).astype(np.uint8)  # RGB
+    if colormap in ['turbo', 'jet']:
+        # turbo 和 jet 的低值是紫色，从 0.18 开始是深蓝色（比0.25更深）
+        attn_remapped = attn * 0.82 + 0.18  # [0,1] -> [0.18, 1.0]
+    else:
+        # 其他 colormap 保持原样
+        attn_remapped = attn
+    heat_color = (cmap(attn_remapped)[:, :, :3] * 255).astype(np.uint8)  # RGB
 
-    # Step 5: Blend with original image
+    # Step 7: Blend with original image
     overlay = (alpha * heat_color + (1 - alpha) * rgb).astype(np.uint8)
 
-    # Step 6: Slight contrast enhancement (CVPR-style)
+    # Step 8: Slight contrast enhancement (CVPR-style)
     overlay = cv2.convertScaleAbs(overlay, alpha=1.05, beta=5)
 
-    # Step 7: Optional grid overlay
+    # Step 9: Optional grid overlay
     if enable_grid:
         grid_step = 16
         grid_color = 255
@@ -344,9 +400,10 @@ def visualize_attention_maps_enhanced(attn_hwT: torch.Tensor,
         )
 
 
-def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, block_idx=-1):
+def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_indices=None, block_idx=-1):
     """
     返回列表 [(attn(B,N,Hh,T), spatial_shape(h,w), stage_info), ...]
+    stage_indices: list of int, or None for all stages
     """
     if hasattr(model, 'module'):
         actual_model = model.module
@@ -358,55 +415,137 @@ def extract_attention_from_model_enhanced(model, vis_stage="enc", stage_idx=0, b
     if vis_stage == "enc":
         backbone = actual_model.backbone
         if hasattr(backbone, 'encoder_sam_blocks'):
-            if stage_idx >= len(backbone.encoder_sam_blocks):
-                logger.warning(
-                    f"Encoder stage {stage_idx} not found! Available: 0-{len(backbone.encoder_sam_blocks) - 1}")
-                return [(None, None, "Invalid stage")]
+            # 如果没有指定 stage，提取所有
+            if stage_indices is None:
+                stage_indices = list(range(len(backbone.encoder_sam_blocks)))
 
-            blocks = backbone.encoder_sam_blocks[stage_idx]
-            if len(blocks) == 0:
-                logger.warning(f"Encoder stage {stage_idx} has no SAM blocks!")
-                return [(None, None, "No SAM blocks")]
+            for stage_idx in stage_indices:
+                if stage_idx >= len(backbone.encoder_sam_blocks):
+                    logger.warning(
+                        f"Encoder stage {stage_idx} not found! Available: 0-{len(backbone.encoder_sam_blocks) - 1}")
+                    continue
 
-            if block_idx == -1:
-                pick = len(blocks) - 1
-            else:
-                pick = min(block_idx, len(blocks) - 1)
+                blocks = backbone.encoder_sam_blocks[stage_idx]
+                if len(blocks) == 0:
+                    logger.warning(f"Encoder stage {stage_idx} has no SAM blocks!")
+                    continue
 
-            sam_block = blocks[pick]
-            if hasattr(sam_block, 'last_attention_map'):
-                attn = sam_block.last_attention_map
-                spatial_shape = getattr(sam_block, 'last_spatial_shape', None)
-                if attn is not None:
-                    stage_info = f"enc_stage{stage_idx}_block{pick}"
-                    attention_data.append((attn, spatial_shape, stage_info))
-                    logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
+                if block_idx == -1:
+                    pick = len(blocks) - 1
+                else:
+                    pick = min(block_idx, len(blocks) - 1)
+
+                sam_block = blocks[pick]
+                if hasattr(sam_block, 'last_attention_map'):
+                    attn = sam_block.last_attention_map
+                    spatial_shape = getattr(sam_block, 'last_spatial_shape', None)
+                    if attn is not None:
+                        stage_info = f"enc_stage{stage_idx}_block{pick}"
+                        attention_data.append((attn, spatial_shape, stage_info))
+                        logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
 
     elif vis_stage == "dec":
         decode_head = actual_model.decode_head
         if hasattr(decode_head, 'dec_sam_layers'):
-            if stage_idx >= len(decode_head.dec_sam_layers):
-                logger.warning(
-                    f"Decoder stage {stage_idx} not found! Available: 0-{len(decode_head.dec_sam_layers) - 1}")
-                return [(None, None, "Invalid stage")]
+            # 如果没有指定 stage，提取所有
+            if stage_indices is None:
+                stage_indices = list(range(len(decode_head.dec_sam_layers)))
 
-            sam_layer = decode_head.dec_sam_layers[stage_idx]
-            if sam_layer is None:
-                logger.warning(f"Decoder stage {stage_idx} has no SAM layer (disabled)!")
-                return [(None, None, "SAM disabled")]
+            for stage_idx in stage_indices:
+                if stage_idx >= len(decode_head.dec_sam_layers):
+                    logger.warning(
+                        f"Decoder stage {stage_idx} not found! Available: 0-{len(decode_head.dec_sam_layers) - 1}")
+                    continue
 
-            if hasattr(sam_layer, 'last_attention_map'):
-                attn = sam_layer.last_attention_map
-                spatial_shape = getattr(sam_layer, 'last_spatial_shape', None)
-                if attn is not None:
-                    stage_info = f"dec_stage{stage_idx}"
-                    attention_data.append((attn, spatial_shape, stage_info))
-                    logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
+                sam_layer = decode_head.dec_sam_layers[stage_idx]
+                if sam_layer is None:
+                    logger.warning(f"Decoder stage {stage_idx} has no SAM layer (disabled)!")
+                    continue
+
+                if hasattr(sam_layer, 'last_attention_map'):
+                    attn = sam_layer.last_attention_map
+                    spatial_shape = getattr(sam_layer, 'last_spatial_shape', None)
+                    if attn is not None:
+                        stage_info = f"dec_stage{stage_idx}"
+                        attention_data.append((attn, spatial_shape, stage_info))
+                        logger.info(f"✓ Extracted {stage_info}, shape={tuple(attn.shape)}, spatial={spatial_shape}")
 
     if not attention_data:
         return [(None, None, "No attention found")]
 
     return attention_data
+
+
+def aggregate_attention_maps(attn_list, mode="mean"):
+    """
+    聚合多个 stage 的 attention maps
+    attn_list: list of (attn, spatial_shape, stage_info)
+    mode: "mean", "max", or "weighted"
+    Returns: (aggregated_attn, spatial_shape, "aggregated")
+    """
+    if not attn_list or len(attn_list) == 0:
+        return None, None, "empty"
+
+    # 过滤掉 None
+    valid_attn = [(a, s, i) for a, s, i in attn_list if a is not None]
+    if len(valid_attn) == 0:
+        return None, None, "no_valid"
+
+    if len(valid_attn) == 1:
+        return valid_attn[0]
+
+    # 获取目标形状（使用第一个有效 attention 的形状）
+    target_attn, target_shape, _ = valid_attn[0]
+    B, N, H, T = target_attn.shape
+
+    # 调整所有 attention 到相同形状
+    normalized_attns = []
+    for attn, spatial_shape, _ in valid_attn:
+        # 如果形状不匹配，需要插值
+        if attn.shape != (B, N, H, T):
+            # 这里简化处理：如果token数不同，跳过
+            if attn.shape[0] != B or attn.shape[-1] != T:
+                logger.warning(f"Skipping attention with incompatible shape {attn.shape} vs {(B, N, H, T)}")
+                continue
+            # 如果空间大小不同，插值
+            if attn.shape[2] != H:
+                # 需要插值到目标大小
+                attn_reshaped = attn.reshape(B, N, int(np.sqrt(attn.shape[2])), int(np.sqrt(attn.shape[2])), T)
+                attn_reshaped = F.interpolate(
+                    attn_reshaped.permute(0, 1, 4, 2, 3),  # (B, N, T, h, w)
+                    size=(int(np.sqrt(H)), int(np.sqrt(H))),
+                    mode='bilinear',
+                    align_corners=False
+                ).permute(0, 1, 3, 4, 2).reshape(B, N, H, T)
+                normalized_attns.append(attn_reshaped)
+            else:
+                normalized_attns.append(attn)
+        else:
+            normalized_attns.append(attn)
+
+    if len(normalized_attns) == 0:
+        return valid_attn[0]
+
+    # 聚合
+    stacked = torch.stack(normalized_attns, dim=0)  # (num_stages, B, N, H, T)
+
+    if mode == "mean":
+        aggregated = stacked.mean(dim=0)
+    elif mode == "max":
+        aggregated = stacked.max(dim=0)[0]
+    elif mode == "weighted":
+        # 使用注意力强度作为权重
+        weights = stacked.sum(dim=(2, 3, 4), keepdim=True)  # (num_stages, B, 1, 1, 1)
+        weights = F.softmax(weights, dim=0)
+        aggregated = (stacked * weights).sum(dim=0)
+    else:
+        aggregated = stacked.mean(dim=0)
+
+    stage_names = "_".join([info.split("_")[-1] for _, _, info in valid_attn[:3]])
+    if len(valid_attn) > 3:
+        stage_names += f"_and_{len(valid_attn)-3}more"
+
+    return aggregated, target_shape, f"aggregated_{mode}_{stage_names}"
 
 
 def load_class_names(config):
@@ -424,20 +563,24 @@ def load_class_names(config):
 
 @torch.no_grad()
 def evaluate_with_attention(model, dataloader, config, device, engine,
-                            save_dir=None, vis_stage="enc", stage_idx=0, block_idx=-1,
+                            save_dir=None, vis_stage="enc", stage_indices=None, block_idx=-1,
                             num_images=None, alpha=0.5, threshold=0.0, smooth_sigma=0.0, max_token_vis=64,
                             filter_tokens=None, competition_mode='softmax', competition_tau=2.0,
-                            colormap='turbo', gamma=0.75, enable_grid=False):
+                            colormap='turbo', gamma=0.75, enable_grid=False, save_predictions=True,
+                            aggregate_mode="none", save_gt=False, model_name=None):
     """
     注意力可视化 + 指标计算
+    stage_indices: list of int, or None for all stages
+    aggregate_mode: "none" (save separately), "mean", "max", "weighted"
     """
     from utils.metrics_new import Metrics
 
     logger.info("=" * 100)
     logger.info(f"Starting ENHANCED attention visualization")
     logger.info(f"  Stage: {vis_stage.upper()}")
-    logger.info(f"  Stage Index: {stage_idx}")
+    logger.info(f"  Stage Indices: {stage_indices if stage_indices else 'all'}")
     logger.info(f"  Block Index: {block_idx} (-1=last)")
+    logger.info(f"  Aggregate Mode: {aggregate_mode}")
     logger.info(f"  Num Images: {num_images if num_images else 'all'}")
     logger.info(f"  Alpha: {alpha}, Threshold: {threshold}, Smooth Sigma: {smooth_sigma}")
     logger.info(f"  Save Dir: {save_dir}")
@@ -465,10 +608,9 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
     global_token_names = load_class_names(config)
     processed_images = 0
 
+    # Note: num_images filtering is now handled at DataLoader level, not here
+    # This parameter is kept for backward compatibility with attention visualization
     for idx, minibatch in enumerate(dataloader):
-        if num_images and processed_images >= num_images:
-            logger.info(f"✓ Reached target number of images ({num_images}), stopping...")
-            break
 
         if ((idx + 1) % int(max(len(dataloader) * 0.5, 1)) == 0 or idx == 0) and (
                 (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
@@ -503,19 +645,57 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
         preds = model(images_gpu, modal_xs_gpu, text_features=text_feats)
 
         # 抽取注意力映射
-        attn_data = extract_attention_from_model_enhanced(model, vis_stage, stage_idx, block_idx)
+        attn_data = extract_attention_from_model_enhanced(model, vis_stage, stage_indices, block_idx)
+
+        # 如果需要聚合多个 stage 的 attention
+        if aggregate_mode != "none" and len(attn_data) > 1:
+            aggregated = aggregate_attention_maps(attn_data, mode=aggregate_mode)
+            # 保留聚合结果 + 原始结果
+            attn_data_to_save = [aggregated] + attn_data
+        else:
+            attn_data_to_save = attn_data
 
         # 更新指标
         metrics.update(preds.softmax(dim=1), labels_gpu)
 
-        # 可视化
-        if save_dir and attn_data[0][0] is not None:
-            B = images_gpu.shape[0]
-            for b in range(B):
-                if num_images and processed_images >= num_images:
-                    break
+        # 获取调色板（提前准备，后面保存分割结果时用）
+        if config.dataset_name in ["NYUDepthv2", "SUNRGBD"]:
+            try:
+                palette = np.load("./utils/nyucmap.npy")
+                # 将 background 类别的颜色设为黑色，避免白色边框
+                bg_idx = getattr(config, 'background', 255)
+                if bg_idx < len(palette):
+                    palette[bg_idx] = [0, 0, 0]  # 黑色
+            except:
+                palette = np.array([[i, i, i] for i in range(256)], dtype=np.uint8)
+        else:
+            palette = np.array([
+                [128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156],
+                [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0],
+                [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60],
+                [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100],
+                [0, 80, 100], [0, 0, 230], [119, 11, 32],
+            ] + [[i, i, i] for i in range(19, 256)], dtype=np.uint8)
 
-                # 反规范化得到 RGB 原图（H,W,3）uint8
+        # 为每张图创建独立文件夹并保存所有可视化结果
+        if save_dir and attn_data_to_save[0][0] is not None:
+            B = images_gpu.shape[0]
+            pred_np = preds.argmax(dim=1).cpu().numpy().astype(np.uint8)
+
+            for b in range(B):
+                # 获取文件名
+                if "fn" in minibatch and len(minibatch["fn"]) > b:
+                    fn = minibatch["fn"][b]
+                    fn = fn.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
+                    fn = re.sub(r"[\\/]+", "_", fn)
+                else:
+                    fn = f"batch{idx:04d}_img{b}"
+
+                # 为每张图创建独立文件夹
+                img_output_dir = os.path.join(save_dir, fn)
+                os.makedirs(img_output_dir, exist_ok=True)
+
+                # 1. 保存原始图片（反规范化）
                 rgb_tensor = images[b]
                 rgb_np = rgb_tensor.permute(1, 2, 0).cpu().numpy()
                 mean = np.array(config.norm_mean).reshape(1, 1, 3)
@@ -524,15 +704,35 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                 rgb_np = (rgb_np * 255).clip(0, 255).astype(np.uint8)
                 H_img, W_img = rgb_np.shape[:2]
 
-                # 文件名
-                if "fn" in minibatch and len(minibatch["fn"]) > b:
-                    fn = minibatch["fn"][b]
-                    fn = fn.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
-                    fn = re.sub(r"[\\/]+", "_", fn)
-                else:
-                    fn = f"batch{idx:04d}_img{b}"
+                # 保存原始图像
+                original_path = os.path.join(img_output_dir, "00_original.png")
+                cv2.imwrite(original_path, cv2.cvtColor(rgb_np, cv2.COLOR_RGB2BGR))
 
-                # 解析该图的 token 名称/类型（来自 dataset 的 text_token_meta）
+                file_counter = 1  # 用于动态分配文件编号
+
+                # 2. 保存 GT 标签（如果启用）
+                if save_gt:
+                    label_np = labels[b].cpu().numpy().astype(np.uint8)
+                    # 使用相同的 palette 进行颜色映射
+                    gt_colored = palette[label_np]  # (H, W, 3) RGB
+                    gt_path = os.path.join(img_output_dir, f"{file_counter:02d}_GT.png")
+                    # 使用 cv2 保存，确保颜色精确一致
+                    cv2.imwrite(gt_path, cv2.cvtColor(gt_colored, cv2.COLOR_RGB2BGR))
+                    file_counter += 1
+
+                # 3. 保存分割结果（模型预测）
+                pred_colored = palette[pred_np[b] if pred_np.ndim > 2 else pred_np]  # (H, W, 3) RGB
+                # 根据 model_name 添加后缀
+                if model_name:
+                    seg_filename = f"{file_counter:02d}_pred_{model_name}.png"
+                else:
+                    seg_filename = f"{file_counter:02d}_segmentation.png"
+                seg_path = os.path.join(img_output_dir, seg_filename)
+                # 使用 cv2 保存，确保与 GT 颜色映射完全一致
+                cv2.imwrite(seg_path, cv2.cvtColor(pred_colored, cv2.COLOR_RGB2BGR))
+                file_counter += 1
+
+                # 解析该图的 token 名称/类型
                 meta_token_names, meta_token_types = None, None
                 if token_meta_batch is not None:
                     raw_meta = token_meta_batch[b] if isinstance(token_meta_batch, (list, tuple)) else token_meta_batch
@@ -543,18 +743,14 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                             meta = json.loads(raw_meta)
                             meta_token_names = meta.get("names") or None
                             meta_token_types = meta.get("types") or None
-                            # DEBUG: 打印实际获取的标签
-                            if idx == 0 and b == 0:
-                                logger.info(
-                                    f"[DEBUG] Sample image token names: {meta_token_names[:5] if meta_token_names else 'None'}...")
-                                logger.info(
-                                    f"[DEBUG] Sample image token types: {meta_token_types[:5] if meta_token_types else 'None'}...")
                         except Exception as exc:
                             logger.warning(f"Failed to parse token metadata for {fn}: {exc}")
 
-                for (attn_map, spatial_shape, stage_info) in attn_data:
+                # 4. 保存每个token的attention可视化
+                token_counter = file_counter  # 使用动态计数器
+
+                for (attn_map, spatial_shape, stage_info) in attn_data_to_save:
                     if attn_map is None:
-                        logger.warning(f"Attention map is None for {fn}, reason: {stage_info}")
                         continue
 
                     # attn_map: (B, N, Hh, T) 或 (B, N, T)
@@ -563,20 +759,17 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         # 对每个token选响应最大的head
                         attn_single = attn_single.max(dim=1)[0]
                     elif attn_single.dim() != 2:
-                        logger.warning(f"Unsupported attention shape: {tuple(attn_single.shape)}")
                         continue
 
                     N, T = attn_single.shape
 
                     # 还原空间网格
-                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(
-                            spatial_shape) == 2:
+                    if spatial_shape is not None and isinstance(spatial_shape, (tuple, list)) and len(spatial_shape) == 2:
                         h_attn, w_attn = int(spatial_shape[0]), int(spatial_shape[1])
                     else:
                         h_attn = int(np.sqrt(N))
                         w_attn = h_attn
                     if h_attn * w_attn != N:
-                        logger.warning(f"Spatial shape mismatch: {h_attn}x{w_attn}!={N}, skip {fn}.")
                         continue
 
                     attn_2d = attn_single.reshape(h_attn, w_attn, T)  # (H', W', T)
@@ -589,49 +782,74 @@ def evaluate_with_attention(model, dataloader, config, device, engine,
                         align_corners=False
                     ).squeeze(0).permute(1, 2, 0)  # (H, W, T)
 
-                    # 选择名称来源：先用 per-image meta；没有再用全局 label list；最后回退 tok{t}
+                    # 获取token名称，确保长度匹配T
                     if meta_token_names is not None and len(meta_token_names) > 0:
                         token_names = list(meta_token_names)
                         token_types = list(meta_token_types) if meta_token_types else None
-                        if idx == 0 and b == 0:
-                            logger.info(f"[DEBUG] Using per-image token names (source: dataset metadata)")
                     elif global_token_names:
-                        token_names = global_token_names[:T]
+                        if len(global_token_names) >= T:
+                            token_names = global_token_names[:T]
+                        else:
+                            # 不足的部分用padding token填充
+                            token_names = list(global_token_names) + [f"<pad_{i}>" for i in range(T - len(global_token_names))]
                         token_types = None
-                        if idx == 0 and b == 0:
-                            logger.warning(
-                                f"[WARNING] Falling back to global label list! This may not match per-image labels.")
-                            logger.warning(
-                                f"[WARNING] Check if --text-source=imglabels and --image-labels-json-path are set correctly.")
                     else:
                         token_names = [f"tok{t}" for t in range(T)]
                         token_types = None
-                        if idx == 0 and b == 0:
-                            logger.warning(
-                                f"[WARNING] Using generic token names (tok0, tok1, ...). No label information available!")
 
-                    save_prefix = os.path.join(save_dir, "attention", stage_info, fn)
-                    os.makedirs(os.path.dirname(save_prefix), exist_ok=True)
+                    # 二次检查：确保token_names长度至少为T（防御性编程）
+                    if len(token_names) < T:
+                        token_names = token_names + [f"<pad_{i}>" for i in range(len(token_names), T)]
 
-                    visualize_attention_maps_enhanced(
-                        attn_resized,
-                        rgb_np,
-                        save_prefix,
-                        token_names=token_names,
-                        token_types=token_types,
-                        alpha=alpha,
-                        threshold=threshold,
-                        smooth_sigma=smooth_sigma,
-                        max_tokens=max_token_vis,
-                        filter_tokens=filter_tokens,
-                        competition_mode=competition_mode,
-                        competition_tau=competition_tau,
-                        colormap=colormap,
-                        gamma=gamma,
-                        enable_grid=enable_grid
-                    )
+                    # 为每个token保存attention map
+                    pad_markers = {"", "<pad>", "[pad]", "pad", "<none>", "none"}
 
-                    logger.info(f"✓ {fn} ({stage_info}): saved token attentions (T={T}, grid={h_attn}x{w_attn})")
+                    # 如果有filter_tokens，只保存指定的tokens
+                    if filter_tokens is not None and len(filter_tokens) > 0:
+                        filter_set = {ft.lower().strip() for ft in filter_tokens}
+                        tokens_to_save = []
+                        for t in range(T):
+                            nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+                            if nm.lower() in filter_set and nm.lower() not in pad_markers:
+                                tokens_to_save.append(t)
+                    else:
+                        # 保存所有非padding的tokens
+                        tokens_to_save = []
+                        for t in range(T):
+                            nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+                            if nm.lower() not in pad_markers:
+                                tokens_to_save.append(t)
+
+                    # 保存每个token
+                    for t in tokens_to_save:
+                        nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+
+                        # 应用竞争性归一化（如果启用）
+                        if competition_mode and competition_mode.lower() != 'none':
+                            a = compute_competitive_map(attn_resized.cpu().numpy(), t, mode=competition_mode, tau=competition_tau)
+                        else:
+                            a = _normalize01(attn_resized[..., t].cpu().numpy())
+
+                        # 保存文件，使用编号前缀
+                        file_name = f"{token_counter:02d}_attn_{_slugify(nm)}.png"
+                        file_path = os.path.join(img_output_dir, file_name)
+
+                        _save_single_token_map(
+                            a, rgb_np, file_path.replace("_attn.png", ""),
+                            alpha=alpha, threshold=threshold, smooth_sigma=smooth_sigma,
+                            colormap=colormap, gamma=gamma, enable_grid=enable_grid
+                        )
+
+                        token_counter += 1
+
+                    # 如果是第一张图，打印示例信息
+                    if idx == 0 and b == 0:
+                        logger.info(f"✓ Saved visualization for image '{fn}':")
+                        logger.info(f"  - 00_original.png")
+                        logger.info(f"  - 01_segmentation.png")
+                        logger.info(f"  - {len(tokens_to_save)} attention maps (02-{token_counter-1:02d})")
+                        if token_names:
+                            logger.info(f"  - Tokens: {[token_names[t] for t in tokens_to_save[:5]]}{'...' if len(tokens_to_save) > 5 else ''}")
 
                 processed_images += 1
 
@@ -699,6 +917,41 @@ with Engine(custom_parser=parser) as engine:
     if args.superpower is not None:
         config.superpower = bool(args.superpower)
 
+    # ★ 验证双模型模式参数
+    if args.dual_model:
+        if not args.model2_path:
+            logger.error("--dual-model requires --model2-path to be specified!")
+            sys.exit(1)
+        if not os.path.exists(args.model2_path):
+            logger.error(f"Model 2 checkpoint not found: {args.model2_path}")
+            sys.exit(1)
+
+        # 双模型模式：强制设置
+        args.save_attention = True     # 模型1: attention 可视化
+        args.save_predictions = False  # 模型1不单独保存predictions
+        args.save_gt = True            # 自动保存 GT 用于对比
+
+        # 设置默认输出路径
+        if not args.save_path:
+            args.save_path = "./dual_model_comparison"
+            logger.info(f"Output path not specified, using default: {args.save_path}")
+
+        # 双模型模式下，默认集成到同一个文件夹
+        # 如果用户指定了 model2_save_path，则使用独立文件夹（兼容旧行为）
+        integrated_mode = (args.model2_save_path is None)
+
+        logger.info("=" * 80)
+        logger.info("DUAL-MODEL COMPARISON MODE ENABLED")
+        logger.info(f"Model 1 (Text-Guided): {args.continue_fpath}")
+        logger.info(f"Model 2 (Visual-Only): {args.model2_path}")
+        logger.info(f"Output: {args.save_path}")
+        if integrated_mode:
+            logger.info(f"  Mode: Integrated (GT + Model1 + Model2 + Attention in same folders)")
+        else:
+            logger.info(f"  Model 1 Output: {args.save_path}")
+            logger.info(f"  Model 2 Output: {args.model2_save_path}")
+        logger.info("=" * 80)
+
     # ★ 为可视化强制开启 text guidance（不影响评测）
     if args.save_attention:
         logger.info("Forcing enable_text_guidance=True for attention visualization")
@@ -746,7 +999,69 @@ with Engine(custom_parser=parser) as engine:
     cudnn.benchmark = True
 
     val_loader, val_sampler = get_val_loader(engine, RGBXDataset, config, int(args.gpus))
-    print(f"Validation dataset size: {len(val_loader)}")
+
+    # Apply image selection if specified
+    original_dataset = val_loader.dataset
+    selected_indices = None
+
+    if args.image_indices is not None:
+        # Parse comma-separated indices
+        try:
+            selected_indices = [int(i.strip()) for i in args.image_indices.split(',')]
+            logger.info(f"Using specified image indices: {selected_indices}")
+        except ValueError as e:
+            logger.error(f"Invalid image indices format: {e}")
+            sys.exit(1)
+
+    elif args.image_paths is not None:
+        # Load image paths from file
+        if not os.path.exists(args.image_paths):
+            logger.error(f"Image paths file not found: {args.image_paths}")
+            sys.exit(1)
+
+        with open(args.image_paths, 'r') as f:
+            target_paths = [line.strip() for line in f if line.strip()]
+
+        # Match paths to dataset indices
+        selected_indices = []
+        dataset_files = original_dataset._file_names
+        for target_path in target_paths:
+            target_base = os.path.basename(target_path)
+            for idx, file_name in enumerate(dataset_files):
+                if target_base in file_name or file_name in target_path:
+                    selected_indices.append(idx)
+                    break
+
+        logger.info(f"Matched {len(selected_indices)}/{len(target_paths)} images from file")
+
+    elif args.num_images is not None and args.random_select:
+        # Random selection
+        total_images = len(original_dataset)
+        num_select = min(args.num_images, total_images)
+        selected_indices = np.random.choice(total_images, size=num_select, replace=False).tolist()
+        logger.info(f"Randomly selected {num_select} images from {total_images}")
+
+    elif args.num_images is not None:
+        # Sequential selection (first N images)
+        total_images = len(original_dataset)
+        num_select = min(args.num_images, total_images)
+        selected_indices = list(range(num_select))
+        logger.info(f"Using first {num_select} images")
+
+    # Apply subset if indices were selected
+    if selected_indices is not None and len(selected_indices) > 0:
+        subset_dataset = SubsetDataset(original_dataset, selected_indices)
+        val_loader = DataLoader(
+            subset_dataset,
+            batch_size=val_loader.batch_size,
+            num_workers=config.num_workers,
+            drop_last=False,
+            shuffle=False,
+            pin_memory=True,
+        )
+        logger.info(f"Dataset filtered to {len(subset_dataset)} images")
+
+    print(f"Validation dataset size: {len(val_loader.dataset)}")
 
     if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
         tb_dir = config.tb_dir + "/{}".format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
@@ -755,10 +1070,40 @@ with Engine(custom_parser=parser) as engine:
         engine.link_tb(tb_dir, generate_tb_dir)
 
     BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
+
+    # 预加载 checkpoint 以检测 SAM FFN 维度
+    if args.continue_fpath:
+        weight = torch.load(args.continue_fpath, map_location="cpu")["model"]
+
+        # 检测 SAM FFN 维度是否匹配
+        # 检查一个典型的 SAM FFN 层
+        sample_key = "backbone.encoder_sam_blocks.1.0.ffn.0.weight"
+        if sample_key in weight:
+            checkpoint_ffn_dim = weight[sample_key].shape[0]  # 实际的 FFN 隐藏维度
+            checkpoint_embed_dim = weight[sample_key].shape[1]  # 输入维度
+
+            # 推断 FFN ratio
+            checkpoint_ffn_ratio = checkpoint_ffn_dim // checkpoint_embed_dim
+
+            # 检查 config 中的设置
+            config_ffn_ratio = getattr(config, 'sam_ffn_ratio', 4)
+
+            if checkpoint_ffn_ratio != config_ffn_ratio:
+                logger.warning("=" * 80)
+                logger.warning(f"⚠️  SAM FFN ratio mismatch detected!")
+                logger.warning(f"  Checkpoint FFN ratio: {checkpoint_ffn_ratio}")
+                logger.warning(f"  Config FFN ratio: {config_ffn_ratio}")
+                logger.warning(f"  Auto-adjusting config to match checkpoint...")
+
+                # 自动修正配置
+                config.sam_ffn_ratio = checkpoint_ffn_ratio
+
+                logger.warning(f"✓ Config updated: sam_ffn_ratio = {checkpoint_ffn_ratio}")
+                logger.warning("=" * 80 + "\n")
+
     model = segmodel(cfg=config, norm_layer=BatchNorm2d)
 
     if args.continue_fpath:
-        weight = torch.load(args.continue_fpath, map_location="cpu")["model"]
         print("Loading model weights...")
         model.load_state_dict(weight, strict=False)
 
@@ -782,6 +1127,28 @@ with Engine(custom_parser=parser) as engine:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # 如果设置了 --save-predictions 但没有 --save_path，使用默认路径
+    if args.save_predictions and not args.save_path:
+        args.save_path = "./infer_predictions"
+        logger.info(f"--save-predictions enabled but no --save_path specified, using default: {args.save_path}")
+
+    # ★★★ 双模型对比模式 ★★★
+    if args.dual_model:
+        logger.info("=" * 100)
+        logger.info("RUNNING DUAL-MODEL COMPARISON MODE")
+        logger.info("=" * 100)
+
+        # === STEP 1: Run Model 1 (Text-Guided) ===
+        logger.info("\n" + "=" * 100)
+        logger.info("STEP 1/2: Running Model 1 (Text-Guided + Attention Visualization)")
+        logger.info(f"Checkpoint: {args.continue_fpath}")
+        logger.info(f"Output: {args.save_path}")
+        logger.info("=" * 100 + "\n")
+
+        # 模型1已经加载，直接运行 attention 可视化
+        # 这里会执行下面的 args.save_attention 分支
+        pass  # 继续执行下面的正常流程
+
     if args.save_attention:
         # 注意力可视化模式
         # 解析 filter_tokens 参数
@@ -789,8 +1156,23 @@ with Engine(custom_parser=parser) as engine:
         if args.filter_tokens:
             filter_tokens_list = [t.strip() for t in args.filter_tokens.split(',') if t.strip()]
             logger.info(f"Filtering tokens: {filter_tokens_list}")
+
+        # 解析 stage indices
+        stage_indices = None
+        if args.vis_stage_idx.lower() == 'all':
+            stage_indices = None  # Extract all stages
+            logger.info("Extracting attention from ALL stages")
+        else:
+            try:
+                stage_indices = [int(i.strip()) for i in args.vis_stage_idx.split(',')]
+                logger.info(f"Extracting attention from stages: {stage_indices}")
+            except ValueError as e:
+                logger.error(f"Invalid stage indices format: {e}")
+                sys.exit(1)
+
         with torch.no_grad():
             model.eval()
+            # Note: num_images is now handled by dataset filtering above
             all_metrics = evaluate_with_attention(
                 model,
                 val_loader,
@@ -799,9 +1181,9 @@ with Engine(custom_parser=parser) as engine:
                 engine,
                 save_dir=args.save_path,
                 vis_stage=args.vis_stage,
-                stage_idx=args.vis_stage_idx,
+                stage_indices=stage_indices,
                 block_idx=args.vis_block_idx,
-                num_images=args.num_images,
+                num_images=None,  # Dataset already filtered
                 alpha=args.attention_alpha,
                 threshold=args.attention_threshold,
                 smooth_sigma=args.attention_smooth,
@@ -812,6 +1194,9 @@ with Engine(custom_parser=parser) as engine:
                 colormap=args.vis_colormap,
                 gamma=args.vis_gamma,
                 enable_grid=args.vis_grid,
+                aggregate_mode=args.vis_aggregate,
+                save_gt=args.save_gt,
+                model_name="model1_text" if args.dual_model else None,
             )
 
             if engine.distributed:
@@ -830,45 +1215,429 @@ with Engine(custom_parser=parser) as engine:
                 f1, mf1 = metric.compute_f1()
                 logger.info(f"mIoU: {miou:.4f}")
 
+        # === STEP 2: Run Model 2 (Visual-Only) for dual-model mode ===
+        if args.dual_model:
+            logger.info("\n" + "=" * 100)
+            logger.info("STEP 2/2: Running Model 2 (Visual-Only + Prediction Saving)")
+            logger.info(f"Checkpoint: {args.model2_path}")
+            logger.info(f"Output: {args.model2_save_path}")
+            logger.info("=" * 100 + "\n")
+
+            # 清理模型1，释放显存
+            logger.info("Clearing Model 1 from GPU memory...")
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.info("✓ Model 1 cleared\n")
+
+            # 为模型2准备配置
+            if args.model2_config:
+                # 使用独立的配置文件
+                logger.info(f"Loading separate config for Model 2: {args.model2_config}")
+                from importlib import import_module
+                config_model2 = getattr(import_module(args.model2_config), "C")
+                logger.info("✓ Model 2 config loaded from separate file\n")
+            else:
+                # 使用相同的 config，但深度清理文本相关配置
+                logger.info("Reconfiguring shared config for visual-only mode...")
+                logger.info("  Removing all text-related configurations...")
+
+                # 完全禁用文本引导
+                config.enable_text_guidance = False
+
+                # 清理所有文本相关配置，避免模型创建时初始化文本模块
+                # 这些配置即使存在，也不应该影响纯视觉模型的创建
+                if hasattr(config, 'text_source'):
+                    config.text_source = None
+                if hasattr(config, 'text_encoder'):
+                    config.text_encoder = None
+                if hasattr(config, 'text_encoder_name'):
+                    config.text_encoder_name = None
+                if hasattr(config, 'text_feature_dim'):
+                    # 保留维度设置，但设为 0 或 None
+                    pass  # 某些模型可能需要这个字段存在
+                if hasattr(config, 'label_txt_path'):
+                    config.label_txt_path = None
+                if hasattr(config, 'image_labels_json_path'):
+                    config.image_labels_json_path = None
+                if hasattr(config, 'caption_json_path'):
+                    config.caption_json_path = None
+                if hasattr(config, 'text_template_set'):
+                    config.text_template_set = None
+
+                logger.info("✓ config.enable_text_guidance = False")
+                logger.info("✓ All text-related configs cleared")
+                config_model2 = config
+                logger.info("")
+
+            # 预加载 model2 checkpoint 以检测 SAM FFN 维度
+            logger.info("Pre-loading Model 2 checkpoint to detect SAM FFN ratio...")
+            weight2 = torch.load(args.model2_path, map_location="cpu")["model"]
+
+            # 检测 SAM FFN 维度（encoder 和 decoder）
+            detected_ffn_ratio = None
+
+            # 尝试从 encoder SAM 检测
+            for key in weight2.keys():
+                if "encoder_sam_blocks" in key and "ffn.0.weight" in key:
+                    checkpoint_ffn_dim = weight2[key].shape[0]
+                    checkpoint_embed_dim = weight2[key].shape[1]
+                    detected_ffn_ratio = checkpoint_ffn_dim // checkpoint_embed_dim
+                    logger.info(f"  Detected from encoder SAM: {key}")
+                    logger.info(f"    FFN: {checkpoint_embed_dim} → {checkpoint_ffn_dim} (ratio={detected_ffn_ratio})")
+                    break
+
+            # 如果 encoder SAM 没找到，尝试从 decoder SAM 检测
+            if detected_ffn_ratio is None:
+                for key in weight2.keys():
+                    if "dec_sam_layers" in key and "ffn.0.weight" in key:
+                        checkpoint_ffn_dim = weight2[key].shape[0]
+                        checkpoint_embed_dim = weight2[key].shape[1]
+                        detected_ffn_ratio = checkpoint_ffn_dim // checkpoint_embed_dim
+                        logger.info(f"  Detected from decoder SAM: {key}")
+                        logger.info(f"    FFN: {checkpoint_embed_dim} → {checkpoint_ffn_dim} (ratio={detected_ffn_ratio})")
+                        break
+
+            # 如果检测到 FFN ratio，更新 config
+            if detected_ffn_ratio is not None:
+                config_ffn_ratio = getattr(config_model2, 'sam_ffn_ratio', 4)
+
+                if detected_ffn_ratio != config_ffn_ratio:
+                    logger.warning("=" * 80)
+                    logger.warning(f"⚠️  Model 2: SAM FFN ratio mismatch detected!")
+                    logger.warning(f"  Checkpoint FFN ratio: {detected_ffn_ratio}")
+                    logger.warning(f"  Config FFN ratio: {config_ffn_ratio}")
+                    logger.warning(f"  Auto-adjusting config_model2 to match checkpoint...")
+
+                    config_model2.sam_ffn_ratio = detected_ffn_ratio
+
+                    logger.warning(f"✓ Config updated: sam_ffn_ratio = {detected_ffn_ratio}")
+                    logger.warning("=" * 80)
+                else:
+                    logger.info(f"✓ SAM FFN ratio matches: {detected_ffn_ratio}")
+            else:
+                logger.info("  No SAM layers found in checkpoint (pure visual model?)")
+
+            logger.info("")
+
+            # 重新创建模型2（纯视觉架构）
+            logger.info("Creating Model 2 architecture...")
+            BatchNorm2d = nn.SyncBatchNorm if engine.distributed else nn.BatchNorm2d
+
+            try:
+                model2 = segmodel(cfg=config_model2, norm_layer=BatchNorm2d)
+                logger.info("✓ Model 2 architecture created successfully")
+            except Exception as e:
+                logger.error(f"✗ Failed to create Model 2 architecture: {e}")
+                logger.error("")
+                logger.error("Possible solutions:")
+                logger.error("  1. Use --model2-config to specify a separate config file for model2")
+                logger.error("  2. Ensure your visual-only model was trained with enable_text_guidance=False")
+                logger.error("  3. Check that the model architecture is compatible")
+                logger.error("")
+                raise
+
+            # 加载模型2的权重（强制跳过维度不匹配的参数）
+            # weight2 已经在上面加载过了（用于检测 SAM FFN ratio）
+            logger.info("Loading Model 2 weights (force loading, skipping mismatched dimensions)...")
+
+            # 手动过滤：只加载形状匹配的参数
+            model2_state_dict = model2.state_dict()
+            filtered_checkpoint = {}
+            mismatched_keys = []
+
+            for key, value in weight2.items():
+                if key in model2_state_dict:
+                    if model2_state_dict[key].shape == value.shape:
+                        # 形状匹配，加载
+                        filtered_checkpoint[key] = value
+                    else:
+                        # 形状不匹配，跳过
+                        mismatched_keys.append(
+                            f"{key}: checkpoint{list(value.shape)} vs model{list(model2_state_dict[key].shape)}"
+                        )
+
+            # 加载过滤后的 checkpoint
+            missing_keys, unexpected_keys = model2.load_state_dict(filtered_checkpoint, strict=False)
+
+            # 输出加载信息
+            if mismatched_keys:
+                logger.warning(f"  ⚠️  Mismatched keys (skipped due to shape mismatch): {len(mismatched_keys)}")
+                if len(mismatched_keys) <= 10:
+                    for key_info in mismatched_keys:
+                        logger.warning(f"    - {key_info}")
+                else:
+                    for key_info in mismatched_keys[:10]:
+                        logger.warning(f"    - {key_info}")
+                    logger.warning(f"    ... and {len(mismatched_keys) - 10} more")
+
+            if missing_keys:
+                logger.info(f"  Missing keys (not loaded from checkpoint): {len(missing_keys)}")
+                if len(missing_keys) <= 10:
+                    for key in missing_keys:
+                        logger.info(f"    - {key}")
+                else:
+                    logger.info(f"    - (showing first 10) {missing_keys[:10]}")
+
+            if unexpected_keys:
+                logger.info(f"  Unexpected keys (in checkpoint but not in model): {len(unexpected_keys)}")
+                if len(unexpected_keys) <= 10:
+                    for key in unexpected_keys:
+                        logger.info(f"    - {key}")
+                else:
+                    logger.info(f"    - (showing first 10) {unexpected_keys[:10]}")
+
+            # 总结加载结果
+            total_params_in_checkpoint = len(weight2)
+            loaded_params = len(filtered_checkpoint)
+            logger.info("")
+            logger.info(f"  Summary:")
+            logger.info(f"    Total params in checkpoint: {total_params_in_checkpoint}")
+            logger.info(f"    Successfully loaded: {loaded_params}")
+            logger.info(f"    Skipped (shape mismatch): {len(mismatched_keys)}")
+            logger.info(f"    Missing in checkpoint: {len(missing_keys)}")
+            logger.info(f"    Unexpected in checkpoint: {len(unexpected_keys)}")
+
+            if not missing_keys and not unexpected_keys and not mismatched_keys:
+                logger.info("  ✓ All keys matched perfectly!")
+            else:
+                logger.info("  ✓ Weights loaded successfully (skipped mismatched parameters)")
+
+
+            # 将模型2移到设备
+            if engine.distributed:
+                if torch.cuda.is_available():
+                    model2.cuda()
+                    model2 = DistributedDataParallel(
+                        model2,
+                        device_ids=[engine.local_rank],
+                        output_device=engine.local_rank,
+                        find_unused_parameters=True,
+                    )
+            else:
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                model2.to(device)
+
+            logger.info("✓ Model 2 loaded successfully\n")
+
+            # 重新创建 dataloader（使用相同的 selected_indices）
+            logger.info("Recreating dataloader with same image selection...")
+            # val_loader 已经是筛选后的，直接使用
+            logger.info(f"✓ Using same {len(val_loader.dataset)} images\n")
+
+            # ============================================================
+            # Model 2: 直接生成分割图到Model 1的文件夹（不计算mIoU）
+            # ============================================================
+            logger.info("\n" + "=" * 100)
+            logger.info("Generating Model 2 predictions (single-scale inference, no mIoU calculation)")
+            logger.info("=" * 100)
+
+            with torch.no_grad():
+                model2.eval()
+                from PIL import Image
+                import numpy as np
+
+                # 只在主进程或非分布式模式下生成
+                if (not engine.distributed) or (engine.distributed and engine.local_rank == 0):
+                    # 遍历dataloader，单尺度推理
+                    for idx, minibatch in enumerate(val_loader):
+                        images = minibatch["data"]
+                        modal_xs = minibatch["modal_x"]
+                        img_name = minibatch.get("fn", [f"image_{idx}"])[0]
+
+                        if len(images.shape) == 3:
+                            images = images.unsqueeze(0)
+                        if len(modal_xs.shape) == 3:
+                            modal_xs = modal_xs.unsqueeze(0)
+
+                        images = images.to(device)
+                        modal_xs = modal_xs.to(device)
+
+                        # 单尺度推理（scale=1.0）
+                        preds = model2(images, modal_xs)
+                        preds = preds.argmax(dim=1).cpu().numpy()[0]
+
+                        # 使用与Model 1相同的文件名处理逻辑（infer.py:689-690）
+                        # 例如 "datasets/NYUDepthv2/RGB/688.jpg" → "NYUDepthv2_RGB_688"
+                        fn = img_name.replace(".jpg", "").replace(".png", "").replace("datasets/", "")
+                        fn = re.sub(r"[\\/]+", "_", fn)
+
+                        # 直接保存到Model 1的文件夹：<save_path>/<fn>/03_pred_model2_visual.png
+                        img_folder = os.path.join(args.save_path, fn)
+                        if os.path.exists(img_folder):
+                            pred_file = os.path.join(img_folder, "03_pred_model2_visual.png")
+
+                            # 转换为彩色图（使用palette）
+                            palette = np.load("./utils/nyucmap.npy")
+                            pred_colored = palette[preds]
+                            Image.fromarray(pred_colored.astype(np.uint8)).save(pred_file)
+                        else:
+                            logger.warning(f"  ⚠ Folder not found for {fn}, skipping Model 2 prediction")
+
+                        if idx % 10 == 0:
+                            logger.info(f"  Processed {idx+1}/{len(val_loader)}: {fn}")
+
+                    logger.info(f"✓ Model 2 predictions saved directly to {args.save_path}/<image_name>/03_pred_model2_visual.png")
+                    logger.info("  Note: mIoU calculation skipped (single-scale inference only)")
+                else:
+                    logger.info("  Skipping on non-master rank in distributed mode")
+                logger.info("=" * 100)
+
+            # if engine.distributed:
+            #     # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            #     # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            #     if len(val_loader) < 3:
+            #         if engine.local_rank == 0:
+            #             logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
+            #     else:
+            #         with torch.no_grad():
+            #             model2.eval()
+            #             all_metrics_m2 = evaluate_msf(
+            #                 model2,
+            #                 val_loader,
+            #                 config,
+            #                 device,
+            #                 scales,
+            #                 flip,
+            #                 engine,
+            #                 save_dir=model2_temp_dir,
+            #             )
+            #             if engine.local_rank == 0:
+            #                 metric_m2 = all_metrics_m2[0]
+            #                 for other_metric in all_metrics_m2[1:]:
+            #                     metric_m2.update_hist(other_metric.hist)
+            #                 ious_m2, miou_m2 = metric_m2.compute_iou()
+            #                 acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+            #                 f1_m2, mf1_m2 = metric_m2.compute_f1()
+            #
+            #                 logger.info("\n" + "=" * 100)
+            #                 logger.info("MODEL 2 RESULTS (Visual-Only):")
+            #                 logger.info(f"mIoU: {miou_m2:.4f}")
+            #                 logger.info(f"mAcc: {macc_m2:.4f}")
+            #                 logger.info(f"mF1: {mf1_m2:.4f}")
+            #                 logger.info("=" * 100)
+            # else:
+            #     # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            #     # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            #     if len(val_loader) < 3:
+            #         logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 2 evaluation")
+            #         metric_m2 = None
+            #     else:
+            #         with torch.no_grad():
+            #             model2.eval()
+            #             metric_m2 = evaluate_msf(
+            #                 model2,
+            #                 val_loader,
+            #                 config,
+            #                 device,
+            #                 scales,
+            #                 flip,
+            #                 engine,
+            #                 save_dir=model2_temp_dir,
+            #             )
+            #     if metric_m2 is not None:
+            #         ious_m2, miou_m2 = metric_m2.compute_iou()
+            #         acc_m2, macc_m2 = metric_m2.compute_pixel_acc()
+            #         f1_m2, mf1_m2 = metric_m2.compute_f1()
+            #
+            #         logger.info("\n" + "=" * 100)
+            #         logger.info("MODEL 2 RESULTS (Visual-Only):")
+            #         logger.info(f"mIoU: {miou_m2:.4f}")
+            #         logger.info(f"mAcc: {macc_m2:.4f}")
+            #         logger.info(f"mF1: {mf1_m2:.4f}")
+            #         logger.info("=" * 100)
+
+            # 完成提示（不再需要合并，已直接保存）
+            logger.info("\n" + "=" * 100)
+            logger.info("DUAL-MODEL MODE COMPLETED")
+            logger.info("=" * 100)
+            logger.info(f"All outputs saved to: {args.save_path}")
+            logger.info("  Each image folder contains:")
+            logger.info("    - 00_original.png")
+            logger.info("    - 01_GT.png")
+            logger.info("    - 02_pred_model1_text.png")
+            logger.info("    - 03_pred_model2_visual.png")
+            logger.info("    - 04+ attention maps")
+            logger.info("  Note: Model 2 used single-scale inference (no mIoU)")
+            logger.info("=" * 100 + "\n")
+
     else:
-        # 标准多尺度评估
-        logger.info("Running standard multi-scale evaluation...")
+        # 标准多尺度评估 (使用和eval.py相同的配置以获得一致的mIoU)
+        logger.info("Running standard multi-scale+flip evaluation (same as eval.py)...")
+        scales = [0.5, 0.75, 1.0, 1.25, 1.5]
+        flip = True
+
+        logger.info(f"Evaluation scales: {scales}")
+        logger.info(f"Flip augmentation: {flip}")
+
+        # 确定是否保存预测结果
+        save_dir_for_eval = args.save_path if args.save_predictions else None
+
+        if save_dir_for_eval:
+            logger.info(f"Predictions will be saved to: {save_dir_for_eval}")
+            logger.info("Output format: <save_path>/<image_name>_pred.png")
+
         if engine.distributed:
             print("Multi GPU test")
-            with torch.no_grad():
-                model.eval()
-                all_metrics = evaluate_msf(
-                    model,
-                    val_loader,
-                    config,
-                    device,
-                    [0.5, 0.75, 1.0, 1.25, 1.5],
-                    True,
-                    engine,
-                    save_dir=args.save_path,
-                )
+            # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            if len(val_loader) < 3:
                 if engine.local_rank == 0:
-                    metric = all_metrics[0]
-                    for other_metric in all_metrics[1:]:
-                        metric.update_hist(other_metric.hist)
+                    logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 1 evaluation")
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    all_metrics = evaluate_msf(
+                        model,
+                        val_loader,
+                        config,
+                        device,
+                        scales,
+                        flip,
+                        engine,
+                        save_dir=save_dir_for_eval,
+                    )
+                    if engine.local_rank == 0:
+                        metric = all_metrics[0]
+                        for other_metric in all_metrics[1:]:
+                            metric.update_hist(other_metric.hist)
+                        ious, miou = metric.compute_iou()
+                        acc, macc = metric.compute_pixel_acc()
+                        f1, mf1 = metric.compute_f1()
+                        logger.info("=" * 80)
+                        logger.info("FINAL RESULTS (Multi-Scale + Flip):")
+                        logger.info(f"mIoU: {miou:.4f}")
+                        logger.info(f"mAcc: {macc:.4f}")
+                        logger.info(f"mF1: {mf1:.4f}")
+                        logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
+                        logger.info("=" * 80)
+                        print(f"mIoU: {miou:.4f}")
+        else:
+            # 检查dataloader是否足够大（避免val_mm.py中的除零错误）
+            # evaluate_msf内部使用 int(len(dataloader) * 0.5)，需要至少3个样本
+            if len(val_loader) < 3:
+                logger.warning(f"val_loader has only {len(val_loader)} samples (need ≥3), skipping Model 1 evaluation")
+            else:
+                with torch.no_grad():
+                    model.eval()
+                    metric = evaluate_msf(
+                        model,
+                        val_loader,
+                        config,
+                        device,
+                        scales,
+                        flip,
+                        engine,
+                        save_dir=save_dir_for_eval,
+                    )
                     ious, miou = metric.compute_iou()
                     acc, macc = metric.compute_pixel_acc()
                     f1, mf1 = metric.compute_f1()
+                    logger.info("=" * 80)
+                    logger.info("FINAL RESULTS (Multi-Scale + Flip):")
+                    logger.info(f"mIoU: {miou:.4f}")
+                    logger.info(f"mAcc: {macc:.4f}")
+                    logger.info(f"mF1: {mf1:.4f}")
+                    logger.info(f"Per-class IoUs: {[f'{iou:.4f}' for iou in ious]}")
+                    logger.info("=" * 80)
                     print(f"mIoU: {miou:.4f}")
-        else:
-            with torch.no_grad():
-                model.eval()
-                metric = evaluate_msf(
-                    model,
-                    val_loader,
-                    config,
-                    device,
-                    [0.5, 0.75, 1.0, 1.25, 1.5],
-                    True,
-                    engine,
-                    save_dir=args.save_path,
-                )
-                ious, miou = metric.compute_iou()
-                acc, macc = metric.compute_pixel_acc()
-                f1, mf1 = metric.compute_f1()
-                print(f"mIoU: {miou:.4f}")

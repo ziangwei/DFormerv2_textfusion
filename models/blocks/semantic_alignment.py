@@ -32,6 +32,7 @@ class SemanticAlignmentModule(nn.Module):
         encoder_use_cosine: bool = False,
         encoder_learnable_temp: bool = False,
         encoder_logit_scale_init: float = 1.0,
+        mode: str = 'both',        # 'encoder', 'decoder', or 'both' (向后兼容)
     ):
         super().__init__()
 
@@ -40,6 +41,7 @@ class SemanticAlignmentModule(nn.Module):
         # 这里改为注册为 buffer，以与 thop/ptflops 的预期类型一致。
         self.register_buffer("total_ops", torch.zeros(1))
         self.register_buffer("total_params", torch.zeros(1))
+        self.mode = mode  # 保存模式
         self.top_m = top_m
         self.use_topk = use_topk
         self.add_residual = add_residual
@@ -54,9 +56,13 @@ class SemanticAlignmentModule(nn.Module):
         self.d_k = float(self.head_dim)              # 缩放用
         self.register_buffer("_inv_sqrt_dk", torch.tensor(1.0 / math.sqrt(self.d_k), dtype=torch.float))
 
-        # === 预归一化（decoder 侧 forward 用；SSA-lite 不用） ===
-        self.norm1 = nn.LayerNorm(query_dim)
-        self.norm2 = nn.LayerNorm(query_dim)
+        # === 条件创建：Decoder 专用层（只在 mode='decoder' 或 'both' 时创建）===
+        if mode in ('decoder', 'both'):
+            self.norm1 = nn.LayerNorm(query_dim)
+            self.norm2 = nn.LayerNorm(query_dim)
+        else:
+            self.norm1 = None
+            self.norm2 = None
 
         # === 线性投影：统一映射到 Cv 空间做注意力 ===
         self.q_proj  = nn.Linear(query_dim, query_dim)   # (B,N,Cv)->(B,N,Cv)
@@ -69,36 +75,52 @@ class SemanticAlignmentModule(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        # 温度与注意力样式配置
-        self.decoder_use_cosine = bool(decoder_use_cosine)
-        self.decoder_learnable_temp = bool(decoder_learnable_temp)
-        decoder_init = math.log(max(decoder_logit_scale_init, 1e-6))
-        self.decoder_logit_scale = nn.Parameter(
-            torch.tensor(decoder_init, dtype=torch.float),
-            requires_grad=self.decoder_learnable_temp,
-        )
+        # === 条件创建：Decoder 专用参数 ===
+        if mode in ('decoder', 'both'):
+            self.decoder_use_cosine = bool(decoder_use_cosine)
+            self.decoder_learnable_temp = bool(decoder_learnable_temp)
+            decoder_init = math.log(max(decoder_logit_scale_init, 1e-6))
+            self.decoder_logit_scale = nn.Parameter(
+                torch.tensor(decoder_init, dtype=torch.float),
+                requires_grad=self.decoder_learnable_temp,
+            )
+            # FFN（decoder 侧 forward 使用）
+            self.ffn = nn.Sequential(
+                nn.Linear(query_dim, query_dim * 4),
+                nn.GELU(),
+                nn.Dropout(ffn_drop),
+                nn.Linear(query_dim * 4, query_dim),
+                nn.Dropout(ffn_drop),
+            )
+            # Decoder 残差门控
+            self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))
+        else:
+            self.decoder_use_cosine = False
+            self.decoder_learnable_temp = False
+            self.decoder_logit_scale = None
+            self.ffn = None
+            self.alpha = None
 
-        self.encoder_use_cosine = bool(encoder_use_cosine)
-        self.encoder_learnable_temp = bool(encoder_learnable_temp)
-        encoder_init = math.log(max(encoder_logit_scale_init, 1e-6))
-        self.encoder_logit_scale = nn.Parameter(
-            torch.tensor(encoder_init, dtype=torch.float),
-            requires_grad=self.encoder_learnable_temp,
-        )
-
-        # FFN（decoder 侧 forward 使用；SSA-lite 不用）
-        self.ffn = nn.Sequential(
-            nn.Linear(query_dim, query_dim * 2),
-            nn.GELU(),
-            nn.Dropout(ffn_drop),
-            nn.Linear(query_dim * 2, query_dim),
-            nn.Dropout(ffn_drop),
-        )
-
-        # 残差缩放参数
-        self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float))  # decoder
-        self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))       # encoder/superpower (SSA-lite)
-        self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
+        # === 条件创建：Encoder 专用参数 ===
+        if mode in ('encoder', 'both'):
+            self.encoder_use_cosine = bool(encoder_use_cosine)
+            self.encoder_learnable_temp = bool(encoder_learnable_temp)
+            encoder_init = math.log(max(encoder_logit_scale_init, 1e-6))
+            self.encoder_logit_scale = nn.Parameter(
+                torch.tensor(encoder_init, dtype=torch.float),
+                requires_grad=self.encoder_learnable_temp,
+            )
+            # Encoder 残差门控
+            self.gamma = nn.Parameter(torch.tensor(0.5, dtype=torch.float))
+            self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
+        else:
+            self.encoder_use_cosine = False
+            self.encoder_learnable_temp = False
+            self.encoder_logit_scale = None
+            self.gamma = None
+            # gamma_scale 作为 buffer 即使不用也无妨，但为了完全精简可以不注册
+            if not hasattr(self, 'gamma_scale'):
+                self.register_buffer("gamma_scale", torch.tensor(float(gamma_scale), dtype=torch.float))
 
         self.save_attention = False  # 新增：控制是否保存attention
         self.last_attention_map = None  # 新增：保存最后一次的attention
@@ -132,12 +154,14 @@ class SemanticAlignmentModule(nn.Module):
         return (text_feats.float().abs().sum(dim=-1) <= eps)
 
     def _decoder_scale(self) -> torch.Tensor:
+        assert self.decoder_logit_scale is not None, "decoder_logit_scale not initialized (mode must be 'decoder' or 'both')"
         scale_log = self.decoder_logit_scale
         if self.decoder_learnable_temp:
             scale_log = torch.clamp(scale_log, min=-self.clamp_logit, max=self.clamp_logit)
         return torch.exp(scale_log) * self._inv_sqrt_dk
 
     def _encoder_scale(self) -> torch.Tensor:
+        assert self.encoder_logit_scale is not None, "encoder_logit_scale not initialized (mode must be 'encoder' or 'both')"
         scale_log = self.encoder_logit_scale
         if self.encoder_learnable_temp:
             scale_log = torch.clamp(scale_log, min=-self.clamp_logit, max=self.clamp_logit)
@@ -149,6 +173,10 @@ class SemanticAlignmentModule(nn.Module):
         visual_features: (B,H,W,Cv)  —— NHWC
         text_features:   (B,T,Ct) / (T,Ct) / (B,Ct)
         """
+        assert self.mode in ('decoder', 'both'), f"forward() requires mode='decoder' or 'both', got '{self.mode}'"
+        assert self.norm1 is not None and self.ffn is not None and self.alpha is not None, \
+            "Decoder components not initialized. Use mode='decoder' or 'both'"
+
         B, H, W, Cv = visual_features.shape
 
         # Pre-LN + Q
@@ -231,12 +259,18 @@ class SemanticAlignmentModule(nn.Module):
             visual_features: (B, H, W, Cv) 的视觉特征
             text_features:   支持 (B,T,Ct) / (T,Ct) / (B,Ct)
         """
+        assert self.mode in ('encoder', 'both'), f"forward_ssa() requires mode='encoder' or 'both', got '{self.mode}'"
+        assert self.gamma is not None, "Encoder components not initialized. Use mode='encoder' or 'both'"
+
         B, H, W, Cv = visual_features.shape
         x = visual_features.view(B, H * W, Cv)
         q_full = self.q_proj(x)
 
         # (1) 统一成 (B,T,Ct)
-        text_b = self._ensure_batched_text(text_features, B).to(visual_features.dtype)  # [B, T, Ct]
+        # FIX: 确保text_features与visual_features在同一设备和数据类型
+        text_b = self._ensure_batched_text(text_features, B).to(
+            device=visual_features.device, dtype=visual_features.dtype
+        )  # [B, T, Ct]
         pad_mask = self._make_text_pad_mask(text_b)  # [B, T], True=padding
 
         # (2) 动态裁短到本 batch 的最大有效长度（仅统计非 padding token）

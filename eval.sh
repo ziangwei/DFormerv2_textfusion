@@ -4,7 +4,7 @@
 GPUS=2 #8
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
-PORT=${PORT:-29158}
+PORT=${PORT:-29018}
 MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 
 export CUDA_VISIBLE_DEVICES="0,1"   #export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
@@ -18,7 +18,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --nproc_per_node=$GPUS \
     --master_port=$PORT \
     utils/eval.py \
-    --config=local_configs.NYUDepthv2.DFormerv2_S \
+    --config=local_configs.SUNRGBD.DFormerv2_L \
     --gpus=$GPUS \
     --sliding \
     --no-compile \
@@ -26,8 +26,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --mst \
     --amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/NYU_S_57.53_seed53384_clip_ori/epoch-251_miou_57.49.pth"
-
+    --continue_fpath="checkpoints/SUNRGBD_DFormerv2_L_20251113-171849/epoch-130_miou_49.95.pth"
 
 # choose the dataset and DFormer for evaluating
 

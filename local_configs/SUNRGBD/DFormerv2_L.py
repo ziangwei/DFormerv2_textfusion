@@ -77,7 +77,7 @@ C.eval_flip = True  # False #
 C.eval_crop_size = [480, 480]  # [height weight]
 
 """Store Config"""
-C.checkpoint_start_epoch = 200
+C.checkpoint_start_epoch = 160
 C.checkpoint_step = 25
 
 """Path Config"""

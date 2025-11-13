@@ -24,11 +24,13 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --master_port=$PORT \
     utils/infer.py \
     --config=local_configs.NYUDepthv2.DFormerv2_S \
-    --continue_fpath=checkpoints/NYU_S_57.53_seed53384_clip_ori/epoch-251_miou_57.49.pth \
+    --continue_fpath=checkpoints/NYU_S_57.63_seed53384?_clip_en/epoch-261_miou_57.63.pth \
     --save_path output \
     --gpus=$GPUS \
     --text-source imglabels \
     --image-labels-json-path datasets/NYUDepthv2/out.json \
+    --dual-model \
+    --model2-path checkpoints/NYU_S_Baseline/epoch-130_miou_55.38.pth \
     --text-encoder clip \
     --sam-enc-stages 1,2,3 \
     --sam-dec-stages 1,2,3 \
@@ -37,10 +39,11 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --vis-stage dec \
     --vis-stage-idx 2 \
     --vis-block-idx -1 \
-    --num-images 3
-
-#   --random-sample \
-# choose the dataset and DFormer for evaluating
+    --vis-competition softmax --vis-competition-tau 8.0 \
+    --attention-threshold 0.22 --attention-smooth 1.4 \
+    --attention-alpha 0.34 --vis-gamma 1.2 --vis-colormap turbo \
+    --random-select \
+    --num-images 20
 
 # NYUv2 DFormers
 # --config=local_configs.NYUDepthv2.DFormer_Large/Base/Small/Tiny
@@ -49,4 +52,3 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 # SUNRGBD DFormers
 # --config=local_configs.SUNRGBD.DFormer_Large/Base/Small/Tiny
 # --continue_fpath=checkpoints/trained/SUNRGBD_DFormer_Large/Base/Small/Tiny.pth
-

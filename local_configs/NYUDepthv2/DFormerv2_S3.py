@@ -12,7 +12,7 @@ C.optimizer = "AdamW"
 # Text Guidance (统一文本引导)
 # ==============================
 # 总开关
-C.enable_text_guidance = True
+C.enable_text_guidance = False
 # 统一文本向量维度（必须和 SAM 的 text_dim 一致；Jina-CLIP 默认 512，OpenAI CLIP ViT-B/16 也是 512）
 C.text_feature_dim = 512
 # 文本来源：labels / captions / both / imglabels
@@ -20,15 +20,15 @@ C.text_source = "imglabels"
 # 选择文本编码器：clip / jinaclip
 C.text_encoder = "clip"
 # 每张图最多取前 K 个标签，与旧版管线保持一致
-C.max_image_labels = 40
+C.max_image_labels = 6
 # 具体模型名（留空走默认：clip→openai/clip-vit-base-patch16；jinaclip→jinaai/jina-clip-v2）
 C.text_encoder_name = None
 # 标签与描述数据
 C.label_txt_path = "datasets/NYUDepthv2/nyu40_labels.txt"
 C.caption_json_path = "datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json"
-C.image_labels_json_path = "datasets/NYUDepthv2/out.json"
+# C.image_labels_json_path = "datasets/NYUDepthv2/out.json"
 # C.image_labels_json_path = "datasets/NYUDepthv2/top5_labels_per_image.json"
-# C.image_labels_json_path = "datasets/NYUDepthv2/image_labels_vlm.json"
+C.image_labels_json_path = "datasets/NYUDepthv2/image_labels_vlm.json"
 
 # 模板与数量（对“类名→多模板短句”的扩写）
 C.text_template_set = "clip"           # clip / none

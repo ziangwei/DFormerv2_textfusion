@@ -724,10 +724,13 @@ with Engine(custom_parser=parser) as engine:
                 if is_eval(i, config):
                     eval_count += 1
 
-            left_time = train_timer.mean_time * (config.nepochs - engine.state.epoch) + eval_timer.mean_time * eval_count
+            # --- 修复：首次尚无均值时 mean_time 可能为 None，做 0.0 兜底 ---
+            train_mt = train_timer.mean_time if train_timer.mean_time is not None else 0.0
+            eval_mt = eval_timer.mean_time if eval_timer.mean_time is not None else 0.0
+            left_time = train_mt * (config.nepochs - engine.state.epoch) + eval_mt * eval_count
             eta = (datetime.datetime.now() + datetime.timedelta(seconds=left_time)).strftime("%Y-%m-%d %H:%M:%S")
             logger.info(
-                f"Avg train time: {train_timer.mean_time:.2f}s, avg eval time: {eval_timer.mean_time:.2f}s, left eval count: {eval_count}, ETA: {eta}"
+                f"Avg train time: {train_mt:.2f}s, avg eval time: {eval_mt:.2f}s, left eval count: {eval_count}, ETA: {eta}"
             )
 
     except Exception:

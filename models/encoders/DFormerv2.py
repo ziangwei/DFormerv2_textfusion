@@ -510,6 +510,7 @@ class dformerv2(nn.Module):
                         encoder_use_cosine=sam_encoder_use_cosine,
                         encoder_learnable_temp=sam_encoder_learnable_temp,
                         encoder_logit_scale_init=sam_encoder_logit_init,
+                        mode='encoder',  # ★ 只创建 encoder 需要的参数
                     )
                     for _ in range(num_units)
                 ])
@@ -580,7 +581,16 @@ class dformerv2(nn.Module):
         key = str(stage_idx)
         if key not in self.encoder_sam_stage_modules:
             spec = self._encoder_sam_stage_specs[stage_idx]
-            self.encoder_sam_stage_modules[key] = SemanticAlignmentModule(**spec)
+            sam_module = SemanticAlignmentModule(**spec)
+            # FIX: 确保新创建的SAM模块与主干网络在同一设备上
+            # 使用第一层参数的设备作为参考
+            try:
+                device = next(self.parameters()).device
+                sam_module = sam_module.to(device)
+            except StopIteration:
+                # 如果模型还没有参数，保持默认设备
+                pass
+            self.encoder_sam_stage_modules[key] = sam_module
         return self.encoder_sam_stage_modules[key]
 
     def forward(self, x, x_e, text_features=None):
@@ -621,7 +631,7 @@ class dformerv2(nn.Module):
                 if use_text_guidance and (i in self._sam_enc_enabled):
                     sam_module = self._get_encoder_stage_sam(i)
                     if sam_module is not None:
-                        x_out = sam_module(x_out, text_features)
+                        x_out = sam_module.forward_ssa(x_out, text_features)
 
             if i in self.out_indices:
                 if i != 0:

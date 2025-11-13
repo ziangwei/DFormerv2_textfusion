@@ -28,8 +28,9 @@
 #    datasets/NYUDepthv2/top5_labels_per_image.json
 
 # 计算某json的标签平均数
-
+#
 #python stats_labels.py datasets/SUNRGBD/out2.json
+#python stats_labels.py datasets/NYUDepthv2/out.json
 
 # 画图
 #python nyu_overlay.py \
@@ -39,8 +40,7 @@
 #  --style paper-soft \
 #  --out out/f2.png
 
-python utils/benchmark.py \
-  --config local_configs.NYUDepthv2.DFormerv2_S \
-  --height 480 --width 640 \
-  --device cpu \
-  --detailed
+#python utils/benchmark.py \
+#  --config local_configs.NYUDepthv2.DFormerv2_L \
+#  --height 480 --width 640 \
+#  --device cpu
