@@ -70,7 +70,7 @@ C.warm_up_epoch = 10
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.drop_path_rate = 0.2
+C.drop_path_rate = 0.3
 C.aux_rate = 0.0
 
 """Eval Config"""

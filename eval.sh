@@ -26,7 +26,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
     --mst \
     --amp \
     --pad_SUNRGBD \
-    --continue_fpath="checkpoints/SUNRGBD_DFormerv2_L_20251113-171849/epoch-130_miou_49.95.pth"
+    --continue_fpath="checkpoints/SUN_L_53.89/epoch-202_miou_50.53.pth"
 
 # choose the dataset and DFormer for evaluating
 
