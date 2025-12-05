@@ -1,27 +1,13 @@
-"""
-DFormerv2: Geometry Self-Attention for RGBD Semantic Segmentation
-Code: https://github.com/VCIP-RGBD/DFormer
-
-Author: yinbow
-Email: bowenyin@mail.nankai.edu.cn
-
-This source code is licensed under the license found in the
-LICENSE file in the root directory of this source tree.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 import math
 from timm.models.layers import DropPath, trunc_normal_
-from typing import List
-from mmengine.runner.checkpoint import load_state_dict
-from mmengine.runner.checkpoint import load_checkpoint
 from typing import Tuple
-import sys
-import os
+from mmengine.runner.checkpoint import load_state_dict
 from collections import OrderedDict
+from ..blocks.semantic_alignment import SemanticAlignmentModule
 
 
 class LayerNorm2d(nn.Module):
@@ -30,25 +16,17 @@ class LayerNorm2d(nn.Module):
         self.norm = nn.LayerNorm(dim, eps=1e-6)
 
     def forward(self, x: torch.Tensor):
-        """
-        input shape (b c h w)
-        """
-        x = x.permute(0, 2, 3, 1).contiguous()  # (b h w c)
-        x = self.norm(x)  # (b h w c)
+        x = x.permute(0, 2, 3, 1).contiguous()
+        x = self.norm(x)
         x = x.permute(0, 3, 1, 2).contiguous()
         return x
 
 
 class PatchEmbed(nn.Module):
-    """
-    Image to Patch Embedding
-    """
-
     def __init__(self, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-
         self.proj = nn.Sequential(
             nn.Conv2d(in_chans, embed_dim // 2, 3, 2, 1),
             nn.SyncBatchNorm(embed_dim // 2),
@@ -64,7 +42,6 @@ class PatchEmbed(nn.Module):
         )
 
     def forward(self, x):
-        B, C, H, W = x.shape
         x = self.proj(x).permute(0, 2, 3, 1)
         return x
 
@@ -75,9 +52,6 @@ class DWConv2d(nn.Module):
         self.dwconv = nn.Conv2d(dim, dim, kernel_size, stride, padding, groups=dim)
 
     def forward(self, x: torch.Tensor):
-        """
-        input (b h w c)
-        """
         x = x.permute(0, 3, 1, 2)
         x = self.dwconv(x)
         x = x.permute(0, 2, 3, 1)
@@ -85,10 +59,6 @@ class DWConv2d(nn.Module):
 
 
 class PatchMerging(nn.Module):
-    """
-    Patch Merging Layer.
-    """
-
     def __init__(self, dim, out_dim, norm_layer=nn.LayerNorm):
         super().__init__()
         self.dim = dim
@@ -96,13 +66,10 @@ class PatchMerging(nn.Module):
         self.norm = nn.SyncBatchNorm(out_dim)
 
     def forward(self, x):
-        """
-        x: B H W C
-        """
-        x = x.permute(0, 3, 1, 2).contiguous()  # (b c h w)
-        x = self.reduction(x)  # (b oc oh ow)
+        x = x.permute(0, 3, 1, 2).contiguous()
+        x = self.reduction(x)
         x = self.norm(x)
-        x = x.permute(0, 2, 3, 1)  # (b oh ow oc)
+        x = x.permute(0, 2, 3, 1)
         return x
 
 
@@ -125,10 +92,6 @@ class GeoPriorGen(nn.Module):
         self.register_buffer("decay", decay)
 
     def generate_depth_decay(self, H: int, W: int, depth_grid):
-        """
-        generate 2d decay mask, the result is (HW)*(HW)
-        H, W are the numbers of patches at each column and row
-        """
         B, _, H, W = depth_grid.shape
         grid_d = depth_grid.reshape(B, H * W, 1)
         mask_d = grid_d[:, :, None, :] - grid_d[:, None, :, :]
@@ -137,13 +100,9 @@ class GeoPriorGen(nn.Module):
         return mask_d
 
     def generate_pos_decay(self, H: int, W: int):
-        """
-        generate 2d decay mask, the result is (HW)*(HW)
-        H, W are the numbers of patches at each column and row
-        """
         index_h = torch.arange(H).to(self.decay)
         index_w = torch.arange(W).to(self.decay)
-        grid = torch.meshgrid([index_h, index_w])
+        grid = torch.meshgrid(index_h, index_w, indexing="ij")
         grid = torch.stack(grid, dim=-1).reshape(H * W, 2)
         mask = grid[:, None, :] - grid[None, :, :]
         mask = (mask.abs()).sum(dim=-1)
@@ -151,9 +110,6 @@ class GeoPriorGen(nn.Module):
         return mask
 
     def generate_1d_depth_decay(self, H, W, depth_grid):
-        """
-        generate 1d depth decay mask, the result is l*l
-        """
         mask = depth_grid[:, :, :, :, None] - depth_grid[:, :, :, None, :]
         mask = mask.abs()
         mask = mask * self.decay[:, None, None, None]
@@ -161,9 +117,6 @@ class GeoPriorGen(nn.Module):
         return mask
 
     def generate_1d_decay(self, l: int):
-        """
-        generate 1d decay mask, the result is l*l
-        """
         index = torch.arange(l).to(self.decay)
         mask = index[:, None] - index[None, :]
         mask = mask.abs()
@@ -171,44 +124,26 @@ class GeoPriorGen(nn.Module):
         return mask
 
     def forward(self, HW_tuple: Tuple[int], depth_map, split_or_not=False):
-        """
-        depth_map: depth patches
-        HW_tuple: (H, W)
-        H * W == l
-        """
         depth_map = F.interpolate(depth_map, size=HW_tuple, mode="bilinear", align_corners=False)
-
         if split_or_not:
             index = torch.arange(HW_tuple[0] * HW_tuple[1]).to(self.decay)
-            sin = torch.sin(index[:, None] * self.angle[None, :])
-            sin = sin.reshape(HW_tuple[0], HW_tuple[1], -1)
-            cos = torch.cos(index[:, None] * self.angle[None, :])
-            cos = cos.reshape(HW_tuple[0], HW_tuple[1], -1)
-
+            sin = torch.sin(index[:, None] * self.angle[None, :]).reshape(HW_tuple[0], HW_tuple[1], -1)
+            cos = torch.cos(index[:, None] * self.angle[None, :]).reshape(HW_tuple[0], HW_tuple[1], -1)
             mask_d_h = self.generate_1d_depth_decay(HW_tuple[0], HW_tuple[1], depth_map.transpose(-2, -1))
             mask_d_w = self.generate_1d_depth_decay(HW_tuple[1], HW_tuple[0], depth_map)
-
             mask_h = self.generate_1d_decay(HW_tuple[0])
             mask_w = self.generate_1d_decay(HW_tuple[1])
-
             mask_h = self.weight[0] * mask_h.unsqueeze(0).unsqueeze(2) + self.weight[1] * mask_d_h
             mask_w = self.weight[0] * mask_w.unsqueeze(0).unsqueeze(2) + self.weight[1] * mask_d_w
-
             geo_prior = ((sin, cos), (mask_h, mask_w))
-
         else:
             index = torch.arange(HW_tuple[0] * HW_tuple[1]).to(self.decay)
-            sin = torch.sin(index[:, None] * self.angle[None, :])
-            sin = sin.reshape(HW_tuple[0], HW_tuple[1], -1)
-            cos = torch.cos(index[:, None] * self.angle[None, :])
-            cos = cos.reshape(HW_tuple[0], HW_tuple[1], -1)
+            sin = torch.sin(index[:, None] * self.angle[None, :]).reshape(HW_tuple[0], HW_tuple[1], -1)
+            cos = torch.cos(index[:, None] * self.angle[None, :]).reshape(HW_tuple[0], HW_tuple[1], -1)
             mask = self.generate_pos_decay(HW_tuple[0], HW_tuple[1])
-
             mask_d = self.generate_depth_decay(HW_tuple[0], HW_tuple[1], depth_map)
             mask = self.weight[0] * mask + self.weight[1] * mask_d
-
             geo_prior = ((sin, cos), mask)
-
         return geo_prior
 
 
@@ -218,51 +153,41 @@ class Decomposed_GSA(nn.Module):
         self.factor = value_factor
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.head_dim = self.embed_dim * self.factor // num_heads
         self.key_dim = self.embed_dim // num_heads
         self.scaling = self.key_dim**-0.5
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=True)
         self.k_proj = nn.Linear(embed_dim, embed_dim, bias=True)
         self.v_proj = nn.Linear(embed_dim, embed_dim * self.factor, bias=True)
         self.lepe = DWConv2d(embed_dim, 5, 1, 2)
-
         self.out_proj = nn.Linear(embed_dim * self.factor, embed_dim, bias=True)
         self.reset_parameters()
 
     def forward(self, x: torch.Tensor, rel_pos, split_or_not=False):
         bsz, h, w, _ = x.size()
-
         (sin, cos), (mask_h, mask_w) = rel_pos
-
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
         lepe = self.lepe(v)
-
         k = k * self.scaling
-        q = q.view(bsz, h, w, self.num_heads, self.key_dim).permute(0, 3, 1, 2, 4)  # (b n h w d1)
-        k = k.view(bsz, h, w, self.num_heads, self.key_dim).permute(0, 3, 1, 2, 4)  # (b n h w d1)
+        q = q.view(bsz, h, w, self.num_heads, self.key_dim).permute(0, 3, 1, 2, 4)
+        k = k.view(bsz, h, w, self.num_heads, self.key_dim).permute(0, 3, 1, 2, 4)
         qr = angle_transform(q, sin, cos)
         kr = angle_transform(k, sin, cos)
-
         qr_w = qr.transpose(1, 2)
         kr_w = kr.transpose(1, 2)
         v = v.reshape(bsz, h, w, self.num_heads, -1).permute(0, 1, 3, 2, 4)
-
         qk_mat_w = qr_w @ kr_w.transpose(-1, -2)
         qk_mat_w = qk_mat_w + mask_w.transpose(1, 2)
         qk_mat_w = torch.softmax(qk_mat_w, -1)
         v = torch.matmul(qk_mat_w, v)
-
         qr_h = qr.permute(0, 3, 1, 2, 4)
         kr_h = kr.permute(0, 3, 1, 2, 4)
         v = v.permute(0, 3, 2, 1, 4)
-
         qk_mat_h = qr_h @ kr_h.transpose(-1, -2)
         qk_mat_h = qk_mat_h + mask_h.transpose(1, 2)
         qk_mat_h = torch.softmax(qk_mat_h, -1)
         output = torch.matmul(qk_mat_h, v)
-
         output = output.permute(0, 3, 1, 2, 4).flatten(-2, -1)
         output = output + lepe
         output = self.out_proj(output)
@@ -282,7 +207,6 @@ class Full_GSA(nn.Module):
         self.factor = value_factor
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.head_dim = self.embed_dim * self.factor // num_heads
         self.key_dim = self.embed_dim // num_heads
         self.scaling = self.key_dim**-0.5
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=True)
@@ -293,33 +217,24 @@ class Full_GSA(nn.Module):
         self.reset_parameters()
 
     def forward(self, x: torch.Tensor, rel_pos, split_or_not=False):
-        """
-        x: (b h w c)
-        rel_pos: mask: (n l l)
-        """
         bsz, h, w, _ = x.size()
         (sin, cos), mask = rel_pos
-        assert h * w == mask.size(3)
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
         lepe = self.lepe(v)
-
         k = k * self.scaling
         q = q.view(bsz, h, w, self.num_heads, -1).permute(0, 3, 1, 2, 4)
         k = k.view(bsz, h, w, self.num_heads, -1).permute(0, 3, 1, 2, 4)
         qr = angle_transform(q, sin, cos)
         kr = angle_transform(k, sin, cos)
-
         qr = qr.flatten(2, 3)
         kr = kr.flatten(2, 3)
-        vr = v.reshape(bsz, h, w, self.num_heads, -1).permute(0, 3, 1, 2, 4)
-        vr = vr.flatten(2, 3)
+        vr = v.reshape(bsz, h, w, self.num_heads, -1).permute(0, 3, 1, 2, 4).flatten(2, 3)
         qk_mat = qr @ kr.transpose(-1, -2)
         qk_mat = qk_mat + mask
         qk_mat = torch.softmax(qk_mat, -1)
-        output = torch.matmul(qk_mat, vr)
-        output = output.transpose(1, 2).reshape(bsz, h, w, -1)
+        output = torch.matmul(qk_mat, vr).transpose(1, 2).reshape(bsz, h, w, -1)
         output = output + lepe
         output = self.out_proj(output)
         return output
@@ -333,17 +248,8 @@ class Full_GSA(nn.Module):
 
 
 class FeedForwardNetwork(nn.Module):
-    def __init__(
-        self,
-        embed_dim,
-        ffn_dim,
-        activation_fn=F.gelu,
-        dropout=0.0,
-        activation_dropout=0.0,
-        layernorm_eps=1e-6,
-        subln=False,
-        subconv=True,
-    ):
+    def __init__(self, embed_dim, ffn_dim, activation_fn=F.gelu, dropout=0.0, activation_dropout=0.0,
+                 layernorm_eps=1e-6, subln=False, subconv=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.activation_fn = activation_fn
@@ -361,9 +267,6 @@ class FeedForwardNetwork(nn.Module):
             self.ffn_layernorm.reset_parameters()
 
     def forward(self, x: torch.Tensor):
-        """
-        input shape: (b h w c)
-        """
         x = self.fc1(x)
         x = self.activation_fn(x)
         x = self.activation_dropout_module(x)
@@ -379,18 +282,9 @@ class FeedForwardNetwork(nn.Module):
 
 
 class RGBD_Block(nn.Module):
-    def __init__(
-        self,
-        split_or_not: str,
-        embed_dim: int,
-        num_heads: int,
-        ffn_dim: int,
-        drop_path=0.0,
-        layerscale=False,
-        layer_init_values=1e-5,
-        init_value=2,
-        heads_range=4,
-    ):
+    def __init__(self, split_or_not: str, embed_dim: int, num_heads: int, ffn_dim: int,
+                 drop_path=0.0, layerscale=False, layer_init_values=1e-5,
+                 init_value=2, heads_range=4):
         super().__init__()
         self.layerscale = layerscale
         self.embed_dim = embed_dim
@@ -401,89 +295,92 @@ class RGBD_Block(nn.Module):
         else:
             self.Attention = Full_GSA(embed_dim, num_heads)
         self.drop_path = DropPath(drop_path)
-        # FFN
         self.ffn = FeedForwardNetwork(embed_dim, ffn_dim)
         self.cnn_pos_encode = DWConv2d(embed_dim, 3, 1, 1)
-        # the function to generate the geometry prior for the current block
         self.Geo = GeoPriorGen(embed_dim, num_heads, init_value, heads_range)
-
         if layerscale:
             self.gamma_1 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
             self.gamma_2 = nn.Parameter(layer_init_values * torch.ones(1, 1, 1, embed_dim), requires_grad=True)
 
-    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False):
+    def forward(self, x: torch.Tensor, x_e: torch.Tensor, split_or_not=False,
+                sam_b: nn.Module = None, text_features: torch.Tensor = None, superpower: bool = False):
         x = x + self.cnn_pos_encode(x)
         b, h, w, d = x.size()
-
         geo_prior = self.Geo((h, w), x_e, split_or_not=split_or_not)
+
+        # 自注意力
+        out = self.Attention(self.layer_norm1(x), geo_prior, split_or_not)
+
+        # ★ superpower=SSA-lite：在 GSA 之后、FFN 之前做一次轻量 SAM
+        if superpower and (sam_b is not None) and (text_features is not None):
+            # 使用 semantic_alignment.forward_ssa；先做独立 LN 再注入，训练更稳
+            out = sam_b.forward_ssa(out, text_features)
+
+        # 残差1
         if self.layerscale:
-            x = x + self.drop_path(self.gamma_1 * self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
+            x = x + self.drop_path(self.gamma_1 * out)
+        else:
+            x = x + self.drop_path(out)
+
+        # FFN（保持不变）
+        if self.layerscale:
             x = x + self.drop_path(self.gamma_2 * self.ffn(self.layer_norm2(x)))
         else:
-            x = x + self.drop_path(self.Attention(self.layer_norm1(x), geo_prior, split_or_not))
             x = x + self.drop_path(self.ffn(self.layer_norm2(x)))
+
         return x
 
 
 class BasicLayer(nn.Module):
-    """
-    A basic RGB-D layer in DFormerv2.
-    """
-
-    def __init__(
-        self,
-        embed_dim,
-        out_dim,
-        depth,
-        num_heads,
-        init_value: float,
-        heads_range: float,
-        ffn_dim=96.0,
-        drop_path=0.0,
-        norm_layer=nn.LayerNorm,
-        split_or_not=False,
-        downsample: PatchMerging = None,
-        use_checkpoint=False,
-        layerscale=False,
-        layer_init_values=1e-5,
-    ):
+    def __init__(self, embed_dim, out_dim, depth, num_heads, init_value: float, heads_range: float,
+                 ffn_dim=96.0, drop_path=0.0, norm_layer=nn.LayerNorm, split_or_not=False,
+                 downsample: PatchMerging = None, use_checkpoint=False, layerscale=False, layer_init_values=1e-5,
+                 SSA_HALF_MODE=False, sam_share_factor: int = 2):
         super().__init__()
         self.embed_dim = embed_dim
         self.depth = depth
         self.use_checkpoint = use_checkpoint
         self.split_or_not = split_or_not
-
-        # build blocks
+        self.SSA_HALF_MODE = SSA_HALF_MODE
+        self.sam_share_factor = max(1, int(sam_share_factor))
         self.blocks = nn.ModuleList(
             [
                 RGBD_Block(
-                    split_or_not,
-                    embed_dim,
-                    num_heads,
-                    ffn_dim,
+                    split_or_not, embed_dim, num_heads, ffn_dim,
                     drop_path[i] if isinstance(drop_path, list) else drop_path,
-                    layerscale,
-                    layer_init_values,
-                    init_value=init_value,
-                    heads_range=heads_range,
+                    layerscale, layer_init_values, init_value=init_value, heads_range=heads_range,
                 )
                 for i in range(depth)
             ]
         )
+        self.downsample = PatchMerging(dim=embed_dim, out_dim=out_dim, norm_layer=norm_layer) if downsample is not None else None
 
-        # patch merging layer
-        if downsample is not None:
-            self.downsample = downsample(dim=embed_dim, out_dim=out_dim, norm_layer=norm_layer)
-        else:
-            self.downsample = None
-
-    def forward(self, x, x_e):
-        b, h, w, d = x.size()
-        for blk in self.blocks:
+    def forward(self, x, x_e, text_features=None, sam_module=None, sam_blocks=None, superpower=False):
+        for b_idx, blk in enumerate(self.blocks):
+            sam_block = None
+            if superpower and sam_blocks is not None and len(sam_blocks) > 0:
+                if self.SSA_HALF_MODE:
+                    pair_idx = b_idx // self.sam_share_factor
+                else:
+                    pair_idx = b_idx
+                if pair_idx < len(sam_blocks):
+                    sam_block = sam_blocks[pair_idx]
             if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not)
+                # 注意：把本 block 对应的 sam_b/text_features/superpower 一并传给 RGBD_Block.forward
+                x = checkpoint.checkpoint(blk, x=x, x_e=x_e, split_or_not=self.split_or_not,
+                                          sam_b=sam_block,
+                                          text_features=text_features,
+                                          superpower=superpower)
             else:
-                x = blk(x, x_e, split_or_not=self.split_or_not)
+                x = blk(x, x_e, split_or_not=self.split_or_not,
+                        sam_b=sam_block,
+                        text_features=text_features,
+                        superpower=superpower)
+
+        # 非 superpower（旧导出或 pre_down）时，如需在 stage 末做一次 SAM，仍走旧分支
+        if (not superpower) and (sam_module is not None) and (text_features is not None):
+            x = sam_module(x, text_features)
+
         if self.downsample is not None:
             x_down = self.downsample(x)
             return x, x_down
@@ -496,7 +393,7 @@ class dformerv2(nn.Module):
         self,
         out_indices=(0, 1, 2, 3),
         embed_dims=[64, 128, 256, 512],
-        depths=[2, 2, 8, 2],
+        depths=[3, 4, 18, 4],
         num_heads=[4, 4, 8, 16],
         init_values=[2, 2, 2, 2],
         heads_ranges=[4, 4, 6, 6],
@@ -505,32 +402,50 @@ class dformerv2(nn.Module):
         norm_layer=nn.LayerNorm,
         patch_norm=True,
         use_checkpoint=False,
-        projection=1024,
         norm_cfg=None,
         layerscales=[False, False, False, False],
         layer_init_values=1e-6,
         norm_eval=True,
+        text_dim=512,
+        sam_enc_stages=(0, 1, 2, 3),
+        sam_use_topk=True,
+        sam_top_m=5,
+        superpower: bool = False,
+        sam_enc_gamma_scale: float = 1.0,
+        sam_decoder_use_cosine: bool = True,
+        sam_decoder_learnable_temp: bool = True,
+        sam_decoder_logit_init: float = 1 / 0.07,
+        sam_encoder_use_cosine: bool = False,
+        sam_encoder_learnable_temp: bool = False,
+        sam_encoder_logit_init: float = 1.0,
     ):
         super().__init__()
         self.out_indices = out_indices
         self.num_layers = len(depths)
-        self.embed_dim = embed_dims[0]
         self.patch_norm = patch_norm
-        self.num_features = embed_dims[-1]
-        self.mlp_ratios = mlp_ratios
         self.norm_eval = norm_eval
+        self.num_heads = num_heads  # ★ 新增：保存各 stage 的头数
 
-        # patch embedding
-        self.patch_embed = PatchEmbed(
-            in_chans=3, embed_dim=embed_dims[0], norm_layer=norm_layer if self.patch_norm else None
-        )
+        # 哪些 encoder stage 启用 SAM
+        self._sam_enc_enabled = set(int(x) for x in sam_enc_stages) if sam_enc_stages is not None else set([0, 1, 2, 3])
 
-        # drop path rate
+        self.patch_embed = PatchEmbed(in_chans=3, embed_dim=embed_dims[0], norm_layer=norm_layer if self.patch_norm else None)
+        self.superpower = bool(superpower)
+        self.SSA_HALF_MODE = True
+        self._sam_block_share_factors = []
+        for i_layer in range(self.num_layers):
+            share_factor = self._resolve_sam_block_share_factor(
+                depths[i_layer], embed_dims[i_layer]
+            )
+            # 目前三种主干在 superpower 下的默认情况：
+            #   - S：所有 stage 仍保持两块一组（share_factor = 2）
+            #   - B：第三阶段扩展为四块一组，第四阶段在深度>=6时同样为四块
+            #   - L：第三阶段扩展为八块一组，第四阶段在深度>=6时同样为八块
+            # 这里统一收集，供各 stage 的 BasicLayer/SAM 实例复用。
+            self._sam_block_share_factors.append(max(1, int(share_factor)))
+
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
-
-        # build layers
         self.layers = nn.ModuleList()
-
         for i_layer in range(self.num_layers):
             layer = BasicLayer(
                 embed_dim=embed_dims[i_layer],
@@ -540,18 +455,72 @@ class dformerv2(nn.Module):
                 init_value=init_values[i_layer],
                 heads_range=heads_ranges[i_layer],
                 ffn_dim=int(mlp_ratios[i_layer] * embed_dims[i_layer]),
-                drop_path=dpr[sum(depths[:i_layer]) : sum(depths[: i_layer + 1])],
+                drop_path=dpr[sum(depths[:i_layer]): sum(depths[: i_layer + 1])],
                 norm_layer=norm_layer,
                 split_or_not=(i_layer != 3),
                 downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
                 use_checkpoint=use_checkpoint,
                 layerscale=layerscales[i_layer],
                 layer_init_values=layer_init_values,
+                SSA_HALF_MODE=self.SSA_HALF_MODE,
+                sam_share_factor=self._sam_block_share_factors[i_layer],
             )
             self.layers.append(layer)
 
+        # encoder stage SAM：延迟初始化，仅在实际使用时构建
+        self._encoder_sam_stage_specs = [
+            dict(
+                query_dim=embed_dims[i],
+                text_dim=text_dim,
+                use_topk=sam_use_topk,
+                top_m=sam_top_m,
+                num_heads=self.num_heads[i],  # ★ 传该 stage 的头数
+                gamma_scale=sam_enc_gamma_scale,
+                decoder_use_cosine=sam_decoder_use_cosine,
+                decoder_learnable_temp=sam_decoder_learnable_temp,
+                decoder_logit_scale_init=sam_decoder_logit_init,
+                encoder_use_cosine=sam_encoder_use_cosine,
+                encoder_learnable_temp=sam_encoder_learnable_temp,
+                encoder_logit_scale_init=sam_encoder_logit_init,
+            )
+
+            for i in range(self.num_layers)
+        ]
+        self.encoder_sam_stage_modules = nn.ModuleDict()
+        self.encoder_sam_blocks = nn.ModuleList()
+        for i in range(self.num_layers):
+            if self.superpower and (i in self._sam_enc_enabled):
+                depth_i = depths[i]
+                share_factor = self._sam_block_share_factors[i] if self.SSA_HALF_MODE else 1
+                if self.SSA_HALF_MODE:
+                    num_units = (depth_i + share_factor - 1) // share_factor
+                else:
+                    num_units = depth_i
+                ml = nn.ModuleList([
+                    SemanticAlignmentModule(
+                        query_dim=embed_dims[i],
+                        text_dim=text_dim,
+                        use_topk=sam_use_topk,
+                        top_m=sam_top_m,
+                        num_heads=self.num_heads[i],  # 同一 stage 的头数
+                        gamma_scale=sam_enc_gamma_scale,
+                        decoder_use_cosine=sam_decoder_use_cosine,
+                        decoder_learnable_temp=sam_decoder_learnable_temp,
+                        decoder_logit_scale_init=sam_decoder_logit_init,
+                        encoder_use_cosine=sam_encoder_use_cosine,
+                        encoder_learnable_temp=sam_encoder_learnable_temp,
+                        encoder_logit_scale_init=sam_encoder_logit_init,
+                        mode='encoder',  # ★ 只创建 encoder 需要的参数
+                    )
+                    for _ in range(num_units)
+                ])
+                self.encoder_sam_blocks.append(ml)
+            else:
+                # 占位，保持索引对齐；不占参数
+                self.encoder_sam_blocks.append(nn.ModuleList())
+
         self.extra_norms = nn.ModuleList()
-        for i in range(3):
+        for i in range(len(embed_dims) - 1):
             self.extra_norms.append(nn.LayerNorm(embed_dims[i + 1]))
 
         self.apply(self._init_weights)
@@ -559,7 +528,7 @@ class dformerv2(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
             try:
@@ -569,17 +538,10 @@ class dformerv2(nn.Module):
                 pass
 
     def init_weights(self, pretrained=None):
-        """Initialize the weights in backbone.
-
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-
         def _init_weights(m):
             if isinstance(m, nn.Linear):
                 trunc_normal_(m.weight, std=0.02)
-                if isinstance(m, nn.Linear) and m.bias is not None:
+                if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.LayerNorm):
                 nn.init.constant_(m.bias, 0)
@@ -587,14 +549,12 @@ class dformerv2(nn.Module):
 
         if isinstance(pretrained, str):
             self.apply(_init_weights)
-            # logger = get_root_logger()
             _state_dict = torch.load(pretrained)
             if "model" in _state_dict.keys():
                 _state_dict = _state_dict["model"]
             if "state_dict" in _state_dict.keys():
                 _state_dict = _state_dict["state_dict"]
             state_dict = OrderedDict()
-
             for k, v in _state_dict.items():
                 if k.startswith("backbone."):
                     state_dict[k[9:]] = v
@@ -602,8 +562,6 @@ class dformerv2(nn.Module):
                     state_dict[k] = v
             print("load " + pretrained)
             load_state_dict(self, state_dict, strict=False)
-            # load_checkpoint(self, pretrained, strict=False)
-            # load_checkpoint(self, pretrained, strict=False, logger=logger)
         elif pretrained is None:
             self.apply(_init_weights)
         else:
@@ -617,49 +575,113 @@ class dformerv2(nn.Module):
     def no_weight_decay_keywords(self):
         return {"relative_position_bias_table"}
 
-    def forward(self, x, x_e):
-        # rgb input
+    def _get_encoder_stage_sam(self, stage_idx: int):
+        if stage_idx not in self._sam_enc_enabled:
+            return None
+        key = str(stage_idx)
+        if key not in self.encoder_sam_stage_modules:
+            spec = self._encoder_sam_stage_specs[stage_idx]
+            sam_module = SemanticAlignmentModule(**spec)
+            # FIX: 确保新创建的SAM模块与主干网络在同一设备上
+            # 使用第一层参数的设备作为参考
+            try:
+                device = next(self.parameters()).device
+                sam_module = sam_module.to(device)
+            except StopIteration:
+                # 如果模型还没有参数，保持默认设备
+                pass
+            self.encoder_sam_stage_modules[key] = sam_module
+        return self.encoder_sam_stage_modules[key]
+
+    def forward(self, x, x_e, text_features=None):
+        # rgb
         x = self.patch_embed(x)
-        # depth input
+        # depth
         x_e = x_e[:, 0, :, :].unsqueeze(1)
 
         outs = []
+        use_text_guidance = text_features is not None
+        if use_text_guidance and text_features.dim() == 2:
+            text_features = text_features.unsqueeze(0)
+        if use_text_guidance:
+            text_features = text_features.to(device=x.device, dtype=x.dtype)
 
         for i in range(self.num_layers):
-            layer = self.layers[i]
-            x_out, x = layer(x, x_e)
+            if self.superpower:
+                # 逐 block：仅当该 stage 启用时传入对应 ModuleList；否则传空
+                sam_blocks = self.encoder_sam_blocks[i] if (
+                            use_text_guidance and (i in self._sam_enc_enabled)) else None
+                x_out, x = self.layers[i](x, x_e,
+                                          text_features=text_features,
+                                          sam_module=None,
+                                          sam_blocks=sam_blocks,
+                                          superpower=True)
+            else:
+                # === export-only：先跑完本 stage，再只对 x_out 做 SAM（不改 x / 不进主干） ===
+                # 1) 进入 BasicLayer 时不传 sam_module，避免在 layer 内注入
+                x_out, x = self.layers[i](
+                    x, x_e,
+                    text_features=None,
+                    sam_module=None,
+                    sam_blocks=None,
+                    superpower=False,
+                )
+
+                # 2) 仅当启用并有文本时，对 x_out 做一次 SAM
+                if use_text_guidance and (i in self._sam_enc_enabled):
+                    sam_module = self._get_encoder_stage_sam(i)
+                    if sam_module is not None:
+                        x_out = sam_module.forward_ssa(x_out, text_features)
+
             if i in self.out_indices:
                 if i != 0:
-                    x_out = self.extra_norms[i - 1](x_out)
+                    norm_layer = self.extra_norms[i - 1]
+                    x_out = norm_layer(x_out)
                 out = x_out.permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
 
         return tuple(outs)
 
     def train(self, mode=True):
-        """Convert the model into training mode while keep normalization layer
-        freezed."""
         super().train(mode)
         if mode and self.norm_eval:
             for m in self.modules():
-                # trick: eval have effect on BatchNorm only
                 if isinstance(m, nn.BatchNorm2d):
                     m.eval()
 
+    def _resolve_sam_block_share_factor(self, depth: int, embed_dim: int) -> int:
+        if not self.SSA_HALF_MODE:
+            return 1
+        if not self.superpower:
+            return 2
+
+        # 渐进式：只对最关键的stage减少共享
+        if depth >= 16:  # Stage 2
+            if embed_dim >= 448:  # L模型
+                return 8
+            if embed_dim >= 320:  # B模型
+                return 4
+            return 4
+
+        if depth >= 6 and embed_dim >= 640:  # L模型Stage 3
+            return 4  # 从8降到4
+        if depth >= 6 and embed_dim >= 512:  # B/S模型Stage 3
+            return 2  # 从4降到2
+
+        return 2
 
 def DFormerv2_S(pretrained=False, **kwargs):
-    model = dformerv2(
+    return dformerv2(
         embed_dims=[64, 128, 256, 512],
         depths=[3, 4, 18, 4],
         num_heads=[4, 4, 8, 16],
         heads_ranges=[4, 4, 6, 6],
         **kwargs,
     )
-    return model
 
 
 def DFormerv2_B(pretrained=False, **kwargs):
-    model = dformerv2(
+    return dformerv2(
         embed_dims=[80, 160, 320, 512],
         depths=[4, 8, 25, 8],
         num_heads=[5, 5, 10, 16],
@@ -668,11 +690,10 @@ def DFormerv2_B(pretrained=False, **kwargs):
         layer_init_values=1e-6,
         **kwargs,
     )
-    return model
 
 
 def DFormerv2_L(pretrained=False, **kwargs):
-    model = dformerv2(
+    return dformerv2(
         embed_dims=[112, 224, 448, 640],
         depths=[4, 8, 25, 8],
         num_heads=[7, 7, 14, 20],
@@ -681,4 +702,3 @@ def DFormerv2_L(pretrained=False, **kwargs):
         layer_init_values=1e-6,
         **kwargs,
     )
-    return model

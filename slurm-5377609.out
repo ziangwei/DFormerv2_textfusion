@@ -1,0 +1,3 @@
+usage: benchmark.py [-h] --config CONFIG [--height HEIGHT] [--width WIDTH]
+                    [--device DEVICE] [--skip-flops]
+benchmark.py: error: unrecognized arguments: --detailed

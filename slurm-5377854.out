@@ -1,0 +1,409 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1109 19:26:34.017000 73192 site-packages/torch/distributed/run.py:766] 
+W1109 19:26:34.017000 73192 site-packages/torch/distributed/run.py:766] *****************************************
+W1109 19:26:34.017000 73192 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1109 19:26:34.017000 73192 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-09 19:26:39,323 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-09 19:26:39,325 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+1
+2025-11-09 19:26:40,877 - train.py[line:259] - INFO: ✓ Non-deterministic training (faster) with seed: 45459
+2025-11-09 19:26:40,877 - train.py[line:260] - INFO:   To reproduce: modify config.seed=45459 and use --use_seed
+2025-11-09 19:26:40,877 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-dgx-a100-001
+2025-11-09 19:26:40,877 - train.py[line:362] - INFO: [warmup] rank0 start
+2025-11-09 19:26:41,351 - factory.py[line:326] - INFO: Parsing model identifier. Schema: None, Identifier: ViT-B-16
+2025-11-09 19:26:41,351 - factory.py[line:403] - INFO: Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+2025-11-09 19:26:41,494 - factory.py[line:500] - INFO: Instantiating model architecture: CLIP
+2025-11-09 19:26:42,880 - factory.py[line:507] - INFO: Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-09 19:26:43,266 - factory.py[line:621] - INFO: Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-11-09 19:26:43,267 - factory.py[line:624] - INFO: Model ViT-B-16 creation process complete.
+2025-11-09 19:26:43,267 - factory.py[line:649] - INFO: Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+2025-11-09 19:26:43,267 - factory.py[line:694] - INFO: Attempting to load config from built-in: ViT-B-16
+2025-11-09 19:26:43,267 - factory.py[line:749] - INFO: Using default SimpleTokenizer.
+2025-11-09 19:26:43,895 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-09 19:26:43,895 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-09 19:26:43,895 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+2025-11-09 19:26:43,895 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-09 19:26:43,896 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-09 19:26:45,628 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 19:26:45,628 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: imglabels.
+2025-11-09 19:26:45,641 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-09 19:26:45,641 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-09 19:26:47,208 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 19:26:47,208 - train.py[line:397] - INFO: Using larger validation batch size for SUNRGBD: 32
+2025-11-09 19:26:48,689 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 19:26:48,689 - train.py[line:409] - INFO: val dataset len:316
+2025-11-09 19:26:48,703 - train.py[line:425] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'actual_seed': 45459,
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_L',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639/checkpoint',
+    'checkpoint_start_epoch': 120,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor_mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'fridge',
+                       'tv',
+                       'paper',
+                       'towel',
+                       'shower_curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night_stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag'],
+    'dataset_name': 'SUNRGBD',
+    'dataset_path': 'datasets/SUNRGBD',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 1024,
+    'drop_path_rate': 0.2,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 480],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [0.5, 0.75, 1, 1.25, 1.5],
+    'eval_source': 'datasets/SUNRGBD/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/SUNRGBD/labels',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/SUNRGBD/out2.json',
+    'image_width': 480,
+    'is_test': True,
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639/log_2025_11_09_19_26_39.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639/log_2025_11_09_19_26_39.log',
+    'lr': 8e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 6,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 300,
+    'niters_per_epoch': 331,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 37,
+    'num_eval_imgs': 5050,
+    'num_train_imgs': 5285,
+    'num_workers': 2,
+    'optimizer': 'AdamW',
+    'pad': True,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Large_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/SUNRGBD/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_encoder_learnable_temp': True,
+    'sam_encoder_use_cosine': True,
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': False,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639/tb',
+    'text_encoder': 'clip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'imglabels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/SUNRGBD/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251109-192639/val_2025_11_09_19_26_39.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/SUNRGBD/Depth'}
+2025-11-09 19:26:48,705 - train.py[line:427] - INFO: args parsed:
+2025-11-09 19:26:48,705 - train.py[line:429] - INFO: config: local_configs.SUNRGBD.DFormerv2_L
+2025-11-09 19:26:48,705 - train.py[line:429] - INFO: gpus: 2
+2025-11-09 19:26:48,705 - train.py[line:429] - INFO: verbose: False
+2025-11-09 19:26:48,705 - train.py[line:429] - INFO: epochs: 0
+2025-11-09 19:26:48,705 - train.py[line:429] - INFO: show_image: False
+2025-11-09 19:26:48,705 - train.py[line:429] - INFO: save_path: None
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: checkpoint_dir: None
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: continue_fpath: None
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: sliding: False
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: compile: False
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: compile_mode: default
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: syncbn: True
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: mst: True
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: amp: False
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: val_amp: True
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: pad_SUNRGBD: True
+2025-11-09 19:26:48,706 - train.py[line:429] - INFO: use_seed: False
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: seed: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: local_rank: 0
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: text_source: imglabels
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: text_encoder: clip
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: text_encoder_name: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: text_feature_dim: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: label_txt_path: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: caption_json_path: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: text_template_set: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: max_templates_per_label: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: max_caption_sentences: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: caption_topk: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: caption_topk_mode: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: image_labels_json_path: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: sam_enc_stages: 1,2,3
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: sam_dec_stages: 1,2,3
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: superpower: False
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: sam_decoder_use_cosine: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: sam_decoder_learnable_temp: None
+2025-11-09 19:26:48,707 - train.py[line:429] - INFO: sam_decoder_logit_init: None
+2025-11-09 19:26:48,708 - train.py[line:429] - INFO: sam_encoder_use_cosine: True
+2025-11-09 19:26:48,708 - train.py[line:429] - INFO: sam_encoder_learnable_temp: True
+2025-11-09 19:26:48,708 - train.py[line:429] - INFO: sam_encoder_logit_init: None
+2025-11-09 19:26:48,708 - train.py[line:429] - INFO: devices: 
+2025-11-09 19:26:48,708 - train.py[line:429] - INFO: port: 16005
+2025-11-09 19:26:48,708 - train.py[line:435] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 19:26:50,696 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-09 19:26:50,834 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+Weight Decay: 552 Weight No Decay: 650 Total: 1202
+2025-11-09 19:26:53,318 - builder.py[line:170] - INFO: Initing weights ...
+Weight Decay: 552 Weight No Decay: 650 Total: 1202
+2025-11-09 19:26:53,352 - train.py[line:483] - INFO: .............distributed training.............
+2025-11-09 19:26:53,507 - train.py[line:502] - INFO: begin trainning:
+Engine initialization or training loop failed with exception
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 558, in <module>
+    loss = model(imgs, modal_xs, label=gts, text_features=text_feats)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1637, in forward
+    else self._run_ddp_forward(*inputs, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1464, in _run_ddp_forward
+    return self.module(*inputs, **kwargs)  # type: ignore[index]
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 231, in forward
+    out = self.encode_decode(rgb, modal_x, text_features)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 194, in encode_decode
+    x = self.backbone(rgb, modal_x, text_features)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/encoders/DFormerv2.py", line 625, in forward
+    x_out = sam_module(x_out, text_features)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/blocks/semantic_alignment.py", line 183, in forward
+    x = self.norm1(visual_features).view(B, H * W, Cv)     # (B,N,Cv)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/normalization.py", line 217, in forward
+    return F.layer_norm(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/functional.py", line 2910, in layer_norm
+    return torch.layer_norm(
+RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:1 and cpu! (when checking argument for argument weight in method wrapper_CUDA__native_layer_norm)
+2025-11-09 19:26:56,361 - train.py[line:734] - ERROR: Engine initialization or training loop failed with exception
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 558, in <module>
+    loss = model(imgs, modal_xs, label=gts, text_features=text_feats)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1637, in forward
+    else self._run_ddp_forward(*inputs, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1464, in _run_ddp_forward
+    return self.module(*inputs, **kwargs)  # type: ignore[index]
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 231, in forward
+    out = self.encode_decode(rgb, modal_x, text_features)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 194, in encode_decode
+    x = self.backbone(rgb, modal_x, text_features)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/encoders/DFormerv2.py", line 625, in forward
+    x_out = sam_module(x_out, text_features)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/blocks/semantic_alignment.py", line 183, in forward
+    x = self.norm1(visual_features).view(B, H * W, Cv)     # (B,N,Cv)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/normalization.py", line 217, in forward
+    return F.layer_norm(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/functional.py", line 2910, in layer_norm
+    return torch.layer_norm(
+RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu! (when checking argument for argument weight in method wrapper_CUDA__native_layer_norm)
+2025-11-09 19:26:56,454 - engine.py[line:188] - WARNING: A exception occurred during Engine initialization, give up running process
+A exception occurred during Engine initialization, give up running process
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 558, in <module>
+[rank0]:     loss = model(imgs, modal_xs, label=gts, text_features=text_feats)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1637, in forward
+[rank0]:     else self._run_ddp_forward(*inputs, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1464, in _run_ddp_forward
+[rank0]:     return self.module(*inputs, **kwargs)  # type: ignore[index]
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 231, in forward
+[rank0]:     out = self.encode_decode(rgb, modal_x, text_features)
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 194, in encode_decode
+[rank0]:     x = self.backbone(rgb, modal_x, text_features)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/encoders/DFormerv2.py", line 625, in forward
+[rank0]:     x_out = sam_module(x_out, text_features)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/blocks/semantic_alignment.py", line 183, in forward
+[rank0]:     x = self.norm1(visual_features).view(B, H * W, Cv)     # (B,N,Cv)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/normalization.py", line 217, in forward
+[rank0]:     return F.layer_norm(
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/functional.py", line 2910, in layer_norm
+[rank0]:     return torch.layer_norm(
+[rank0]: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu! (when checking argument for argument weight in method wrapper_CUDA__native_layer_norm)
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 558, in <module>
+[rank1]:     loss = model(imgs, modal_xs, label=gts, text_features=text_feats)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank1]:     return forward_call(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1637, in forward
+[rank1]:     else self._run_ddp_forward(*inputs, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1464, in _run_ddp_forward
+[rank1]:     return self.module(*inputs, **kwargs)  # type: ignore[index]
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank1]:     return forward_call(*args, **kwargs)
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 231, in forward
+[rank1]:     out = self.encode_decode(rgb, modal_x, text_features)
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 194, in encode_decode
+[rank1]:     x = self.backbone(rgb, modal_x, text_features)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank1]:     return forward_call(*args, **kwargs)
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/encoders/DFormerv2.py", line 625, in forward
+[rank1]:     x_out = sam_module(x_out, text_features)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank1]:     return forward_call(*args, **kwargs)
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/blocks/semantic_alignment.py", line 183, in forward
+[rank1]:     x = self.norm1(visual_features).view(B, H * W, Cv)     # (B,N,Cv)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank1]:     return forward_call(*args, **kwargs)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/normalization.py", line 217, in forward
+[rank1]:     return F.layer_norm(
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/functional.py", line 2910, in layer_norm
+[rank1]:     return torch.layer_norm(
+[rank1]: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:1 and cpu! (when checking argument for argument weight in method wrapper_CUDA__native_layer_norm)
+W1109 19:26:58.259000 73192 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 73274 closing signal SIGTERM
+E1109 19:26:58.723000 73192 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 73273) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-09_19:26:58
+  host      : lrz-dgx-a100-001.ai.lrz.de
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 73273)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

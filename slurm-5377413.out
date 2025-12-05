@@ -1,0 +1,24 @@
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 13:29:53,789 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+================================================================================
+模型Benchmark工具
+================================================================================
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/benchmark.py", line 463, in <module>
+    main()
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/benchmark.py", line 363, in main
+    C, model, make_inputs = build_model_from_config(
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/benchmark.py", line 133, in build_model_from_config
+    model = segmodel(cfg=C, criterion=criterion, norm_layer=BatchNorm2d)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/builder.py", line 73, in __init__
+    from .decoders.hsg_head import HierarchicalSemanticGuidedHead
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/models/decoders/hsg_head.py", line 5, in <module>
+    from mmcv.cnn import ConvModule
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/mmcv/__init__.py", line 4, in <module>
+    from .image import *
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/mmcv/image/__init__.py", line 2, in <module>
+    from .colorspace import (bgr2gray, bgr2hls, bgr2hsv, bgr2rgb, bgr2ycbcr,
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/mmcv/image/colorspace.py", line 4, in <module>
+    import cv2
+ImportError: libGL.so.1: cannot open shared object file: No such file or directory

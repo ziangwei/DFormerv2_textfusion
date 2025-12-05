@@ -1,0 +1,376 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1111 11:58:05.591000 1896391 site-packages/torch/distributed/run.py:766] 
+W1111 11:58:05.591000 1896391 site-packages/torch/distributed/run.py:766] *****************************************
+W1111 11:58:05.591000 1896391 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1111 11:58:05.591000 1896391 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-11 11:58:14,272 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-11 11:58:14,278 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+2025-11-11 11:58:14,420 - train.py[line:221] - WARNING: pad_SUNRGBD is only used for SUNRGBD dataset
+2025-11-11 11:58:14,442 - train.py[line:234] - INFO: ✓ Deterministic training enabled with seed: 53384 (from CLI argument)
+2025-11-11 11:58:14,442 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-030
+2025-11-11 11:58:14,443 - train.py[line:362] - INFO: [warmup] rank0 start
+1
+pad_SUNRGBD is only used for SUNRGBD dataset
+[rank1]:[W1111 11:58:14.207384562 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+2025-11-11 11:58:15,392 - factory.py[line:326] - INFO: Parsing model identifier. Schema: None, Identifier: ViT-B-16
+2025-11-11 11:58:15,392 - factory.py[line:403] - INFO: Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+2025-11-11 11:58:15,570 - factory.py[line:500] - INFO: Instantiating model architecture: CLIP
+2025-11-11 11:58:17,422 - factory.py[line:507] - INFO: Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-11 11:58:17,903 - factory.py[line:621] - INFO: Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-11-11 11:58:17,903 - factory.py[line:624] - INFO: Model ViT-B-16 creation process complete.
+2025-11-11 11:58:17,904 - factory.py[line:649] - INFO: Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+2025-11-11 11:58:17,904 - factory.py[line:694] - INFO: Attempting to load config from built-in: ViT-B-16
+2025-11-11 11:58:17,904 - factory.py[line:749] - INFO: Using default SimpleTokenizer.
+2025-11-11 11:58:18,484 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-11 11:58:18,484 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-11 11:58:18,484 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+[rank0]:[W1111 11:58:18.921770408 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+2025-11-11 11:58:20,114 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-11 11:58:20,115 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-11 11:58:20,527 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: labels
+2025-11-11 11:58:20,530 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: labels.
+2025-11-11 11:58:20,530 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-11 11:58:20,530 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-11 11:58:20,922 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: labels
+2025-11-11 11:58:20,923 - train.py[line:400] - INFO: Using 4x training batch for validation: 64
+INFO:root:Parsing model identifier. Schema: None, Identifier: ViT-B-16
+INFO:root:Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+INFO:root:Instantiating model architecture: CLIP
+2025-11-11 11:58:21,318 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: labels
+2025-11-11 11:58:21,319 - train.py[line:409] - INFO: val dataset len:22
+2025-11-11 11:58:21,344 - train.py[line:425] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'actual_seed': 53384,
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_S',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_json_path': 'datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json',
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814/checkpoint',
+    'checkpoint_start_epoch': 250,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'refridgerator',
+                       'television',
+                       'paper',
+                       'towel',
+                       'shower curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag',
+                       'otherstructure',
+                       'otherfurniture',
+                       'otherprop'],
+    'dataset_name': 'NYUDepthv2',
+    'dataset_path': 'datasets/NYUDepthv2',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 512,
+    'drop_path_rate': 0.25,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 640],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [1],
+    'eval_source': 'datasets/NYUDepthv2/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/NYUDepthv2/Label',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/NYUDepthv2/out.json',
+    'image_width': 640,
+    'is_test': True,
+    'label_txt_path': 'datasets/NYUDepthv2/nyu40_labels.txt',
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814/log_2025_11_11_11_58_14.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814/log_2025_11_11_11_58_14.log',
+    'lr': 6e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 40,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 500,
+    'niters_per_epoch': 50,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 40,
+    'num_eval_imgs': 654,
+    'num_train_imgs': 795,
+    'num_workers': 0,
+    'optimizer': 'AdamW',
+    'pad': False,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Small_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/NYUDepthv2/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_encoder_learnable_temp': True,
+    'sam_encoder_use_cosine': True,
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': True,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814/tb',
+    'text_encoder': 'clip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'labels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/NYUDepthv2/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251111-115814/val_2025_11_11_11_58_14.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/NYUDepthv2/Depth'}
+2025-11-11 11:58:21,346 - train.py[line:427] - INFO: args parsed:
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: config: local_configs.NYUDepthv2.DFormerv2_S2
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: gpus: 2
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: verbose: False
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: epochs: 0
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: show_image: False
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: save_path: None
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: checkpoint_dir: None
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: continue_fpath: checkpoints/NYUDepthv2_DFormerv2_S_20251111-071537/epoch-40_miou_52.21.pth
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: sliding: False
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: compile: False
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: compile_mode: default
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: syncbn: True
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: mst: True
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: amp: False
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: val_amp: True
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: pad_SUNRGBD: False
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: use_seed: True
+2025-11-11 11:58:21,346 - train.py[line:429] - INFO: seed: 53384
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: local_rank: 0
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: text_source: labels
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: text_encoder: clip
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: text_encoder_name: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: text_feature_dim: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: label_txt_path: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: caption_json_path: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: text_template_set: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: max_templates_per_label: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: max_caption_sentences: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: caption_topk: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: caption_topk_mode: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: image_labels_json_path: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_enc_stages: 1,2,3
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_dec_stages: 1,2,3
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: superpower: True
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_decoder_use_cosine: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_decoder_learnable_temp: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_decoder_logit_init: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_encoder_use_cosine: True
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_encoder_learnable_temp: True
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: sam_encoder_logit_init: None
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: devices: 
+2025-11-11 11:58:21,347 - train.py[line:429] - INFO: port: 16005
+2025-11-11 11:58:21,348 - train.py[line:435] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-11 11:58:22,424 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+INFO:root:Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-11 11:58:22,764 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+INFO:root:Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+INFO:root:Model ViT-B-16 creation process complete.
+INFO:root:Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+INFO:root:Attempting to load config from built-in: ViT-B-16
+INFO:root:Using default SimpleTokenizer.
+load checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+The model and loaded state dict do not match exactly
+
+unexpected key in source state_dict: proj.weight, proj.bias, norm.weight, norm.bias, norm.running_mean, norm.running_var, norm.num_batches_tracked, head.weight, head.bias, aux_head.weight, aux_head.bias
+
+missing keys in source state_dict: encoder_sam_blocks.1.0.encoder_logit_scale, encoder_sam_blocks.1.0.gamma, encoder_sam_blocks.1.0.total_ops, encoder_sam_blocks.1.0.total_params, encoder_sam_blocks.1.0._inv_sqrt_dk, encoder_sam_blocks.1.0.gamma_scale, encoder_sam_blocks.1.0.q_proj.weight, encoder_sam_blocks.1.0.q_proj.bias, encoder_sam_blocks.1.0.k_proj.weight, encoder_sam_blocks.1.0.k_proj.bias, encoder_sam_blocks.1.0.v_proj.weight, encoder_sam_blocks.1.0.v_proj.bias, encoder_sam_blocks.1.0.out_proj.weight, encoder_sam_blocks.1.0.out_proj.bias, encoder_sam_blocks.1.1.encoder_logit_scale, encoder_sam_blocks.1.1.gamma, encoder_sam_blocks.1.1.total_ops, encoder_sam_blocks.1.1.total_params, encoder_sam_blocks.1.1._inv_sqrt_dk, encoder_sam_blocks.1.1.gamma_scale, encoder_sam_blocks.1.1.q_proj.weight, encoder_sam_blocks.1.1.q_proj.bias, encoder_sam_blocks.1.1.k_proj.weight, encoder_sam_blocks.1.1.k_proj.bias, encoder_sam_blocks.1.1.v_proj.weight, encoder_sam_blocks.1.1.v_proj.bias, encoder_sam_blocks.1.1.out_proj.weight, encoder_sam_blocks.1.1.out_proj.bias, encoder_sam_blocks.2.0.encoder_logit_scale, encoder_sam_blocks.2.0.gamma, encoder_sam_blocks.2.0.total_ops, encoder_sam_blocks.2.0.total_params, encoder_sam_blocks.2.0._inv_sqrt_dk, encoder_sam_blocks.2.0.gamma_scale, encoder_sam_blocks.2.0.q_proj.weight, encoder_sam_blocks.2.0.q_proj.bias, encoder_sam_blocks.2.0.k_proj.weight, encoder_sam_blocks.2.0.k_proj.bias, encoder_sam_blocks.2.0.v_proj.weight, encoder_sam_blocks.2.0.v_proj.bias, encoder_sam_blocks.2.0.out_proj.weight, encoder_sam_blocks.2.0.out_proj.bias, encoder_sam_blocks.2.1.encoder_logit_scale, encoder_sam_blocks.2.1.gamma, encoder_sam_blocks.2.1.total_ops, encoder_sam_blocks.2.1.total_params, encoder_sam_blocks.2.1._inv_sqrt_dk, encoder_sam_blocks.2.1.gamma_scale, encoder_sam_blocks.2.1.q_proj.weight, encoder_sam_blocks.2.1.q_proj.bias, encoder_sam_blocks.2.1.k_proj.weight, encoder_sam_blocks.2.1.k_proj.bias, encoder_sam_blocks.2.1.v_proj.weight, encoder_sam_blocks.2.1.v_proj.bias, encoder_sam_blocks.2.1.out_proj.weight, encoder_sam_blocks.2.1.out_proj.bias, encoder_sam_blocks.2.2.encoder_logit_scale, encoder_sam_blocks.2.2.gamma, encoder_sam_blocks.2.2.total_ops, encoder_sam_blocks.2.2.total_params, encoder_sam_blocks.2.2._inv_sqrt_dk, encoder_sam_blocks.2.2.gamma_scale, encoder_sam_blocks.2.2.q_proj.weight, encoder_sam_blocks.2.2.q_proj.bias, encoder_sam_blocks.2.2.k_proj.weight, encoder_sam_blocks.2.2.k_proj.bias, encoder_sam_blocks.2.2.v_proj.weight, encoder_sam_blocks.2.2.v_proj.bias, encoder_sam_blocks.2.2.out_proj.weight, encoder_sam_blocks.2.2.out_proj.bias, encoder_sam_blocks.2.3.encoder_logit_scale, encoder_sam_blocks.2.3.gamma, encoder_sam_blocks.2.3.total_ops, encoder_sam_blocks.2.3.total_params, encoder_sam_blocks.2.3._inv_sqrt_dk, encoder_sam_blocks.2.3.gamma_scale, encoder_sam_blocks.2.3.q_proj.weight, encoder_sam_blocks.2.3.q_proj.bias, encoder_sam_blocks.2.3.k_proj.weight, encoder_sam_blocks.2.3.k_proj.bias, encoder_sam_blocks.2.3.v_proj.weight, encoder_sam_blocks.2.3.v_proj.bias, encoder_sam_blocks.2.3.out_proj.weight, encoder_sam_blocks.2.3.out_proj.bias, encoder_sam_blocks.2.4.encoder_logit_scale, encoder_sam_blocks.2.4.gamma, encoder_sam_blocks.2.4.total_ops, encoder_sam_blocks.2.4.total_params, encoder_sam_blocks.2.4._inv_sqrt_dk, encoder_sam_blocks.2.4.gamma_scale, encoder_sam_blocks.2.4.q_proj.weight, encoder_sam_blocks.2.4.q_proj.bias, encoder_sam_blocks.2.4.k_proj.weight, encoder_sam_blocks.2.4.k_proj.bias, encoder_sam_blocks.2.4.v_proj.weight, encoder_sam_blocks.2.4.v_proj.bias, encoder_sam_blocks.2.4.out_proj.weight, encoder_sam_blocks.2.4.out_proj.bias, encoder_sam_blocks.3.0.encoder_logit_scale, encoder_sam_blocks.3.0.gamma, encoder_sam_blocks.3.0.total_ops, encoder_sam_blocks.3.0.total_params, encoder_sam_blocks.3.0._inv_sqrt_dk, encoder_sam_blocks.3.0.gamma_scale, encoder_sam_blocks.3.0.q_proj.weight, encoder_sam_blocks.3.0.q_proj.bias, encoder_sam_blocks.3.0.k_proj.weight, encoder_sam_blocks.3.0.k_proj.bias, encoder_sam_blocks.3.0.v_proj.weight, encoder_sam_blocks.3.0.v_proj.bias, encoder_sam_blocks.3.0.out_proj.weight, encoder_sam_blocks.3.0.out_proj.bias, encoder_sam_blocks.3.1.encoder_logit_scale, encoder_sam_blocks.3.1.gamma, encoder_sam_blocks.3.1.total_ops, encoder_sam_blocks.3.1.total_params, encoder_sam_blocks.3.1._inv_sqrt_dk, encoder_sam_blocks.3.1.gamma_scale, encoder_sam_blocks.3.1.q_proj.weight, encoder_sam_blocks.3.1.q_proj.bias, encoder_sam_blocks.3.1.k_proj.weight, encoder_sam_blocks.3.1.k_proj.bias, encoder_sam_blocks.3.1.v_proj.weight, encoder_sam_blocks.3.1.v_proj.bias, encoder_sam_blocks.3.1.out_proj.weight, encoder_sam_blocks.3.1.out_proj.bias, extra_norms.0.weight, extra_norms.0.bias, extra_norms.1.weight, extra_norms.1.bias, extra_norms.2.weight, extra_norms.2.bias
+
+2025-11-11 11:58:23,234 - builder.py[line:170] - INFO: Initing weights ...
+Weight Decay: 380 Weight No Decay: 478 Total: 858
+2025-11-11 11:58:23,248 - train.py[line:483] - INFO: .............distributed training.............
+INFO:root:[Text guidance] built caches for: labels
+INFO:root:Using 4x training batch for validation: 64
+INFO:root:[Text guidance] built caches for: labels
+INFO:root:val dataset len:22
+INFO:root:args parsed:
+INFO:root:config: local_configs.NYUDepthv2.DFormerv2_S2
+INFO:root:gpus: 2
+INFO:root:verbose: False
+INFO:root:epochs: 0
+INFO:root:show_image: False
+INFO:root:save_path: None
+INFO:root:checkpoint_dir: None
+INFO:root:continue_fpath: checkpoints/NYUDepthv2_DFormerv2_S_20251111-071537/epoch-40_miou_52.21.pth
+INFO:root:sliding: False
+INFO:root:compile: False
+INFO:root:compile_mode: default
+INFO:root:syncbn: True
+INFO:root:mst: True
+INFO:root:amp: False
+INFO:root:val_amp: True
+INFO:root:pad_SUNRGBD: False
+INFO:root:use_seed: True
+INFO:root:seed: 53384
+INFO:root:local_rank: 0
+INFO:root:text_source: labels
+INFO:root:text_encoder: clip
+INFO:root:text_encoder_name: None
+INFO:root:text_feature_dim: None
+INFO:root:label_txt_path: None
+INFO:root:caption_json_path: None
+INFO:root:text_template_set: None
+INFO:root:max_templates_per_label: None
+INFO:root:max_caption_sentences: None
+INFO:root:caption_topk: None
+INFO:root:caption_topk_mode: None
+INFO:root:image_labels_json_path: None
+INFO:root:sam_enc_stages: 1,2,3
+INFO:root:sam_dec_stages: 1,2,3
+INFO:root:superpower: True
+INFO:root:sam_decoder_use_cosine: None
+INFO:root:sam_decoder_learnable_temp: None
+INFO:root:sam_decoder_logit_init: None
+INFO:root:sam_encoder_use_cosine: True
+INFO:root:sam_encoder_learnable_temp: True
+INFO:root:sam_encoder_logit_init: None
+INFO:root:devices: 
+INFO:root:port: 16005
+INFO:root:using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+INFO:root:Using Hierarchical Semantic-Guided Decoder
+INFO:root:Loading pretrained model: checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+INFO:root:Initing weights ...
+Weight Decay: 380 Weight No Decay: 478 Total: 858
+INFO:root:.............distributed training.............
+INFO:root:Load model, Time usage:
+	IO: 9.5367431640625e-07, initialize parameters: 0.03955721855163574
+2025-11-11 11:58:26,981 - pyt_utils.py[line:195] - INFO: Load model, Time usage:
+	IO: 9.5367431640625e-07, initialize parameters: 0.043036460876464844
+INFO:root:Load checkpoint from file checkpoints/NYUDepthv2_DFormerv2_S_20251111-071537/epoch-40_miou_52.21.pth, Time usage:
+	IO: 0.8983209133148193, restore checkpoint: 0.13339948654174805
+INFO:root:begin trainning:
+2025-11-11 11:58:27,084 - engine.py[line:176] - INFO: Load checkpoint from file checkpoints/NYUDepthv2_DFormerv2_S_20251111-071537/epoch-40_miou_52.21.pth, Time usage:
+	IO: 0.9019851684570312, restore checkpoint: 0.14677214622497559
+2025-11-11 11:58:27,085 - train.py[line:502] - INFO: begin trainning:
+[rank0]:[W1111 11:58:28.377659998 reducer.cpp:1430] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W1111 11:58:28.378397374 reducer.cpp:1430] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1536, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1536, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1536, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1536, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Epoch 41/500 Iter 1/50: lr=5.5662e-05 loss=0.3457 total_loss=0.3457
+Epoch 41/500 Iter 5/50: lr=5.5653e-05 loss=0.4357 total_loss=0.3945
+Epoch 41/500 Iter 10/50: lr=5.5643e-05 loss=0.3436 total_loss=0.3671
+Epoch 41/500 Iter 15/50: lr=5.5632e-05 loss=0.3269 total_loss=0.3821
+Epoch 41/500 Iter 20/50: lr=5.5621e-05 loss=0.3442 total_loss=0.3789
+Epoch 41/500 Iter 25/50: lr=5.5610e-05 loss=0.2998 total_loss=0.3774
+Epoch 41/500 Iter 30/50: lr=5.5599e-05 loss=0.3345 total_loss=0.3771
+Epoch 41/500 Iter 35/50: lr=5.5588e-05 loss=0.3721 total_loss=0.3721
+Epoch 41/500 Iter 40/50: lr=5.5577e-05 loss=0.3062 total_loss=0.3694
+Epoch 41/500 Iter 45/50: lr=5.5566e-05 loss=0.3811 total_loss=0.3703
+INFO:root:Epoch 41/500 Iter 50/50: lr=5.5555e-05 loss=0.3488 total_loss=0.3706
+Epoch 41/500 Iter 50/50: lr=5.5555e-05 loss=0.3488 total_loss=0.3706
+INFO:root:[Train] epoch 41 - before is_eval()
+2025-11-11 11:59:19,863 - train.py[line:611] - INFO: Epoch 41/500 Iter 50/50: lr=5.5555e-05 loss=0.3488 total_loss=0.3706
+ERROR:root:Engine initialization or training loop failed with exception
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 727, in <module>
+    left_time = train_timer.mean_time * (config.nepochs - engine.state.epoch) + eval_timer.mean_time * eval_count
+TypeError: unsupported operand type(s) for *: 'NoneType' and 'int'
+2025-11-11 11:59:19,863 - train.py[line:614] - INFO: [Train] epoch 41 - before is_eval()
+2025-11-11 11:59:19,864 - train.py[line:734] - ERROR: Engine initialization or training loop failed with exception
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 727, in <module>
+    left_time = train_timer.mean_time * (config.nepochs - engine.state.epoch) + eval_timer.mean_time * eval_count
+TypeError: unsupported operand type(s) for *: 'NoneType' and 'int'
+WARNING:root:A exception occurred during Engine initialization, give up running process
+2025-11-11 11:59:19,983 - engine.py[line:188] - WARNING: A exception occurred during Engine initialization, give up running process
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 727, in <module>
+[rank0]:     left_time = train_timer.mean_time * (config.nepochs - engine.state.epoch) + eval_timer.mean_time * eval_count
+[rank0]: TypeError: unsupported operand type(s) for *: 'NoneType' and 'int'
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 727, in <module>
+[rank1]:     left_time = train_timer.mean_time * (config.nepochs - engine.state.epoch) + eval_timer.mean_time * eval_count
+[rank1]: TypeError: unsupported operand type(s) for *: 'NoneType' and 'int'
+W1111 11:59:21.727000 1896391 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1896432 closing signal SIGTERM
+E1111 11:59:22.043000 1896391 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 1896433) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-11_11:59:21
+  host      : lrz-hgx-h100-030
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1896433)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

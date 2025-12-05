@@ -1,0 +1,108 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+2025-11-09 16:09:35,234 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+False
+2025-11-09 16:09:35,255 - infer.py[line:907] - INFO: ================================================================================
+2025-11-09 16:09:35,255 - infer.py[line:908] - INFO: DUAL-MODEL COMPARISON MODE ENABLED
+2025-11-09 16:09:35,255 - infer.py[line:909] - INFO: Model 1 (Text-Guided): checkpoints/NYU_S_57.63_seed53384?_clip_en/epoch-261_miou_57.63.pth
+2025-11-09 16:09:35,255 - infer.py[line:910] - INFO: Model 2 (Visual-Only): checkpoints/NYU_S_Baseline/epoch-130_miou_55.38.pth
+2025-11-09 16:09:35,255 - infer.py[line:911] - INFO: Output: output
+2025-11-09 16:09:35,255 - infer.py[line:913] - INFO:   Mode: Integrated (GT + Model1 + Model2 + Attention in same folders)
+2025-11-09 16:09:35,255 - infer.py[line:917] - INFO: ================================================================================
+2025-11-09 16:09:35,255 - infer.py[line:921] - INFO: Forcing enable_text_guidance=True for attention visualization
+2025-11-09 16:09:35,255 - infer.py[line:939] - INFO: ================================================================================
+2025-11-09 16:09:35,255 - infer.py[line:940] - INFO: TEXT GUIDANCE CONFIGURATION:
+2025-11-09 16:09:35,255 - infer.py[line:941] - INFO:   text_source: imglabels
+2025-11-09 16:09:35,255 - infer.py[line:942] - INFO:   text_encoder: clip
+2025-11-09 16:09:35,255 - infer.py[line:943] - INFO:   text_feature_dim: 512
+2025-11-09 16:09:35,255 - infer.py[line:944] - INFO:   label_txt_path: datasets/NYUDepthv2/nyu40_labels.txt
+2025-11-09 16:09:35,255 - infer.py[line:945] - INFO:   image_labels_json_path: datasets/NYUDepthv2/out.json
+2025-11-09 16:09:35,255 - infer.py[line:951] - INFO:   ✓ image_labels_json found: datasets/NYUDepthv2/out.json
+2025-11-09 16:09:35,255 - infer.py[line:958] - INFO: ================================================================================
+2025-11-09 16:09:35,486 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 16:09:35,487 - infer.py[line:1006] - INFO: Randomly selected 15 images from 654
+2025-11-09 16:09:35,487 - infer.py[line:1026] - INFO: Dataset filtered to 15 images
+Validation dataset size: 15
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 16:09:40,253 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-09 16:09:40,445 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+The model and loaded state dict do not match exactly
+
+unexpected key in source state_dict: proj.weight, proj.bias, norm.weight, norm.bias, norm.running_mean, norm.running_var, norm.num_batches_tracked, head.weight, head.bias, aux_head.weight, aux_head.bias
+
+missing keys in source state_dict: encoder_sam_blocks.1.0.decoder_logit_scale, encoder_sam_blocks.1.0.encoder_logit_scale, encoder_sam_blocks.1.0.alpha, encoder_sam_blocks.1.0.gamma, encoder_sam_blocks.1.0.total_ops, encoder_sam_blocks.1.0.total_params, encoder_sam_blocks.1.0._inv_sqrt_dk, encoder_sam_blocks.1.0.gamma_scale, encoder_sam_blocks.1.0.norm1.weight, encoder_sam_blocks.1.0.norm1.bias, encoder_sam_blocks.1.0.norm2.weight, encoder_sam_blocks.1.0.norm2.bias, encoder_sam_blocks.1.0.q_proj.weight, encoder_sam_blocks.1.0.q_proj.bias, encoder_sam_blocks.1.0.k_proj.weight, encoder_sam_blocks.1.0.k_proj.bias, encoder_sam_blocks.1.0.v_proj.weight, encoder_sam_blocks.1.0.v_proj.bias, encoder_sam_blocks.1.0.out_proj.weight, encoder_sam_blocks.1.0.out_proj.bias, encoder_sam_blocks.1.0.ffn.0.weight, encoder_sam_blocks.1.0.ffn.0.bias, encoder_sam_blocks.1.0.ffn.3.weight, encoder_sam_blocks.1.0.ffn.3.bias, encoder_sam_blocks.1.1.decoder_logit_scale, encoder_sam_blocks.1.1.encoder_logit_scale, encoder_sam_blocks.1.1.alpha, encoder_sam_blocks.1.1.gamma, encoder_sam_blocks.1.1.total_ops, encoder_sam_blocks.1.1.total_params, encoder_sam_blocks.1.1._inv_sqrt_dk, encoder_sam_blocks.1.1.gamma_scale, encoder_sam_blocks.1.1.norm1.weight, encoder_sam_blocks.1.1.norm1.bias, encoder_sam_blocks.1.1.norm2.weight, encoder_sam_blocks.1.1.norm2.bias, encoder_sam_blocks.1.1.q_proj.weight, encoder_sam_blocks.1.1.q_proj.bias, encoder_sam_blocks.1.1.k_proj.weight, encoder_sam_blocks.1.1.k_proj.bias, encoder_sam_blocks.1.1.v_proj.weight, encoder_sam_blocks.1.1.v_proj.bias, encoder_sam_blocks.1.1.out_proj.weight, encoder_sam_blocks.1.1.out_proj.bias, encoder_sam_blocks.1.1.ffn.0.weight, encoder_sam_blocks.1.1.ffn.0.bias, encoder_sam_blocks.1.1.ffn.3.weight, encoder_sam_blocks.1.1.ffn.3.bias, encoder_sam_blocks.2.0.decoder_logit_scale, encoder_sam_blocks.2.0.encoder_logit_scale, encoder_sam_blocks.2.0.alpha, encoder_sam_blocks.2.0.gamma, encoder_sam_blocks.2.0.total_ops, encoder_sam_blocks.2.0.total_params, encoder_sam_blocks.2.0._inv_sqrt_dk, encoder_sam_blocks.2.0.gamma_scale, encoder_sam_blocks.2.0.norm1.weight, encoder_sam_blocks.2.0.norm1.bias, encoder_sam_blocks.2.0.norm2.weight, encoder_sam_blocks.2.0.norm2.bias, encoder_sam_blocks.2.0.q_proj.weight, encoder_sam_blocks.2.0.q_proj.bias, encoder_sam_blocks.2.0.k_proj.weight, encoder_sam_blocks.2.0.k_proj.bias, encoder_sam_blocks.2.0.v_proj.weight, encoder_sam_blocks.2.0.v_proj.bias, encoder_sam_blocks.2.0.out_proj.weight, encoder_sam_blocks.2.0.out_proj.bias, encoder_sam_blocks.2.0.ffn.0.weight, encoder_sam_blocks.2.0.ffn.0.bias, encoder_sam_blocks.2.0.ffn.3.weight, encoder_sam_blocks.2.0.ffn.3.bias, encoder_sam_blocks.2.1.decoder_logit_scale, encoder_sam_blocks.2.1.encoder_logit_scale, encoder_sam_blocks.2.1.alpha, encoder_sam_blocks.2.1.gamma, encoder_sam_blocks.2.1.total_ops, encoder_sam_blocks.2.1.total_params, encoder_sam_blocks.2.1._inv_sqrt_dk, encoder_sam_blocks.2.1.gamma_scale, encoder_sam_blocks.2.1.norm1.weight, encoder_sam_blocks.2.1.norm1.bias, encoder_sam_blocks.2.1.norm2.weight, encoder_sam_blocks.2.1.norm2.bias, encoder_sam_blocks.2.1.q_proj.weight, encoder_sam_blocks.2.1.q_proj.bias, encoder_sam_blocks.2.1.k_proj.weight, encoder_sam_blocks.2.1.k_proj.bias, encoder_sam_blocks.2.1.v_proj.weight, encoder_sam_blocks.2.1.v_proj.bias, encoder_sam_blocks.2.1.out_proj.weight, encoder_sam_blocks.2.1.out_proj.bias, encoder_sam_blocks.2.1.ffn.0.weight, encoder_sam_blocks.2.1.ffn.0.bias, encoder_sam_blocks.2.1.ffn.3.weight, encoder_sam_blocks.2.1.ffn.3.bias, encoder_sam_blocks.2.2.decoder_logit_scale, encoder_sam_blocks.2.2.encoder_logit_scale, encoder_sam_blocks.2.2.alpha, encoder_sam_blocks.2.2.gamma, encoder_sam_blocks.2.2.total_ops, encoder_sam_blocks.2.2.total_params, encoder_sam_blocks.2.2._inv_sqrt_dk, encoder_sam_blocks.2.2.gamma_scale, encoder_sam_blocks.2.2.norm1.weight, encoder_sam_blocks.2.2.norm1.bias, encoder_sam_blocks.2.2.norm2.weight, encoder_sam_blocks.2.2.norm2.bias, encoder_sam_blocks.2.2.q_proj.weight, encoder_sam_blocks.2.2.q_proj.bias, encoder_sam_blocks.2.2.k_proj.weight, encoder_sam_blocks.2.2.k_proj.bias, encoder_sam_blocks.2.2.v_proj.weight, encoder_sam_blocks.2.2.v_proj.bias, encoder_sam_blocks.2.2.out_proj.weight, encoder_sam_blocks.2.2.out_proj.bias, encoder_sam_blocks.2.2.ffn.0.weight, encoder_sam_blocks.2.2.ffn.0.bias, encoder_sam_blocks.2.2.ffn.3.weight, encoder_sam_blocks.2.2.ffn.3.bias, encoder_sam_blocks.2.3.decoder_logit_scale, encoder_sam_blocks.2.3.encoder_logit_scale, encoder_sam_blocks.2.3.alpha, encoder_sam_blocks.2.3.gamma, encoder_sam_blocks.2.3.total_ops, encoder_sam_blocks.2.3.total_params, encoder_sam_blocks.2.3._inv_sqrt_dk, encoder_sam_blocks.2.3.gamma_scale, encoder_sam_blocks.2.3.norm1.weight, encoder_sam_blocks.2.3.norm1.bias, encoder_sam_blocks.2.3.norm2.weight, encoder_sam_blocks.2.3.norm2.bias, encoder_sam_blocks.2.3.q_proj.weight, encoder_sam_blocks.2.3.q_proj.bias, encoder_sam_blocks.2.3.k_proj.weight, encoder_sam_blocks.2.3.k_proj.bias, encoder_sam_blocks.2.3.v_proj.weight, encoder_sam_blocks.2.3.v_proj.bias, encoder_sam_blocks.2.3.out_proj.weight, encoder_sam_blocks.2.3.out_proj.bias, encoder_sam_blocks.2.3.ffn.0.weight, encoder_sam_blocks.2.3.ffn.0.bias, encoder_sam_blocks.2.3.ffn.3.weight, encoder_sam_blocks.2.3.ffn.3.bias, encoder_sam_blocks.2.4.decoder_logit_scale, encoder_sam_blocks.2.4.encoder_logit_scale, encoder_sam_blocks.2.4.alpha, encoder_sam_blocks.2.4.gamma, encoder_sam_blocks.2.4.total_ops, encoder_sam_blocks.2.4.total_params, encoder_sam_blocks.2.4._inv_sqrt_dk, encoder_sam_blocks.2.4.gamma_scale, encoder_sam_blocks.2.4.norm1.weight, encoder_sam_blocks.2.4.norm1.bias, encoder_sam_blocks.2.4.norm2.weight, encoder_sam_blocks.2.4.norm2.bias, encoder_sam_blocks.2.4.q_proj.weight, encoder_sam_blocks.2.4.q_proj.bias, encoder_sam_blocks.2.4.k_proj.weight, encoder_sam_blocks.2.4.k_proj.bias, encoder_sam_blocks.2.4.v_proj.weight, encoder_sam_blocks.2.4.v_proj.bias, encoder_sam_blocks.2.4.out_proj.weight, encoder_sam_blocks.2.4.out_proj.bias, encoder_sam_blocks.2.4.ffn.0.weight, encoder_sam_blocks.2.4.ffn.0.bias, encoder_sam_blocks.2.4.ffn.3.weight, encoder_sam_blocks.2.4.ffn.3.bias, encoder_sam_blocks.3.0.decoder_logit_scale, encoder_sam_blocks.3.0.encoder_logit_scale, encoder_sam_blocks.3.0.alpha, encoder_sam_blocks.3.0.gamma, encoder_sam_blocks.3.0.total_ops, encoder_sam_blocks.3.0.total_params, encoder_sam_blocks.3.0._inv_sqrt_dk, encoder_sam_blocks.3.0.gamma_scale, encoder_sam_blocks.3.0.norm1.weight, encoder_sam_blocks.3.0.norm1.bias, encoder_sam_blocks.3.0.norm2.weight, encoder_sam_blocks.3.0.norm2.bias, encoder_sam_blocks.3.0.q_proj.weight, encoder_sam_blocks.3.0.q_proj.bias, encoder_sam_blocks.3.0.k_proj.weight, encoder_sam_blocks.3.0.k_proj.bias, encoder_sam_blocks.3.0.v_proj.weight, encoder_sam_blocks.3.0.v_proj.bias, encoder_sam_blocks.3.0.out_proj.weight, encoder_sam_blocks.3.0.out_proj.bias, encoder_sam_blocks.3.0.ffn.0.weight, encoder_sam_blocks.3.0.ffn.0.bias, encoder_sam_blocks.3.0.ffn.3.weight, encoder_sam_blocks.3.0.ffn.3.bias, encoder_sam_blocks.3.1.decoder_logit_scale, encoder_sam_blocks.3.1.encoder_logit_scale, encoder_sam_blocks.3.1.alpha, encoder_sam_blocks.3.1.gamma, encoder_sam_blocks.3.1.total_ops, encoder_sam_blocks.3.1.total_params, encoder_sam_blocks.3.1._inv_sqrt_dk, encoder_sam_blocks.3.1.gamma_scale, encoder_sam_blocks.3.1.norm1.weight, encoder_sam_blocks.3.1.norm1.bias, encoder_sam_blocks.3.1.norm2.weight, encoder_sam_blocks.3.1.norm2.bias, encoder_sam_blocks.3.1.q_proj.weight, encoder_sam_blocks.3.1.q_proj.bias, encoder_sam_blocks.3.1.k_proj.weight, encoder_sam_blocks.3.1.k_proj.bias, encoder_sam_blocks.3.1.v_proj.weight, encoder_sam_blocks.3.1.v_proj.bias, encoder_sam_blocks.3.1.out_proj.weight, encoder_sam_blocks.3.1.out_proj.bias, encoder_sam_blocks.3.1.ffn.0.weight, encoder_sam_blocks.3.1.ffn.0.bias, encoder_sam_blocks.3.1.ffn.3.weight, encoder_sam_blocks.3.1.ffn.3.bias, extra_norms.0.weight, extra_norms.0.bias, extra_norms.1.weight, extra_norms.1.bias, extra_norms.2.weight, extra_norms.2.bias
+
+2025-11-09 16:09:40,969 - builder.py[line:170] - INFO: Initing weights ...
+Loading model weights...
+2025-11-09 16:09:42,046 - infer.py[line:1060] - INFO: Begin testing...
+2025-11-09 16:09:42,046 - infer.py[line:1071] - INFO: ====================================================================================================
+2025-11-09 16:09:42,046 - infer.py[line:1072] - INFO: RUNNING DUAL-MODEL COMPARISON MODE
+2025-11-09 16:09:42,046 - infer.py[line:1073] - INFO: ====================================================================================================
+2025-11-09 16:09:42,046 - infer.py[line:1076] - INFO: 
+====================================================================================================
+2025-11-09 16:09:42,046 - infer.py[line:1077] - INFO: STEP 1/2: Running Model 1 (Text-Guided + Attention Visualization)
+2025-11-09 16:09:42,046 - infer.py[line:1078] - INFO: Checkpoint: checkpoints/NYU_S_57.63_seed53384?_clip_en/epoch-261_miou_57.63.pth
+2025-11-09 16:09:42,046 - infer.py[line:1079] - INFO: Output: output
+2025-11-09 16:09:42,046 - infer.py[line:1080] - INFO: ====================================================================================================
+
+2025-11-09 16:09:42,046 - infer.py[line:1102] - INFO: Extracting attention from stages: [2]
+2025-11-09 16:09:42,049 - infer.py[line:556] - INFO: ====================================================================================================
+2025-11-09 16:09:42,049 - infer.py[line:557] - INFO: Starting ENHANCED attention visualization
+2025-11-09 16:09:42,049 - infer.py[line:558] - INFO:   Stage: DEC
+2025-11-09 16:09:42,049 - infer.py[line:559] - INFO:   Stage Indices: [2]
+2025-11-09 16:09:42,049 - infer.py[line:560] - INFO:   Block Index: -1 (-1=last)
+2025-11-09 16:09:42,049 - infer.py[line:561] - INFO:   Aggregate Mode: none
+2025-11-09 16:09:42,049 - infer.py[line:562] - INFO:   Num Images: all
+2025-11-09 16:09:42,049 - infer.py[line:563] - INFO:   Alpha: 0.6, Threshold: 0.15, Smooth Sigma: 1.5
+2025-11-09 16:09:42,049 - infer.py[line:564] - INFO:   Save Dir: output
+2025-11-09 16:09:42,049 - infer.py[line:565] - INFO: ====================================================================================================
+2025-11-09 16:09:42,053 - infer.py[line:536] - INFO: ✓ Loaded 37 class names from datasets/NYUDepthv2/nyu40_labels.txt
+Validation Iter: 1 / 15
+2025-11-09 16:09:43,923 - infer.py[line:449] - INFO: ✓ Extracted dec_stage2, shape=(1, 300, 16, 6), spatial=(15, 20)
+2025-11-09 16:09:44,607 - infer.py[line:811] - INFO: ✓ Saved visualization for image 'NYUDepthv2_RGB_207':
+2025-11-09 16:09:44,607 - infer.py[line:812] - INFO:   - 00_original.png
+2025-11-09 16:09:44,607 - infer.py[line:813] - INFO:   - 01_segmentation.png
+2025-11-09 16:09:44,607 - infer.py[line:814] - INFO:   - 6 attention maps (02-08)
+2025-11-09 16:09:44,607 - infer.py[line:816] - INFO:   - Tokens: ['floor', 'door', 'window', 'blinds', 'chair']...
+2025-11-09 16:09:44,718 - infer.py[line:449] - INFO: ✓ Extracted dec_stage2, shape=(1, 300, 16, 6), spatial=(15, 20)
+2025-11-09 16:09:45,286 - infer.py[line:449] - INFO: ✓ Extracted dec_stage2, shape=(1, 300, 16, 6), spatial=(15, 20)
+2025-11-09 16:09:45,520 - engine.py[line:188] - WARNING: A exception occurred during Engine initialization, give up running process
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/infer.py", line 1110, in <module>
+    all_metrics = evaluate_with_attention(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/infer.py", line 783, in evaluate_with_attention
+    nm = token_names[t].strip() if isinstance(token_names[t], str) else str(token_names[t])
+IndexError: list index out of range
+E1109 16:09:46.872000 717803 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 718514) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/infer.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-09_16:09:46
+  host      : lrz-hgx-h100-013
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 718514)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

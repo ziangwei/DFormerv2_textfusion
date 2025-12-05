@@ -1,0 +1,426 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1109 03:29:49.446000 488574 site-packages/torch/distributed/run.py:766] 
+W1109 03:29:49.446000 488574 site-packages/torch/distributed/run.py:766] *****************************************
+W1109 03:29:49.446000 488574 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1109 03:29:49.446000 488574 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-09 03:29:59,517 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-09 03:29:59,523 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+2025-11-09 03:29:59,666 - train.py[line:221] - WARNING: pad_SUNRGBD is only used for SUNRGBD dataset
+2025-11-09 03:29:59,668 - train.py[line:234] - INFO: ✓ Deterministic training enabled with seed: 53384 (from CLI argument)
+2025-11-09 03:29:59,668 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-003
+2025-11-09 03:29:59,668 - train.py[line:362] - INFO: [warmup] rank0 start
+1
+pad_SUNRGBD is only used for SUNRGBD dataset
+[rank1]:[W1109 03:29:59.195361090 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+`torch_dtype` is deprecated! Use `dtype` instead!
+2025-11-09 03:29:59,989 - configuration_clip.py[line:258] - INFO: `text_config` is `None`. Initializing the `JinaCLIPTextConfig` with default values.
+2025-11-09 03:29:59,989 - configuration_clip.py[line:265] - INFO: `vision_config` is `None`. initializing the `JinaCLIPVisionConfig` with default values.
+`torch_dtype` is deprecated! Use `dtype` instead!
+/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/modules/transformers_modules/jinaai/jina_hyphen_clip_hyphen_implementation/39e6a55ae971b59bea6e44675d237c99762e7ee2/modeling_clip.py:140: UserWarning: Flash attention is not installed. Check https://github.com/Dao-AILab/flash-attention?tab=readme-ov-file#installation-and-features for installation instructions, disabling
+  warnings.warn(
+/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/modules/transformers_modules/jinaai/jina_hyphen_clip_hyphen_implementation/39e6a55ae971b59bea6e44675d237c99762e7ee2/modeling_clip.py:175: UserWarning: xFormers is not installed. Check https://github.com/facebookresearch/xformers?tab=readme-ov-file#installing-xformers for installation instructions, disabling
+  warnings.warn(
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:00<00:00,  1.63it/s]Encoding: 100%|██████████| 1/1 [00:00<00:00,  1.63it/s]
+2025-11-09 03:30:11,777 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-09 03:30:11,777 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-09 03:30:11,777 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+[rank0]:[W1109 03:30:11.064900828 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+2025-11-09 03:30:13,545 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-09 03:30:13,545 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-09 03:30:14,273 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 03:30:14,274 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: imglabels.
+2025-11-09 03:30:14,276 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-09 03:30:14,278 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-09 03:30:14,482 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 03:30:14,482 - train.py[line:400] - INFO: Using 4x training batch for validation: 64
+2025-11-09 03:30:14,688 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 03:30:14,688 - train.py[line:409] - INFO: val dataset len:22
+2025-11-09 03:30:14,705 - train.py[line:425] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'actual_seed': 53384,
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_S',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_json_path': 'datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json',
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/checkpoint',
+    'checkpoint_start_epoch': 250,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'refridgerator',
+                       'television',
+                       'paper',
+                       'towel',
+                       'shower curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag',
+                       'otherstructure',
+                       'otherfurniture',
+                       'otherprop'],
+    'dataset_name': 'NYUDepthv2',
+    'dataset_path': 'datasets/NYUDepthv2',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 512,
+    'drop_path_rate': 0.25,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 640],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [1],
+    'eval_source': 'datasets/NYUDepthv2/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/NYUDepthv2/Label',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/NYUDepthv2/out.json',
+    'image_width': 640,
+    'is_test': True,
+    'label_txt_path': 'datasets/NYUDepthv2/nyu40_labels.txt',
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/log_2025_11_09_03_29_59.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/log_2025_11_09_03_29_59.log',
+    'lr': 6e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 6,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 500,
+    'niters_per_epoch': 50,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 40,
+    'num_eval_imgs': 654,
+    'num_train_imgs': 795,
+    'num_workers': 0,
+    'optimizer': 'AdamW',
+    'pad': False,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Small_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/NYUDepthv2/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_encoder_learnable_temp': True,
+    'sam_encoder_use_cosine': True,
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': True,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/tb',
+    'text_encoder': 'jinaclip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'imglabels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/NYUDepthv2/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/val_2025_11_09_03_29_59.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/NYUDepthv2/Depth'}
+2025-11-09 03:30:14,706 - train.py[line:427] - INFO: args parsed:
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: config: local_configs.NYUDepthv2.DFormerv2_S
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: gpus: 2
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: verbose: False
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: epochs: 0
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: show_image: False
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: save_path: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: checkpoint_dir: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: continue_fpath: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: sliding: False
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: compile: False
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: compile_mode: default
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: syncbn: True
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: mst: True
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: amp: False
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: val_amp: True
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: pad_SUNRGBD: False
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: use_seed: True
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: seed: 53384
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: local_rank: 0
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: text_source: imglabels
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: text_encoder: jinaclip
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: text_encoder_name: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: text_feature_dim: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: label_txt_path: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: caption_json_path: None
+2025-11-09 03:30:14,707 - train.py[line:429] - INFO: text_template_set: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: max_templates_per_label: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: max_caption_sentences: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: caption_topk: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: caption_topk_mode: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: image_labels_json_path: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_enc_stages: 1,2,3
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_dec_stages: 1,2,3
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: superpower: True
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_decoder_use_cosine: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_decoder_learnable_temp: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_decoder_logit_init: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_encoder_use_cosine: True
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_encoder_learnable_temp: True
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: sam_encoder_logit_init: None
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: devices: 
+2025-11-09 03:30:14,708 - train.py[line:429] - INFO: port: 16005
+2025-11-09 03:30:14,708 - train.py[line:435] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 03:30:15,966 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-09 03:30:16,078 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+The model and loaded state dict do not match exactly
+
+unexpected key in source state_dict: proj.weight, proj.bias, norm.weight, norm.bias, norm.running_mean, norm.running_var, norm.num_batches_tracked, head.weight, head.bias, aux_head.weight, aux_head.bias
+
+missing keys in source state_dict: encoder_sam_blocks.1.0.decoder_logit_scale, encoder_sam_blocks.1.0.encoder_logit_scale, encoder_sam_blocks.1.0.alpha, encoder_sam_blocks.1.0.gamma, encoder_sam_blocks.1.0.total_ops, encoder_sam_blocks.1.0.total_params, encoder_sam_blocks.1.0._inv_sqrt_dk, encoder_sam_blocks.1.0.gamma_scale, encoder_sam_blocks.1.0.norm1.weight, encoder_sam_blocks.1.0.norm1.bias, encoder_sam_blocks.1.0.norm2.weight, encoder_sam_blocks.1.0.norm2.bias, encoder_sam_blocks.1.0.q_proj.weight, encoder_sam_blocks.1.0.q_proj.bias, encoder_sam_blocks.1.0.k_proj.weight, encoder_sam_blocks.1.0.k_proj.bias, encoder_sam_blocks.1.0.v_proj.weight, encoder_sam_blocks.1.0.v_proj.bias, encoder_sam_blocks.1.0.out_proj.weight, encoder_sam_blocks.1.0.out_proj.bias, encoder_sam_blocks.1.0.ffn.0.weight, encoder_sam_blocks.1.0.ffn.0.bias, encoder_sam_blocks.1.0.ffn.3.weight, encoder_sam_blocks.1.0.ffn.3.bias, encoder_sam_blocks.1.1.decoder_logit_scale, encoder_sam_blocks.1.1.encoder_logit_scale, encoder_sam_blocks.1.1.alpha, encoder_sam_blocks.1.1.gamma, encoder_sam_blocks.1.1.total_ops, encoder_sam_blocks.1.1.total_params, encoder_sam_blocks.1.1._inv_sqrt_dk, encoder_sam_blocks.1.1.gamma_scale, encoder_sam_blocks.1.1.norm1.weight, encoder_sam_blocks.1.1.norm1.bias, encoder_sam_blocks.1.1.norm2.weight, encoder_sam_blocks.1.1.norm2.bias, encoder_sam_blocks.1.1.q_proj.weight, encoder_sam_blocks.1.1.q_proj.bias, encoder_sam_blocks.1.1.k_proj.weight, encoder_sam_blocks.1.1.k_proj.bias, encoder_sam_blocks.1.1.v_proj.weight, encoder_sam_blocks.1.1.v_proj.bias, encoder_sam_blocks.1.1.out_proj.weight, encoder_sam_blocks.1.1.out_proj.bias, encoder_sam_blocks.1.1.ffn.0.weight, encoder_sam_blocks.1.1.ffn.0.bias, encoder_sam_blocks.1.1.ffn.3.weight, encoder_sam_blocks.1.1.ffn.3.bias, encoder_sam_blocks.2.0.decoder_logit_scale, encoder_sam_blocks.2.0.encoder_logit_scale, encoder_sam_blocks.2.0.alpha, encoder_sam_blocks.2.0.gamma, encoder_sam_blocks.2.0.total_ops, encoder_sam_blocks.2.0.total_params, encoder_sam_blocks.2.0._inv_sqrt_dk, encoder_sam_blocks.2.0.gamma_scale, encoder_sam_blocks.2.0.norm1.weight, encoder_sam_blocks.2.0.norm1.bias, encoder_sam_blocks.2.0.norm2.weight, encoder_sam_blocks.2.0.norm2.bias, encoder_sam_blocks.2.0.q_proj.weight, encoder_sam_blocks.2.0.q_proj.bias, encoder_sam_blocks.2.0.k_proj.weight, encoder_sam_blocks.2.0.k_proj.bias, encoder_sam_blocks.2.0.v_proj.weight, encoder_sam_blocks.2.0.v_proj.bias, encoder_sam_blocks.2.0.out_proj.weight, encoder_sam_blocks.2.0.out_proj.bias, encoder_sam_blocks.2.0.ffn.0.weight, encoder_sam_blocks.2.0.ffn.0.bias, encoder_sam_blocks.2.0.ffn.3.weight, encoder_sam_blocks.2.0.ffn.3.bias, encoder_sam_blocks.2.1.decoder_logit_scale, encoder_sam_blocks.2.1.encoder_logit_scale, encoder_sam_blocks.2.1.alpha, encoder_sam_blocks.2.1.gamma, encoder_sam_blocks.2.1.total_ops, encoder_sam_blocks.2.1.total_params, encoder_sam_blocks.2.1._inv_sqrt_dk, encoder_sam_blocks.2.1.gamma_scale, encoder_sam_blocks.2.1.norm1.weight, encoder_sam_blocks.2.1.norm1.bias, encoder_sam_blocks.2.1.norm2.weight, encoder_sam_blocks.2.1.norm2.bias, encoder_sam_blocks.2.1.q_proj.weight, encoder_sam_blocks.2.1.q_proj.bias, encoder_sam_blocks.2.1.k_proj.weight, encoder_sam_blocks.2.1.k_proj.bias, encoder_sam_blocks.2.1.v_proj.weight, encoder_sam_blocks.2.1.v_proj.bias, encoder_sam_blocks.2.1.out_proj.weight, encoder_sam_blocks.2.1.out_proj.bias, encoder_sam_blocks.2.1.ffn.0.weight, encoder_sam_blocks.2.1.ffn.0.bias, encoder_sam_blocks.2.1.ffn.3.weight, encoder_sam_blocks.2.1.ffn.3.bias, encoder_sam_blocks.2.2.decoder_logit_scale, encoder_sam_blocks.2.2.encoder_logit_scale, encoder_sam_blocks.2.2.alpha, encoder_sam_blocks.2.2.gamma, encoder_sam_blocks.2.2.total_ops, encoder_sam_blocks.2.2.total_params, encoder_sam_blocks.2.2._inv_sqrt_dk, encoder_sam_blocks.2.2.gamma_scale, encoder_sam_blocks.2.2.norm1.weight, encoder_sam_blocks.2.2.norm1.bias, encoder_sam_blocks.2.2.norm2.weight, encoder_sam_blocks.2.2.norm2.bias, encoder_sam_blocks.2.2.q_proj.weight, encoder_sam_blocks.2.2.q_proj.bias, encoder_sam_blocks.2.2.k_proj.weight, encoder_sam_blocks.2.2.k_proj.bias, encoder_sam_blocks.2.2.v_proj.weight, encoder_sam_blocks.2.2.v_proj.bias, encoder_sam_blocks.2.2.out_proj.weight, encoder_sam_blocks.2.2.out_proj.bias, encoder_sam_blocks.2.2.ffn.0.weight, encoder_sam_blocks.2.2.ffn.0.bias, encoder_sam_blocks.2.2.ffn.3.weight, encoder_sam_blocks.2.2.ffn.3.bias, encoder_sam_blocks.2.3.decoder_logit_scale, encoder_sam_blocks.2.3.encoder_logit_scale, encoder_sam_blocks.2.3.alpha, encoder_sam_blocks.2.3.gamma, encoder_sam_blocks.2.3.total_ops, encoder_sam_blocks.2.3.total_params, encoder_sam_blocks.2.3._inv_sqrt_dk, encoder_sam_blocks.2.3.gamma_scale, encoder_sam_blocks.2.3.norm1.weight, encoder_sam_blocks.2.3.norm1.bias, encoder_sam_blocks.2.3.norm2.weight, encoder_sam_blocks.2.3.norm2.bias, encoder_sam_blocks.2.3.q_proj.weight, encoder_sam_blocks.2.3.q_proj.bias, encoder_sam_blocks.2.3.k_proj.weight, encoder_sam_blocks.2.3.k_proj.bias, encoder_sam_blocks.2.3.v_proj.weight, encoder_sam_blocks.2.3.v_proj.bias, encoder_sam_blocks.2.3.out_proj.weight, encoder_sam_blocks.2.3.out_proj.bias, encoder_sam_blocks.2.3.ffn.0.weight, encoder_sam_blocks.2.3.ffn.0.bias, encoder_sam_blocks.2.3.ffn.3.weight, encoder_sam_blocks.2.3.ffn.3.bias, encoder_sam_blocks.2.4.decoder_logit_scale, encoder_sam_blocks.2.4.encoder_logit_scale, encoder_sam_blocks.2.4.alpha, encoder_sam_blocks.2.4.gamma, encoder_sam_blocks.2.4.total_ops, encoder_sam_blocks.2.4.total_params, encoder_sam_blocks.2.4._inv_sqrt_dk, encoder_sam_blocks.2.4.gamma_scale, encoder_sam_blocks.2.4.norm1.weight, encoder_sam_blocks.2.4.norm1.bias, encoder_sam_blocks.2.4.norm2.weight, encoder_sam_blocks.2.4.norm2.bias, encoder_sam_blocks.2.4.q_proj.weight, encoder_sam_blocks.2.4.q_proj.bias, encoder_sam_blocks.2.4.k_proj.weight, encoder_sam_blocks.2.4.k_proj.bias, encoder_sam_blocks.2.4.v_proj.weight, encoder_sam_blocks.2.4.v_proj.bias, encoder_sam_blocks.2.4.out_proj.weight, encoder_sam_blocks.2.4.out_proj.bias, encoder_sam_blocks.2.4.ffn.0.weight, encoder_sam_blocks.2.4.ffn.0.bias, encoder_sam_blocks.2.4.ffn.3.weight, encoder_sam_blocks.2.4.ffn.3.bias, encoder_sam_blocks.3.0.decoder_logit_scale, encoder_sam_blocks.3.0.encoder_logit_scale, encoder_sam_blocks.3.0.alpha, encoder_sam_blocks.3.0.gamma, encoder_sam_blocks.3.0.total_ops, encoder_sam_blocks.3.0.total_params, encoder_sam_blocks.3.0._inv_sqrt_dk, encoder_sam_blocks.3.0.gamma_scale, encoder_sam_blocks.3.0.norm1.weight, encoder_sam_blocks.3.0.norm1.bias, encoder_sam_blocks.3.0.norm2.weight, encoder_sam_blocks.3.0.norm2.bias, encoder_sam_blocks.3.0.q_proj.weight, encoder_sam_blocks.3.0.q_proj.bias, encoder_sam_blocks.3.0.k_proj.weight, encoder_sam_blocks.3.0.k_proj.bias, encoder_sam_blocks.3.0.v_proj.weight, encoder_sam_blocks.3.0.v_proj.bias, encoder_sam_blocks.3.0.out_proj.weight, encoder_sam_blocks.3.0.out_proj.bias, encoder_sam_blocks.3.0.ffn.0.weight, encoder_sam_blocks.3.0.ffn.0.bias, encoder_sam_blocks.3.0.ffn.3.weight, encoder_sam_blocks.3.0.ffn.3.bias, encoder_sam_blocks.3.1.decoder_logit_scale, encoder_sam_blocks.3.1.encoder_logit_scale, encoder_sam_blocks.3.1.alpha, encoder_sam_blocks.3.1.gamma, encoder_sam_blocks.3.1.total_ops, encoder_sam_blocks.3.1.total_params, encoder_sam_blocks.3.1._inv_sqrt_dk, encoder_sam_blocks.3.1.gamma_scale, encoder_sam_blocks.3.1.norm1.weight, encoder_sam_blocks.3.1.norm1.bias, encoder_sam_blocks.3.1.norm2.weight, encoder_sam_blocks.3.1.norm2.bias, encoder_sam_blocks.3.1.q_proj.weight, encoder_sam_blocks.3.1.q_proj.bias, encoder_sam_blocks.3.1.k_proj.weight, encoder_sam_blocks.3.1.k_proj.bias, encoder_sam_blocks.3.1.v_proj.weight, encoder_sam_blocks.3.1.v_proj.bias, encoder_sam_blocks.3.1.out_proj.weight, encoder_sam_blocks.3.1.out_proj.bias, encoder_sam_blocks.3.1.ffn.0.weight, encoder_sam_blocks.3.1.ffn.0.bias, encoder_sam_blocks.3.1.ffn.3.weight, encoder_sam_blocks.3.1.ffn.3.bias, extra_norms.0.weight, extra_norms.0.bias, extra_norms.1.weight, extra_norms.1.bias, extra_norms.2.weight, extra_norms.2.bias
+
+2025-11-09 03:30:16,750 - builder.py[line:170] - INFO: Initing weights ...
+Weight Decay: 422 Weight No Decay: 532 Total: 954
+2025-11-09 03:30:16,765 - train.py[line:483] - INFO: .............distributed training.............
+load checkpoints/pretrained/DFormerv2_Small_pretrained.pth
+Weight Decay: 422 Weight No Decay: 532 Total: 954
+2025-11-09 03:30:16,958 - train.py[line:502] - INFO: begin trainning:
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1536, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1536, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1536, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1536, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Epoch 1/500 Iter 1/50: lr=0.0000e+00 loss=4.2490 total_loss=4.2490
+Epoch 1/500 Iter 5/50: lr=4.8000e-07 loss=4.0720 total_loss=4.1447
+Epoch 1/500 Iter 10/50: lr=1.0800e-06 loss=4.0235 total_loss=4.1195
+Epoch 1/500 Iter 15/50: lr=1.6800e-06 loss=4.0668 total_loss=4.1243
+Epoch 1/500 Iter 20/50: lr=2.2800e-06 loss=4.1622 total_loss=4.1427
+Epoch 1/500 Iter 25/50: lr=2.8800e-06 loss=4.2028 total_loss=4.1464
+Epoch 1/500 Iter 30/50: lr=3.4800e-06 loss=4.0689 total_loss=4.1391
+Epoch 1/500 Iter 35/50: lr=4.0800e-06 loss=4.1751 total_loss=4.1341
+Epoch 1/500 Iter 40/50: lr=4.6800e-06 loss=3.9722 total_loss=4.1303
+Epoch 1/500 Iter 45/50: lr=5.2800e-06 loss=4.1757 total_loss=4.1292
+Epoch 1/500 Iter 50/50: lr=5.8800e-06 loss=3.8750 total_loss=4.1209
+2025-11-09 03:31:01,580 - train.py[line:611] - INFO: Epoch 1/500 Iter 50/50: lr=5.8800e-06 loss=3.8750 total_loss=4.1209
+2025-11-09 03:31:01,581 - train.py[line:614] - INFO: [Train] epoch 1 - before is_eval()
+2025-11-09 03:31:01,581 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 11
+Validation Iter: 1 / 11
+Validation Iter: 5 / 11
+Validation Iter: 10 / 11
+2025-11-09 03:32:16,951 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/epoch-1_miou_0.74.pth
+2025-11-09 03:32:17,480 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/epoch-1_miou_0.74.pth, Time usage:
+	prepare checkpoint: 0.0075778961181640625, IO: 0.5212826728820801
+miou 0.74 best 0.74
+2025-11-09 03:32:17,480 - train.py[line:717] - INFO: Epoch 1 validation result: mIoU: 0.7400,Best mIoU: 0.7400, 
+2025-11-09 03:32:17,481 - train.py[line:729] - INFO: Avg train time: 44.62s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:31:14
+Epoch 2/500 Iter 1/50: lr=6.0000e-06 loss=3.8701 total_loss=3.8701
+Epoch 2/500 Iter 5/50: lr=6.4800e-06 loss=3.9487 total_loss=3.9570
+Epoch 2/500 Iter 10/50: lr=7.0800e-06 loss=3.6945 total_loss=3.9509
+Epoch 2/500 Iter 15/50: lr=7.6800e-06 loss=3.9910 total_loss=3.9519
+Epoch 2/500 Iter 20/50: lr=8.2800e-06 loss=3.6279 total_loss=3.9306
+Epoch 2/500 Iter 25/50: lr=8.8800e-06 loss=3.8208 total_loss=3.9141
+Epoch 2/500 Iter 30/50: lr=9.4800e-06 loss=3.8221 total_loss=3.9097
+Epoch 2/500 Iter 35/50: lr=1.0080e-05 loss=4.0972 total_loss=3.9098
+Epoch 2/500 Iter 40/50: lr=1.0680e-05 loss=3.8702 total_loss=3.8966
+Epoch 2/500 Iter 45/50: lr=1.1280e-05 loss=3.8167 total_loss=3.8881
+Epoch 2/500 Iter 50/50: lr=1.1880e-05 loss=3.7391 total_loss=3.8742
+2025-11-09 03:33:09,167 - train.py[line:611] - INFO: Epoch 2/500 Iter 50/50: lr=1.1880e-05 loss=3.7391 total_loss=3.8742
+2025-11-09 03:33:09,168 - train.py[line:614] - INFO: [Train] epoch 2 - before is_eval()
+2025-11-09 03:33:09,168 - train.py[line:729] - INFO: Avg train time: 47.44s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:54:49
+Epoch 3/500 Iter 1/50: lr=1.2000e-05 loss=3.5400 total_loss=3.5400
+Epoch 3/500 Iter 5/50: lr=1.2480e-05 loss=3.5545 total_loss=3.6307
+Epoch 3/500 Iter 10/50: lr=1.3080e-05 loss=3.9756 total_loss=3.6963
+Epoch 3/500 Iter 15/50: lr=1.3680e-05 loss=3.5043 total_loss=3.6569
+Epoch 3/500 Iter 20/50: lr=1.4280e-05 loss=3.4918 total_loss=3.6232
+Epoch 3/500 Iter 25/50: lr=1.4880e-05 loss=3.8435 total_loss=3.6024
+Epoch 3/500 Iter 30/50: lr=1.5480e-05 loss=3.3816 total_loss=3.5783
+Epoch 3/500 Iter 35/50: lr=1.6080e-05 loss=3.3636 total_loss=3.5597
+Epoch 3/500 Iter 40/50: lr=1.6680e-05 loss=3.4222 total_loss=3.5417
+Epoch 3/500 Iter 45/50: lr=1.7280e-05 loss=3.2634 total_loss=3.5166
+Epoch 3/500 Iter 50/50: lr=1.7880e-05 loss=3.2396 total_loss=3.4860
+2025-11-09 03:33:52,848 - train.py[line:611] - INFO: Epoch 3/500 Iter 50/50: lr=1.7880e-05 loss=3.2396 total_loss=3.4860
+2025-11-09 03:33:52,849 - train.py[line:614] - INFO: [Train] epoch 3 - before is_eval()
+2025-11-09 03:33:52,849 - train.py[line:729] - INFO: Avg train time: 45.94s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:42:16
+Epoch 4/500 Iter 1/50: lr=1.8000e-05 loss=3.3377 total_loss=3.3377
+Epoch 4/500 Iter 5/50: lr=1.8480e-05 loss=3.1553 total_loss=3.2553
+Epoch 4/500 Iter 10/50: lr=1.9080e-05 loss=3.1155 total_loss=3.1679
+Epoch 4/500 Iter 15/50: lr=1.9680e-05 loss=2.8944 total_loss=3.1289
+Epoch 4/500 Iter 20/50: lr=2.0280e-05 loss=3.1613 total_loss=3.1312
+Epoch 4/500 Iter 25/50: lr=2.0880e-05 loss=2.9289 total_loss=3.1286
+Epoch 4/500 Iter 30/50: lr=2.1480e-05 loss=2.6874 total_loss=3.0903
+Epoch 4/500 Iter 35/50: lr=2.2080e-05 loss=3.2315 total_loss=3.0933
+Epoch 4/500 Iter 40/50: lr=2.2680e-05 loss=3.1562 total_loss=3.0871
+Epoch 4/500 Iter 45/50: lr=2.3280e-05 loss=3.1974 total_loss=3.0589
+Epoch 4/500 Iter 50/50: lr=2.3880e-05 loss=2.7579 total_loss=3.0424
+2025-11-09 03:34:36,764 - train.py[line:611] - INFO: Epoch 4/500 Iter 50/50: lr=2.3880e-05 loss=2.7579 total_loss=3.0424
+2025-11-09 03:34:36,764 - train.py[line:614] - INFO: [Train] epoch 4 - before is_eval()
+2025-11-09 03:34:36,765 - train.py[line:729] - INFO: Avg train time: 45.13s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:35:32
+Epoch 5/500 Iter 1/50: lr=2.4000e-05 loss=2.7416 total_loss=2.7416
+Epoch 5/500 Iter 5/50: lr=2.4480e-05 loss=2.7225 total_loss=2.7872
+Epoch 5/500 Iter 10/50: lr=2.5080e-05 loss=2.4961 total_loss=2.7429
+Epoch 5/500 Iter 15/50: lr=2.5680e-05 loss=2.7646 total_loss=2.7610
+Epoch 5/500 Iter 20/50: lr=2.6280e-05 loss=2.8944 total_loss=2.7424
+Epoch 5/500 Iter 25/50: lr=2.6880e-05 loss=2.3688 total_loss=2.7080
+Epoch 5/500 Iter 30/50: lr=2.7480e-05 loss=2.8223 total_loss=2.7111
+Epoch 5/500 Iter 35/50: lr=2.8080e-05 loss=2.8613 total_loss=2.7005
+Epoch 5/500 Iter 40/50: lr=2.8680e-05 loss=2.8038 total_loss=2.6988
+Epoch 5/500 Iter 45/50: lr=2.9280e-05 loss=2.5866 total_loss=2.6710
+Epoch 5/500 Iter 50/50: lr=2.9880e-05 loss=2.4079 total_loss=2.6581
+2025-11-09 03:35:20,738 - train.py[line:611] - INFO: Epoch 5/500 Iter 50/50: lr=2.9880e-05 loss=2.4079 total_loss=2.6581
+2025-11-09 03:35:20,739 - train.py[line:614] - INFO: [Train] epoch 5 - before is_eval()
+2025-11-09 03:35:20,739 - train.py[line:729] - INFO: Avg train time: 44.66s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:31:41
+Epoch 6/500 Iter 1/50: lr=3.0000e-05 loss=2.3181 total_loss=2.3181
+Epoch 6/500 Iter 5/50: lr=3.0480e-05 loss=2.4865 total_loss=2.4313
+Epoch 6/500 Iter 10/50: lr=3.1080e-05 loss=2.4794 total_loss=2.4792
+Epoch 6/500 Iter 15/50: lr=3.1680e-05 loss=2.7728 total_loss=2.4720
+Epoch 6/500 Iter 20/50: lr=3.2280e-05 loss=2.3224 total_loss=2.4654
+Epoch 6/500 Iter 25/50: lr=3.2880e-05 loss=2.1959 total_loss=2.4319
+Epoch 6/500 Iter 30/50: lr=3.3480e-05 loss=2.3963 total_loss=2.4216
+Epoch 6/500 Iter 35/50: lr=3.4080e-05 loss=2.5094 total_loss=2.3977
+Epoch 6/500 Iter 40/50: lr=3.4680e-05 loss=2.4320 total_loss=2.3915
+Epoch 6/500 Iter 45/50: lr=3.5280e-05 loss=2.1928 total_loss=2.3714
+Epoch 6/500 Iter 50/50: lr=3.5880e-05 loss=2.2456 total_loss=2.3595
+2025-11-09 03:36:04,908 - train.py[line:611] - INFO: Epoch 6/500 Iter 50/50: lr=3.5880e-05 loss=2.2456 total_loss=2.3595
+2025-11-09 03:36:04,908 - train.py[line:614] - INFO: [Train] epoch 6 - before is_eval()
+2025-11-09 03:36:04,909 - train.py[line:729] - INFO: Avg train time: 44.46s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:30:02
+Epoch 7/500 Iter 1/50: lr=3.6000e-05 loss=1.8840 total_loss=1.8840
+Epoch 7/500 Iter 5/50: lr=3.6480e-05 loss=2.2476 total_loss=2.1258
+Epoch 7/500 Iter 10/50: lr=3.7080e-05 loss=2.1998 total_loss=2.1515
+Epoch 7/500 Iter 15/50: lr=3.7680e-05 loss=1.9705 total_loss=2.1581
+Epoch 7/500 Iter 20/50: lr=3.8280e-05 loss=1.9818 total_loss=2.1460
+Epoch 7/500 Iter 25/50: lr=3.8880e-05 loss=2.0778 total_loss=2.1310
+Epoch 7/500 Iter 30/50: lr=3.9480e-05 loss=2.2833 total_loss=2.1351
+Epoch 7/500 Iter 35/50: lr=4.0080e-05 loss=1.8301 total_loss=2.1007
+Epoch 7/500 Iter 40/50: lr=4.0680e-05 loss=1.7198 total_loss=2.0737
+Epoch 7/500 Iter 45/50: lr=4.1280e-05 loss=1.7281 total_loss=2.0691
+Epoch 7/500 Iter 50/50: lr=4.1880e-05 loss=1.8548 total_loss=2.0654
+2025-11-09 03:36:48,892 - train.py[line:611] - INFO: Epoch 7/500 Iter 50/50: lr=4.1880e-05 loss=1.8548 total_loss=2.0654
+2025-11-09 03:36:48,892 - train.py[line:614] - INFO: [Train] epoch 7 - before is_eval()
+2025-11-09 03:36:48,893 - train.py[line:729] - INFO: Avg train time: 44.27s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:28:26
+Epoch 8/500 Iter 1/50: lr=4.2000e-05 loss=1.9943 total_loss=1.9943
+Epoch 8/500 Iter 5/50: lr=4.2480e-05 loss=1.7677 total_loss=1.9233
+Epoch 8/500 Iter 10/50: lr=4.3080e-05 loss=1.8461 total_loss=1.8770
+Epoch 8/500 Iter 15/50: lr=4.3680e-05 loss=1.6522 total_loss=1.8535
+Epoch 8/500 Iter 20/50: lr=4.4280e-05 loss=1.9475 total_loss=1.8589
+Epoch 8/500 Iter 25/50: lr=4.4880e-05 loss=1.9602 total_loss=1.8710
+Epoch 8/500 Iter 30/50: lr=4.5480e-05 loss=1.6843 total_loss=1.8577
+Epoch 8/500 Iter 35/50: lr=4.6080e-05 loss=1.6751 total_loss=1.8549
+Epoch 8/500 Iter 40/50: lr=4.6680e-05 loss=1.9827 total_loss=1.8612
+Epoch 8/500 Iter 45/50: lr=4.7280e-05 loss=1.6708 total_loss=1.8391
+Epoch 8/500 Iter 50/50: lr=4.7880e-05 loss=1.7358 total_loss=1.8325
+2025-11-09 03:37:32,727 - train.py[line:611] - INFO: Epoch 8/500 Iter 50/50: lr=4.7880e-05 loss=1.7358 total_loss=1.8325
+2025-11-09 03:37:32,727 - train.py[line:614] - INFO: [Train] epoch 8 - before is_eval()
+2025-11-09 03:37:32,727 - train.py[line:729] - INFO: Avg train time: 44.09s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:26:59
+Epoch 9/500 Iter 1/50: lr=4.8000e-05 loss=1.8312 total_loss=1.8312
+Epoch 9/500 Iter 5/50: lr=4.8480e-05 loss=1.4098 total_loss=1.7078
+Epoch 9/500 Iter 10/50: lr=4.9080e-05 loss=2.1219 total_loss=1.7666
+Epoch 9/500 Iter 15/50: lr=4.9680e-05 loss=1.4109 total_loss=1.6722
+Epoch 9/500 Iter 20/50: lr=5.0280e-05 loss=1.7247 total_loss=1.6909
+Epoch 9/500 Iter 25/50: lr=5.0880e-05 loss=1.6297 total_loss=1.6952
+Epoch 9/500 Iter 30/50: lr=5.1480e-05 loss=1.5897 total_loss=1.7000
+Epoch 9/500 Iter 35/50: lr=5.2080e-05 loss=1.7366 total_loss=1.6700
+Epoch 9/500 Iter 40/50: lr=5.2680e-05 loss=1.7716 total_loss=1.6855
+Epoch 9/500 Iter 45/50: lr=5.3280e-05 loss=2.0091 total_loss=1.6834
+Epoch 9/500 Iter 50/50: lr=5.3880e-05 loss=1.9626 total_loss=1.6839
+2025-11-09 03:38:16,668 - train.py[line:611] - INFO: Epoch 9/500 Iter 50/50: lr=5.3880e-05 loss=1.9626 total_loss=1.6839
+2025-11-09 03:38:16,669 - train.py[line:614] - INFO: [Train] epoch 9 - before is_eval()
+2025-11-09 03:38:16,669 - train.py[line:729] - INFO: Avg train time: 44.03s, avg eval time: 75.90s, left eval count: 275, ETA: 2025-11-09 15:26:28
+Epoch 10/500 Iter 1/50: lr=5.4000e-05 loss=1.5867 total_loss=1.5867
+Epoch 10/500 Iter 5/50: lr=5.4480e-05 loss=1.5243 total_loss=1.5894
+Epoch 10/500 Iter 10/50: lr=5.5080e-05 loss=1.5406 total_loss=1.5672
+Epoch 10/500 Iter 15/50: lr=5.5680e-05 loss=1.4965 total_loss=1.5137
+Epoch 10/500 Iter 20/50: lr=5.6280e-05 loss=1.3602 total_loss=1.5454
+Epoch 10/500 Iter 25/50: lr=5.6880e-05 loss=1.3306 total_loss=1.5324
+Epoch 10/500 Iter 30/50: lr=5.7480e-05 loss=1.6500 total_loss=1.5218
+Epoch 10/500 Iter 35/50: lr=5.8080e-05 loss=1.4332 total_loss=1.5305
+Epoch 10/500 Iter 40/50: lr=5.8680e-05 loss=1.3383 total_loss=1.5111
+Epoch 10/500 Iter 45/50: lr=5.9280e-05 loss=1.5109 total_loss=1.5101
+Epoch 10/500 Iter 50/50: lr=5.9880e-05 loss=1.4090 total_loss=1.4964
+2025-11-09 03:38:59,950 - train.py[line:611] - INFO: Epoch 10/500 Iter 50/50: lr=5.9880e-05 loss=1.4090 total_loss=1.4964
+2025-11-09 03:38:59,951 - train.py[line:614] - INFO: [Train] epoch 10 - before is_eval()
+2025-11-09 03:38:59,951 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 11
+Validation Iter: 1 / 11
+Validation Iter: 5 / 11
+Validation Iter: 10 / 11
+2025-11-09 03:40:10,418 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/epoch-10_miou_22.13.pth
+2025-11-09 03:40:10,940 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_S_20251109-032959/epoch-10_miou_22.13.pth, Time usage:
+	prepare checkpoint: 0.007064342498779297, IO: 0.5141773223876953
+miou 22.13 best 22.13
+2025-11-09 03:40:10,941 - train.py[line:717] - INFO: Epoch 10 validation result: mIoU: 22.1300,Best mIoU: 22.1300, 
+2025-11-09 03:40:10,941 - train.py[line:729] - INFO: Avg train time: 43.73s, avg eval time: 73.94s, left eval count: 274, ETA: 2025-11-09 15:14:57
+Epoch 11/500 Iter 1/50: lr=5.8919e-05 loss=1.2528 total_loss=1.2528
+Epoch 11/500 Iter 5/50: lr=5.8910e-05 loss=1.2657 total_loss=1.2437
+Epoch 11/500 Iter 10/50: lr=5.8899e-05 loss=1.5523 total_loss=1.3119
+Epoch 11/500 Iter 15/50: lr=5.8889e-05 loss=1.2827 total_loss=1.3164
+Epoch 11/500 Iter 20/50: lr=5.8878e-05 loss=1.1280 total_loss=1.3557
+Epoch 11/500 Iter 25/50: lr=5.8867e-05 loss=1.2772 total_loss=1.3584
+Epoch 11/500 Iter 30/50: lr=5.8856e-05 loss=1.1364 total_loss=1.3557
+Epoch 11/500 Iter 35/50: lr=5.8845e-05 loss=1.4671 total_loss=1.3563
+Epoch 11/500 Iter 40/50: lr=5.8834e-05 loss=1.2331 total_loss=1.3563
+Epoch 11/500 Iter 45/50: lr=5.8824e-05 loss=1.2238 total_loss=1.3489
+Epoch 11/500 Iter 50/50: lr=5.8813e-05 loss=1.2948 total_loss=1.3378
+2025-11-09 03:41:02,423 - train.py[line:611] - INFO: Epoch 11/500 Iter 50/50: lr=5.8813e-05 loss=1.2948 total_loss=1.3378
+2025-11-09 03:41:02,423 - train.py[line:614] - INFO: [Train] epoch 11 - before is_eval()
+2025-11-09 03:41:02,424 - train.py[line:729] - INFO: Avg train time: 46.83s, avg eval time: 73.94s, left eval count: 274, ETA: 2025-11-09 15:40:20
+Epoch 12/500 Iter 1/50: lr=5.8811e-05 loss=1.2288 total_loss=1.2288
+Epoch 12/500 Iter 5/50: lr=5.8802e-05 loss=1.2634 total_loss=1.2442
+Epoch 12/500 Iter 10/50: lr=5.8791e-05 loss=1.2123 total_loss=1.2237
+Epoch 12/500 Iter 15/50: lr=5.8780e-05 loss=1.3200 total_loss=1.2426
+Epoch 12/500 Iter 20/50: lr=5.8770e-05 loss=1.1901 total_loss=1.2230
+Epoch 12/500 Iter 25/50: lr=5.8759e-05 loss=1.3252 total_loss=1.2200
+Epoch 12/500 Iter 30/50: lr=5.8748e-05 loss=1.5198 total_loss=1.2172
+Epoch 12/500 Iter 35/50: lr=5.8737e-05 loss=1.1840 total_loss=1.2118
+Epoch 12/500 Iter 40/50: lr=5.8726e-05 loss=1.1992 total_loss=1.2209
+Epoch 12/500 Iter 45/50: lr=5.8715e-05 loss=1.0855 total_loss=1.2182
+Epoch 12/500 Iter 50/50: lr=5.8705e-05 loss=0.9711 total_loss=1.2074
+2025-11-09 03:41:46,332 - train.py[line:611] - INFO: Epoch 12/500 Iter 50/50: lr=5.8705e-05 loss=0.9711 total_loss=1.2074
+2025-11-09 03:41:46,333 - train.py[line:614] - INFO: [Train] epoch 12 - before is_eval()
+2025-11-09 03:41:46,333 - train.py[line:729] - INFO: Avg train time: 45.66s, avg eval time: 73.94s, left eval count: 274, ETA: 2025-11-09 15:30:46
+Epoch 13/500 Iter 1/50: lr=5.8702e-05 loss=1.0420 total_loss=1.0420
+Epoch 13/500 Iter 5/50: lr=5.8694e-05 loss=1.0474 total_loss=1.1143
+Epoch 13/500 Iter 10/50: lr=5.8683e-05 loss=1.2676 total_loss=1.1304
+Epoch 13/500 Iter 15/50: lr=5.8672e-05 loss=1.1133 total_loss=1.1705
+Epoch 13/500 Iter 20/50: lr=5.8661e-05 loss=1.1340 total_loss=1.1461
+Epoch 13/500 Iter 25/50: lr=5.8650e-05 loss=1.0919 total_loss=1.1530
+Epoch 13/500 Iter 30/50: lr=5.8640e-05 loss=1.0092 total_loss=1.1336
+slurmstepd: error: *** JOB 5376707 ON lrz-hgx-h100-003 CANCELLED AT 2025-11-09T03:42:15 ***

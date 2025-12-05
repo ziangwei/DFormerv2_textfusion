@@ -1,0 +1,67 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1112 20:28:19.737000 2035507 site-packages/torch/distributed/run.py:766] 
+W1112 20:28:19.737000 2035507 site-packages/torch/distributed/run.py:766] *****************************************
+W1112 20:28:19.737000 2035507 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1112 20:28:19.737000 2035507 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-12 20:28:26,672 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-12 20:28:26,681 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+2025-11-12 20:28:26,813 - train.py[line:221] - WARNING: pad_SUNRGBD is only used for SUNRGBD dataset
+2025-11-12 20:28:26,814 - train.py[line:234] - INFO: ✓ Deterministic training enabled with seed: 53384 (from CLI argument)
+2025-11-12 20:28:26,814 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-003
+2025-11-12 20:28:26,815 - train.py[line:362] - INFO: [warmup] rank0 start
+1
+pad_SUNRGBD is only used for SUNRGBD dataset
+[rank1]:[W1112 20:28:27.355228154 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+`torch_dtype` is deprecated! Use `dtype` instead!
+2025-11-12 20:28:27,188 - configuration_clip.py[line:258] - INFO: `text_config` is `None`. Initializing the `JinaCLIPTextConfig` with default values.
+2025-11-12 20:28:27,188 - configuration_clip.py[line:265] - INFO: `vision_config` is `None`. initializing the `JinaCLIPVisionConfig` with default values.
+`torch_dtype` is deprecated! Use `dtype` instead!
+/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/modules/transformers_modules/jinaai/jina_hyphen_clip_hyphen_implementation/39e6a55ae971b59bea6e44675d237c99762e7ee2/modeling_clip.py:140: UserWarning: Flash attention is not installed. Check https://github.com/Dao-AILab/flash-attention?tab=readme-ov-file#installation-and-features for installation instructions, disabling
+  warnings.warn(
+/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/modules/transformers_modules/jinaai/jina_hyphen_clip_hyphen_implementation/39e6a55ae971b59bea6e44675d237c99762e7ee2/modeling_clip.py:175: UserWarning: xFormers is not installed. Check https://github.com/facebookresearch/xformers?tab=readme-ov-file#installing-xformers for installation instructions, disabling
+  warnings.warn(
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:00<00:00,  1.70it/s]Encoding: 100%|██████████| 1/1 [00:00<00:00,  1.70it/s]
+2025-11-12 20:28:44,099 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-12 20:28:44,099 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-12 20:28:44,099 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+[rank0]:[W1112 20:28:44.386484370 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+2025-11-12 20:28:45,674 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-12 20:28:45,675 - train.py[line:377] - INFO: [prebuild] rank0 start
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:00<00:00,  3.96it/s]Encoding: 100%|██████████| 1/1 [00:00<00:00,  3.95it/s]
+
+
+W1112 20:28:53.069000 2035507 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2035549 closing signal SIGTERM
+--- Logging error ---
+E1112 20:28:53.760000 2035507 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 2035548) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-12_20:28:53
+  host      : lrz-hgx-h100-003
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 2035548)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

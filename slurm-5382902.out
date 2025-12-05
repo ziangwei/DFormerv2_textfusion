@@ -1,0 +1,1349 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1114 09:46:01.435000 207940 site-packages/torch/distributed/run.py:766] 
+W1114 09:46:01.435000 207940 site-packages/torch/distributed/run.py:766] *****************************************
+W1114 09:46:01.435000 207940 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1114 09:46:01.435000 207940 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-14 09:46:11,168 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+2025-11-14 09:46:11,169 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+True
+0
+1
+2025-11-14 09:46:13,380 - train.py[line:259] - INFO: ✓ Non-deterministic training (faster) with seed: 96002
+2025-11-14 09:46:13,380 - train.py[line:260] - INFO:   To reproduce: modify config.seed=96002 and use --use_seed
+2025-11-14 09:46:13,380 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-002
+2025-11-14 09:46:13,380 - train.py[line:362] - INFO: [warmup] rank0 start
+2025-11-14 09:46:14,465 - factory.py[line:326] - INFO: Parsing model identifier. Schema: None, Identifier: ViT-B-16
+2025-11-14 09:46:14,465 - factory.py[line:403] - INFO: Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+2025-11-14 09:46:14,619 - factory.py[line:500] - INFO: Instantiating model architecture: CLIP
+2025-11-14 09:46:16,201 - factory.py[line:507] - INFO: Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-14 09:46:16,597 - factory.py[line:621] - INFO: Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-11-14 09:46:16,597 - factory.py[line:624] - INFO: Model ViT-B-16 creation process complete.
+2025-11-14 09:46:16,598 - factory.py[line:649] - INFO: Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+2025-11-14 09:46:16,598 - factory.py[line:694] - INFO: Attempting to load config from built-in: ViT-B-16
+2025-11-14 09:46:16,598 - factory.py[line:749] - INFO: Using default SimpleTokenizer.
+2025-11-14 09:46:17,090 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-14 09:46:17,091 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-14 09:46:17,091 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+2025-11-14 09:46:17,091 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-14 09:46:17,093 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-14 09:46:18,776 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-14 09:46:18,777 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: imglabels.
+2025-11-14 09:46:18,788 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-14 09:46:18,788 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-14 09:46:20,271 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-14 09:46:20,272 - train.py[line:397] - INFO: Using larger validation batch size for SUNRGBD: 32
+2025-11-14 09:46:21,695 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-14 09:46:21,696 - train.py[line:409] - INFO: val dataset len:316
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-14 09:46:24,725 - train.py[line:425] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'actual_seed': 96002,
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_L',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/checkpoint',
+    'checkpoint_start_epoch': 160,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor_mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'fridge',
+                       'tv',
+                       'paper',
+                       'towel',
+                       'shower_curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night_stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag'],
+    'dataset_name': 'SUNRGBD',
+    'dataset_path': 'datasets/SUNRGBD',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 1024,
+    'drop_path_rate': 0.2,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 480],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [0.5, 0.75, 1, 1.25, 1.5],
+    'eval_source': 'datasets/SUNRGBD/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/SUNRGBD/labels',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/SUNRGBD/out2.json',
+    'image_width': 480,
+    'is_test': True,
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/log_2025_11_14_09_46_11.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/log_2025_11_14_09_46_11.log',
+    'lr': 6e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 6,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 300,
+    'niters_per_epoch': 331,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 37,
+    'num_eval_imgs': 5050,
+    'num_train_imgs': 5285,
+    'num_workers': 2,
+    'optimizer': 'AdamW',
+    'pad': True,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Large_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/SUNRGBD/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_encoder_learnable_temp': True,
+    'sam_encoder_use_cosine': True,
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': True,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/tb',
+    'text_encoder': 'clip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'imglabels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/SUNRGBD/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/val_2025_11_14_09_46_11.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/SUNRGBD/Depth'}
+2025-11-14 09:46:24,727 - train.py[line:427] - INFO: args parsed:
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: config: local_configs.SUNRGBD.DFormerv2_L
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: gpus: 2
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: verbose: False
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: epochs: 0
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: show_image: False
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: save_path: None
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: checkpoint_dir: None
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: continue_fpath: None
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: sliding: False
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: compile: False
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: compile_mode: default
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: syncbn: True
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: mst: False
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: amp: False
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: val_amp: True
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: pad_SUNRGBD: True
+2025-11-14 09:46:24,727 - train.py[line:429] - INFO: use_seed: False
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: seed: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: local_rank: 0
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: text_source: imglabels
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: text_encoder: clip
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: text_encoder_name: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: text_feature_dim: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: label_txt_path: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: caption_json_path: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: text_template_set: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: max_templates_per_label: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: max_caption_sentences: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: caption_topk: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: caption_topk_mode: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: image_labels_json_path: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_enc_stages: 1,2,3
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_dec_stages: 1,2,3
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: superpower: True
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_decoder_use_cosine: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_decoder_learnable_temp: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_decoder_logit_init: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_encoder_use_cosine: True
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_encoder_learnable_temp: True
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: sam_encoder_logit_init: None
+2025-11-14 09:46:24,728 - train.py[line:429] - INFO: devices: 
+2025-11-14 09:46:24,729 - train.py[line:429] - INFO: port: 16005
+2025-11-14 09:46:24,729 - train.py[line:435] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-14 09:46:27,135 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-14 09:46:27,291 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+Weight Decay: 612 Weight No Decay: 690 Total: 1302
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+The model and loaded state dict do not match exactly
+
+missing keys in source state_dict: encoder_sam_blocks.1.0.encoder_logit_scale, encoder_sam_blocks.1.0.gamma, encoder_sam_blocks.1.0.total_ops, encoder_sam_blocks.1.0.total_params, encoder_sam_blocks.1.0._inv_sqrt_dk, encoder_sam_blocks.1.0.gamma_scale, encoder_sam_blocks.1.0.q_proj.weight, encoder_sam_blocks.1.0.q_proj.bias, encoder_sam_blocks.1.0.k_proj.weight, encoder_sam_blocks.1.0.k_proj.bias, encoder_sam_blocks.1.0.v_proj.weight, encoder_sam_blocks.1.0.v_proj.bias, encoder_sam_blocks.1.0.out_proj.weight, encoder_sam_blocks.1.0.out_proj.bias, encoder_sam_blocks.1.1.encoder_logit_scale, encoder_sam_blocks.1.1.gamma, encoder_sam_blocks.1.1.total_ops, encoder_sam_blocks.1.1.total_params, encoder_sam_blocks.1.1._inv_sqrt_dk, encoder_sam_blocks.1.1.gamma_scale, encoder_sam_blocks.1.1.q_proj.weight, encoder_sam_blocks.1.1.q_proj.bias, encoder_sam_blocks.1.1.k_proj.weight, encoder_sam_blocks.1.1.k_proj.bias, encoder_sam_blocks.1.1.v_proj.weight, encoder_sam_blocks.1.1.v_proj.bias, encoder_sam_blocks.1.1.out_proj.weight, encoder_sam_blocks.1.1.out_proj.bias, encoder_sam_blocks.1.2.encoder_logit_scale, encoder_sam_blocks.1.2.gamma, encoder_sam_blocks.1.2.total_ops, encoder_sam_blocks.1.2.total_params, encoder_sam_blocks.1.2._inv_sqrt_dk, encoder_sam_blocks.1.2.gamma_scale, encoder_sam_blocks.1.2.q_proj.weight, encoder_sam_blocks.1.2.q_proj.bias, encoder_sam_blocks.1.2.k_proj.weight, encoder_sam_blocks.1.2.k_proj.bias, encoder_sam_blocks.1.2.v_proj.weight, encoder_sam_blocks.1.2.v_proj.bias, encoder_sam_blocks.1.2.out_proj.weight, encoder_sam_blocks.1.2.out_proj.bias, encoder_sam_blocks.1.3.encoder_logit_scale, encoder_sam_blocks.1.3.gamma, encoder_sam_blocks.1.3.total_ops, encoder_sam_blocks.1.3.total_params, encoder_sam_blocks.1.3._inv_sqrt_dk, encoder_sam_blocks.1.3.gamma_scale, encoder_sam_blocks.1.3.q_proj.weight, encoder_sam_blocks.1.3.q_proj.bias, encoder_sam_blocks.1.3.k_proj.weight, encoder_sam_blocks.1.3.k_proj.bias, encoder_sam_blocks.1.3.v_proj.weight, encoder_sam_blocks.1.3.v_proj.bias, encoder_sam_blocks.1.3.out_proj.weight, encoder_sam_blocks.1.3.out_proj.bias, encoder_sam_blocks.2.0.encoder_logit_scale, encoder_sam_blocks.2.0.gamma, encoder_sam_blocks.2.0.total_ops, encoder_sam_blocks.2.0.total_params, encoder_sam_blocks.2.0._inv_sqrt_dk, encoder_sam_blocks.2.0.gamma_scale, encoder_sam_blocks.2.0.q_proj.weight, encoder_sam_blocks.2.0.q_proj.bias, encoder_sam_blocks.2.0.k_proj.weight, encoder_sam_blocks.2.0.k_proj.bias, encoder_sam_blocks.2.0.v_proj.weight, encoder_sam_blocks.2.0.v_proj.bias, encoder_sam_blocks.2.0.out_proj.weight, encoder_sam_blocks.2.0.out_proj.bias, encoder_sam_blocks.2.1.encoder_logit_scale, encoder_sam_blocks.2.1.gamma, encoder_sam_blocks.2.1.total_ops, encoder_sam_blocks.2.1.total_params, encoder_sam_blocks.2.1._inv_sqrt_dk, encoder_sam_blocks.2.1.gamma_scale, encoder_sam_blocks.2.1.q_proj.weight, encoder_sam_blocks.2.1.q_proj.bias, encoder_sam_blocks.2.1.k_proj.weight, encoder_sam_blocks.2.1.k_proj.bias, encoder_sam_blocks.2.1.v_proj.weight, encoder_sam_blocks.2.1.v_proj.bias, encoder_sam_blocks.2.1.out_proj.weight, encoder_sam_blocks.2.1.out_proj.bias, encoder_sam_blocks.2.2.encoder_logit_scale, encoder_sam_blocks.2.2.gamma, encoder_sam_blocks.2.2.total_ops, encoder_sam_blocks.2.2.total_params, encoder_sam_blocks.2.2._inv_sqrt_dk, encoder_sam_blocks.2.2.gamma_scale, encoder_sam_blocks.2.2.q_proj.weight, encoder_sam_blocks.2.2.q_proj.bias, encoder_sam_blocks.2.2.k_proj.weight, encoder_sam_blocks.2.2.k_proj.bias, encoder_sam_blocks.2.2.v_proj.weight, encoder_sam_blocks.2.2.v_proj.bias, encoder_sam_blocks.2.2.out_proj.weight, encoder_sam_blocks.2.2.out_proj.bias, encoder_sam_blocks.2.3.encoder_logit_scale, encoder_sam_blocks.2.3.gamma, encoder_sam_blocks.2.3.total_ops, encoder_sam_blocks.2.3.total_params, encoder_sam_blocks.2.3._inv_sqrt_dk, encoder_sam_blocks.2.3.gamma_scale, encoder_sam_blocks.2.3.q_proj.weight, encoder_sam_blocks.2.3.q_proj.bias, encoder_sam_blocks.2.3.k_proj.weight, encoder_sam_blocks.2.3.k_proj.bias, encoder_sam_blocks.2.3.v_proj.weight, encoder_sam_blocks.2.3.v_proj.bias, encoder_sam_blocks.2.3.out_proj.weight, encoder_sam_blocks.2.3.out_proj.bias, encoder_sam_blocks.3.0.encoder_logit_scale, encoder_sam_blocks.3.0.gamma, encoder_sam_blocks.3.0.total_ops, encoder_sam_blocks.3.0.total_params, encoder_sam_blocks.3.0._inv_sqrt_dk, encoder_sam_blocks.3.0.gamma_scale, encoder_sam_blocks.3.0.q_proj.weight, encoder_sam_blocks.3.0.q_proj.bias, encoder_sam_blocks.3.0.k_proj.weight, encoder_sam_blocks.3.0.k_proj.bias, encoder_sam_blocks.3.0.v_proj.weight, encoder_sam_blocks.3.0.v_proj.bias, encoder_sam_blocks.3.0.out_proj.weight, encoder_sam_blocks.3.0.out_proj.bias, encoder_sam_blocks.3.1.encoder_logit_scale, encoder_sam_blocks.3.1.gamma, encoder_sam_blocks.3.1.total_ops, encoder_sam_blocks.3.1.total_params, encoder_sam_blocks.3.1._inv_sqrt_dk, encoder_sam_blocks.3.1.gamma_scale, encoder_sam_blocks.3.1.q_proj.weight, encoder_sam_blocks.3.1.q_proj.bias, encoder_sam_blocks.3.1.k_proj.weight, encoder_sam_blocks.3.1.k_proj.bias, encoder_sam_blocks.3.1.v_proj.weight, encoder_sam_blocks.3.1.v_proj.bias, encoder_sam_blocks.3.1.out_proj.weight, encoder_sam_blocks.3.1.out_proj.bias
+
+2025-11-14 09:46:28,587 - builder.py[line:170] - INFO: Initing weights ...
+Weight Decay: 612 Weight No Decay: 690 Total: 1302
+2025-11-14 09:46:28,623 - train.py[line:483] - INFO: .............distributed training.............
+2025-11-14 09:46:28,738 - train.py[line:502] - INFO: begin trainning:
+[rank1]:[W1114 09:46:32.311620585 reducer.cpp:1430] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W1114 09:46:32.315526963 reducer.cpp:1430] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1920, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1920, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1920, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1920, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Epoch 1/300 Iter 1/331: lr=0.0000e+00 loss=4.1565 total_loss=4.1565
+Epoch 1/300 Iter 33/331: lr=5.8006e-07 loss=3.8092 total_loss=4.0175
+Epoch 1/300 Iter 66/331: lr=1.1782e-06 loss=3.7722 total_loss=4.0051
+Epoch 1/300 Iter 99/331: lr=1.7764e-06 loss=3.6500 total_loss=3.9882
+Epoch 1/300 Iter 132/331: lr=2.3746e-06 loss=3.7721 total_loss=3.9462
+Epoch 1/300 Iter 165/331: lr=2.9728e-06 loss=3.6133 total_loss=3.8941
+Epoch 1/300 Iter 198/331: lr=3.5710e-06 loss=3.9537 total_loss=3.8389
+Epoch 1/300 Iter 231/331: lr=4.1692e-06 loss=3.2742 total_loss=3.7687
+Epoch 1/300 Iter 264/331: lr=4.7674e-06 loss=2.9173 total_loss=3.6967
+Epoch 1/300 Iter 297/331: lr=5.3656e-06 loss=2.7031 total_loss=3.6222
+Epoch 1/300 Iter 330/331: lr=5.9637e-06 loss=2.7889 total_loss=3.5448
+2025-11-14 09:49:35,900 - train.py[line:611] - INFO: Epoch 1/300 Iter 331/331: lr=5.9819e-06 loss=2.5517 total_loss=3.5418
+2025-11-14 09:49:35,901 - train.py[line:614] - INFO: [Train] epoch 1 - before is_eval()
+2025-11-14 09:49:35,901 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 158
+Evaluating...
+2025-11-14 09:49:36,155 - val_mm.py[line:21] - INFO: [evaluate] Entered evaluate(), dataloader size=158
+Evaluating...
+2025-11-14 09:49:37,908 - val_mm.py[line:33] - INFO: [evaluate] Batch 0/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 1 / 158
+2025-11-14 09:49:40,884 - val_mm.py[line:33] - INFO: [evaluate] Batch 1/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:41,315 - val_mm.py[line:33] - INFO: [evaluate] Batch 2/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:41,753 - val_mm.py[line:33] - INFO: [evaluate] Batch 3/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:42,190 - val_mm.py[line:33] - INFO: [evaluate] Batch 4/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:42,628 - val_mm.py[line:33] - INFO: [evaluate] Batch 5/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:43,067 - val_mm.py[line:33] - INFO: [evaluate] Batch 6/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:43,508 - val_mm.py[line:33] - INFO: [evaluate] Batch 7/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:43,947 - val_mm.py[line:33] - INFO: [evaluate] Batch 8/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:44,384 - val_mm.py[line:33] - INFO: [evaluate] Batch 9/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:44,824 - val_mm.py[line:33] - INFO: [evaluate] Batch 10/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:45,263 - val_mm.py[line:33] - INFO: [evaluate] Batch 11/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:45,708 - val_mm.py[line:33] - INFO: [evaluate] Batch 12/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:46,155 - val_mm.py[line:33] - INFO: [evaluate] Batch 13/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:46,593 - val_mm.py[line:33] - INFO: [evaluate] Batch 14/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:47,034 - val_mm.py[line:33] - INFO: [evaluate] Batch 15/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:47,472 - val_mm.py[line:33] - INFO: [evaluate] Batch 16/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:47,915 - val_mm.py[line:33] - INFO: [evaluate] Batch 17/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:48,356 - val_mm.py[line:33] - INFO: [evaluate] Batch 18/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:48,800 - val_mm.py[line:33] - INFO: [evaluate] Batch 19/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:49,241 - val_mm.py[line:33] - INFO: [evaluate] Batch 20/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:49,702 - val_mm.py[line:33] - INFO: [evaluate] Batch 21/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:50,139 - val_mm.py[line:33] - INFO: [evaluate] Batch 22/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:50,577 - val_mm.py[line:33] - INFO: [evaluate] Batch 23/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:51,022 - val_mm.py[line:33] - INFO: [evaluate] Batch 24/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:51,467 - val_mm.py[line:33] - INFO: [evaluate] Batch 25/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:51,918 - val_mm.py[line:33] - INFO: [evaluate] Batch 26/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:52,361 - val_mm.py[line:33] - INFO: [evaluate] Batch 27/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:52,798 - val_mm.py[line:33] - INFO: [evaluate] Batch 28/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:53,238 - val_mm.py[line:33] - INFO: [evaluate] Batch 29/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:53,691 - val_mm.py[line:33] - INFO: [evaluate] Batch 30/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:54,138 - val_mm.py[line:33] - INFO: [evaluate] Batch 31/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:54,587 - val_mm.py[line:33] - INFO: [evaluate] Batch 32/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:55,029 - val_mm.py[line:33] - INFO: [evaluate] Batch 33/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:55,467 - val_mm.py[line:33] - INFO: [evaluate] Batch 34/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:55,919 - val_mm.py[line:33] - INFO: [evaluate] Batch 35/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:56,355 - val_mm.py[line:33] - INFO: [evaluate] Batch 36/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:56,808 - val_mm.py[line:33] - INFO: [evaluate] Batch 37/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:57,245 - val_mm.py[line:33] - INFO: [evaluate] Batch 38/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:57,686 - val_mm.py[line:33] - INFO: [evaluate] Batch 39/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:58,123 - val_mm.py[line:33] - INFO: [evaluate] Batch 40/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:58,568 - val_mm.py[line:33] - INFO: [evaluate] Batch 41/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:59,013 - val_mm.py[line:33] - INFO: [evaluate] Batch 42/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:59,451 - val_mm.py[line:33] - INFO: [evaluate] Batch 43/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:49:59,894 - val_mm.py[line:33] - INFO: [evaluate] Batch 44/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:00,336 - val_mm.py[line:33] - INFO: [evaluate] Batch 45/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:00,784 - val_mm.py[line:33] - INFO: [evaluate] Batch 46/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:01,227 - val_mm.py[line:33] - INFO: [evaluate] Batch 47/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:01,666 - val_mm.py[line:33] - INFO: [evaluate] Batch 48/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:02,107 - val_mm.py[line:33] - INFO: [evaluate] Batch 49/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:02,554 - val_mm.py[line:33] - INFO: [evaluate] Batch 50/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:02,996 - val_mm.py[line:33] - INFO: [evaluate] Batch 51/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:03,435 - val_mm.py[line:33] - INFO: [evaluate] Batch 52/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:03,885 - val_mm.py[line:33] - INFO: [evaluate] Batch 53/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:04,328 - val_mm.py[line:33] - INFO: [evaluate] Batch 54/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:04,769 - val_mm.py[line:33] - INFO: [evaluate] Batch 55/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:05,216 - val_mm.py[line:33] - INFO: [evaluate] Batch 56/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:05,657 - val_mm.py[line:33] - INFO: [evaluate] Batch 57/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:06,095 - val_mm.py[line:33] - INFO: [evaluate] Batch 58/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:06,546 - val_mm.py[line:33] - INFO: [evaluate] Batch 59/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:06,986 - val_mm.py[line:33] - INFO: [evaluate] Batch 60/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:07,438 - val_mm.py[line:33] - INFO: [evaluate] Batch 61/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:07,880 - val_mm.py[line:33] - INFO: [evaluate] Batch 62/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:08,330 - val_mm.py[line:33] - INFO: [evaluate] Batch 63/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:08,769 - val_mm.py[line:33] - INFO: [evaluate] Batch 64/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:09,212 - val_mm.py[line:33] - INFO: [evaluate] Batch 65/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:09,650 - val_mm.py[line:33] - INFO: [evaluate] Batch 66/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:10,102 - val_mm.py[line:33] - INFO: [evaluate] Batch 67/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:10,543 - val_mm.py[line:33] - INFO: [evaluate] Batch 68/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:10,983 - val_mm.py[line:33] - INFO: [evaluate] Batch 69/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:11,428 - val_mm.py[line:33] - INFO: [evaluate] Batch 70/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:11,871 - val_mm.py[line:33] - INFO: [evaluate] Batch 71/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:12,317 - val_mm.py[line:33] - INFO: [evaluate] Batch 72/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:12,758 - val_mm.py[line:33] - INFO: [evaluate] Batch 73/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:13,207 - val_mm.py[line:33] - INFO: [evaluate] Batch 74/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:13,650 - val_mm.py[line:33] - INFO: [evaluate] Batch 75/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:14,094 - val_mm.py[line:33] - INFO: [evaluate] Batch 76/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:14,538 - val_mm.py[line:33] - INFO: [evaluate] Batch 77/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:14,980 - val_mm.py[line:33] - INFO: [evaluate] Batch 78/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 79 / 158
+2025-11-14 09:50:15,423 - val_mm.py[line:33] - INFO: [evaluate] Batch 79/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:15,873 - val_mm.py[line:33] - INFO: [evaluate] Batch 80/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:16,315 - val_mm.py[line:33] - INFO: [evaluate] Batch 81/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:16,760 - val_mm.py[line:33] - INFO: [evaluate] Batch 82/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:17,203 - val_mm.py[line:33] - INFO: [evaluate] Batch 83/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:17,646 - val_mm.py[line:33] - INFO: [evaluate] Batch 84/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:18,099 - val_mm.py[line:33] - INFO: [evaluate] Batch 85/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:18,543 - val_mm.py[line:33] - INFO: [evaluate] Batch 86/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:18,986 - val_mm.py[line:33] - INFO: [evaluate] Batch 87/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:19,429 - val_mm.py[line:33] - INFO: [evaluate] Batch 88/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:19,873 - val_mm.py[line:33] - INFO: [evaluate] Batch 89/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:20,316 - val_mm.py[line:33] - INFO: [evaluate] Batch 90/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:20,760 - val_mm.py[line:33] - INFO: [evaluate] Batch 91/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:21,203 - val_mm.py[line:33] - INFO: [evaluate] Batch 92/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:21,646 - val_mm.py[line:33] - INFO: [evaluate] Batch 93/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:22,090 - val_mm.py[line:33] - INFO: [evaluate] Batch 94/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:22,534 - val_mm.py[line:33] - INFO: [evaluate] Batch 95/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:22,982 - val_mm.py[line:33] - INFO: [evaluate] Batch 96/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:23,426 - val_mm.py[line:33] - INFO: [evaluate] Batch 97/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:23,875 - val_mm.py[line:33] - INFO: [evaluate] Batch 98/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:24,320 - val_mm.py[line:33] - INFO: [evaluate] Batch 99/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:24,761 - val_mm.py[line:33] - INFO: [evaluate] Batch 100/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:25,205 - val_mm.py[line:33] - INFO: [evaluate] Batch 101/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:25,647 - val_mm.py[line:33] - INFO: [evaluate] Batch 102/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:26,092 - val_mm.py[line:33] - INFO: [evaluate] Batch 103/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:26,535 - val_mm.py[line:33] - INFO: [evaluate] Batch 104/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:26,998 - val_mm.py[line:33] - INFO: [evaluate] Batch 105/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:27,438 - val_mm.py[line:33] - INFO: [evaluate] Batch 106/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:27,889 - val_mm.py[line:33] - INFO: [evaluate] Batch 107/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:28,330 - val_mm.py[line:33] - INFO: [evaluate] Batch 108/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:28,775 - val_mm.py[line:33] - INFO: [evaluate] Batch 109/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:29,218 - val_mm.py[line:33] - INFO: [evaluate] Batch 110/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:29,663 - val_mm.py[line:33] - INFO: [evaluate] Batch 111/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:30,102 - val_mm.py[line:33] - INFO: [evaluate] Batch 112/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:30,547 - val_mm.py[line:33] - INFO: [evaluate] Batch 113/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:30,988 - val_mm.py[line:33] - INFO: [evaluate] Batch 114/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:31,435 - val_mm.py[line:33] - INFO: [evaluate] Batch 115/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:31,874 - val_mm.py[line:33] - INFO: [evaluate] Batch 116/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:32,320 - val_mm.py[line:33] - INFO: [evaluate] Batch 117/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:32,760 - val_mm.py[line:33] - INFO: [evaluate] Batch 118/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:33,208 - val_mm.py[line:33] - INFO: [evaluate] Batch 119/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:33,656 - val_mm.py[line:33] - INFO: [evaluate] Batch 120/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:34,100 - val_mm.py[line:33] - INFO: [evaluate] Batch 121/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:34,540 - val_mm.py[line:33] - INFO: [evaluate] Batch 122/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:34,986 - val_mm.py[line:33] - INFO: [evaluate] Batch 123/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:35,426 - val_mm.py[line:33] - INFO: [evaluate] Batch 124/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:35,872 - val_mm.py[line:33] - INFO: [evaluate] Batch 125/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:36,313 - val_mm.py[line:33] - INFO: [evaluate] Batch 126/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:36,767 - val_mm.py[line:33] - INFO: [evaluate] Batch 127/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:37,205 - val_mm.py[line:33] - INFO: [evaluate] Batch 128/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:37,651 - val_mm.py[line:33] - INFO: [evaluate] Batch 129/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:38,095 - val_mm.py[line:33] - INFO: [evaluate] Batch 130/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:38,546 - val_mm.py[line:33] - INFO: [evaluate] Batch 131/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:38,992 - val_mm.py[line:33] - INFO: [evaluate] Batch 132/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:39,442 - val_mm.py[line:33] - INFO: [evaluate] Batch 133/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:39,883 - val_mm.py[line:33] - INFO: [evaluate] Batch 134/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:40,331 - val_mm.py[line:33] - INFO: [evaluate] Batch 135/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:40,778 - val_mm.py[line:33] - INFO: [evaluate] Batch 136/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:41,231 - val_mm.py[line:33] - INFO: [evaluate] Batch 137/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:41,674 - val_mm.py[line:33] - INFO: [evaluate] Batch 138/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:42,121 - val_mm.py[line:33] - INFO: [evaluate] Batch 139/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:42,565 - val_mm.py[line:33] - INFO: [evaluate] Batch 140/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:43,011 - val_mm.py[line:33] - INFO: [evaluate] Batch 141/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:43,456 - val_mm.py[line:33] - INFO: [evaluate] Batch 142/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:43,903 - val_mm.py[line:33] - INFO: [evaluate] Batch 143/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:44,343 - val_mm.py[line:33] - INFO: [evaluate] Batch 144/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:44,794 - val_mm.py[line:33] - INFO: [evaluate] Batch 145/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:45,237 - val_mm.py[line:33] - INFO: [evaluate] Batch 146/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:45,685 - val_mm.py[line:33] - INFO: [evaluate] Batch 147/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:46,136 - val_mm.py[line:33] - INFO: [evaluate] Batch 148/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:46,579 - val_mm.py[line:33] - INFO: [evaluate] Batch 149/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:47,019 - val_mm.py[line:33] - INFO: [evaluate] Batch 150/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:47,472 - val_mm.py[line:33] - INFO: [evaluate] Batch 151/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:47,913 - val_mm.py[line:33] - INFO: [evaluate] Batch 152/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:48,358 - val_mm.py[line:33] - INFO: [evaluate] Batch 153/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:48,796 - val_mm.py[line:33] - INFO: [evaluate] Batch 154/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:49,282 - val_mm.py[line:33] - INFO: [evaluate] Batch 155/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:49,719 - val_mm.py[line:33] - INFO: [evaluate] Batch 156/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 09:50:50,157 - val_mm.py[line:33] - INFO: [evaluate] Batch 157/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 158 / 158
+2025-11-14 09:51:00,845 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-1_miou_3.3.pth
+2025-11-14 09:51:01,984 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-1_miou_3.3.pth, Time usage:
+	prepare checkpoint: 0.010876893997192383, IO: 1.1273868083953857
+miou 3.3 best 3.3
+2025-11-14 09:51:01,984 - train.py[line:717] - INFO: Epoch 1 validation result: mIoU: 3.3000,Best mIoU: 3.3000, 
+2025-11-14 09:51:01,985 - train.py[line:732] - INFO: Avg train time: 187.03s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 05:06:52
+Epoch 2/300 Iter 1/331: lr=6.0000e-06 loss=2.4981 total_loss=2.4981
+Epoch 2/300 Iter 33/331: lr=6.5801e-06 loss=2.1286 total_loss=2.5720
+Epoch 2/300 Iter 66/331: lr=7.1782e-06 loss=2.1941 total_loss=2.4769
+Epoch 2/300 Iter 99/331: lr=7.7764e-06 loss=2.0245 total_loss=2.3886
+Epoch 2/300 Iter 132/331: lr=8.3746e-06 loss=2.2053 total_loss=2.3158
+Epoch 2/300 Iter 165/331: lr=8.9728e-06 loss=1.9429 total_loss=2.2445
+Epoch 2/300 Iter 198/331: lr=9.5710e-06 loss=1.6418 total_loss=2.1793
+Epoch 2/300 Iter 231/331: lr=1.0169e-05 loss=1.2473 total_loss=2.1269
+Epoch 2/300 Iter 264/331: lr=1.0767e-05 loss=1.4479 total_loss=2.0731
+Epoch 2/300 Iter 297/331: lr=1.1366e-05 loss=1.4700 total_loss=2.0174
+Epoch 2/300 Iter 330/331: lr=1.1964e-05 loss=1.2599 total_loss=1.9725
+2025-11-14 09:54:22,924 - train.py[line:611] - INFO: Epoch 2/300 Iter 331/331: lr=1.1982e-05 loss=1.1523 total_loss=1.9700
+2025-11-14 09:54:22,927 - train.py[line:614] - INFO: [Train] epoch 2 - before is_eval()
+2025-11-14 09:54:22,927 - train.py[line:732] - INFO: Avg train time: 192.46s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 05:34:06
+Epoch 3/300 Iter 1/331: lr=1.2000e-05 loss=1.4929 total_loss=1.4929
+Epoch 3/300 Iter 33/331: lr=1.2580e-05 loss=1.6771 total_loss=1.3512
+Epoch 3/300 Iter 66/331: lr=1.3178e-05 loss=1.5893 total_loss=1.3346
+Epoch 3/300 Iter 99/331: lr=1.3776e-05 loss=0.9271 total_loss=1.3320
+Epoch 3/300 Iter 132/331: lr=1.4375e-05 loss=1.3459 total_loss=1.3026
+Epoch 3/300 Iter 165/331: lr=1.4973e-05 loss=1.0287 total_loss=1.2818
+Epoch 3/300 Iter 198/331: lr=1.5571e-05 loss=0.8409 total_loss=1.2596
+Epoch 3/300 Iter 231/331: lr=1.6169e-05 loss=0.9464 total_loss=1.2384
+Epoch 3/300 Iter 264/331: lr=1.6767e-05 loss=0.7982 total_loss=1.2165
+Epoch 3/300 Iter 297/331: lr=1.7366e-05 loss=0.8763 total_loss=1.1979
+Epoch 3/300 Iter 330/331: lr=1.7964e-05 loss=0.8065 total_loss=1.1819
+2025-11-14 09:57:26,796 - train.py[line:611] - INFO: Epoch 3/300 Iter 331/331: lr=1.7982e-05 loss=0.7375 total_loss=1.1806
+2025-11-14 09:57:26,796 - train.py[line:614] - INFO: [Train] epoch 3 - before is_eval()
+2025-11-14 09:57:26,797 - train.py[line:732] - INFO: Avg train time: 188.89s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 05:16:16
+Epoch 4/300 Iter 1/331: lr=1.8000e-05 loss=0.9373 total_loss=0.9373
+Epoch 4/300 Iter 33/331: lr=1.8580e-05 loss=0.8383 total_loss=0.9279
+Epoch 4/300 Iter 66/331: lr=1.9178e-05 loss=1.1654 total_loss=0.9306
+Epoch 4/300 Iter 99/331: lr=1.9776e-05 loss=1.0950 total_loss=0.9274
+Epoch 4/300 Iter 132/331: lr=2.0375e-05 loss=0.6565 total_loss=0.9239
+Epoch 4/300 Iter 165/331: lr=2.0973e-05 loss=1.1947 total_loss=0.9090
+Epoch 4/300 Iter 198/331: lr=2.1571e-05 loss=0.7738 total_loss=0.8935
+Epoch 4/300 Iter 231/331: lr=2.2169e-05 loss=0.9213 total_loss=0.8970
+Epoch 4/300 Iter 264/331: lr=2.2767e-05 loss=0.8099 total_loss=0.8942
+Epoch 4/300 Iter 297/331: lr=2.3366e-05 loss=0.8182 total_loss=0.8894
+Epoch 4/300 Iter 330/331: lr=2.3964e-05 loss=1.2428 total_loss=0.8821
+2025-11-14 10:00:32,800 - train.py[line:611] - INFO: Epoch 4/300 Iter 331/331: lr=2.3982e-05 loss=0.7741 total_loss=0.8817
+2025-11-14 10:00:32,801 - train.py[line:614] - INFO: [Train] epoch 4 - before is_eval()
+2025-11-14 10:00:32,801 - train.py[line:732] - INFO: Avg train time: 187.62s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 05:09:56
+Epoch 5/300 Iter 1/331: lr=2.4000e-05 loss=0.7465 total_loss=0.7465
+Epoch 5/300 Iter 33/331: lr=2.4580e-05 loss=0.5031 total_loss=0.8105
+Epoch 5/300 Iter 66/331: lr=2.5178e-05 loss=0.7696 total_loss=0.7926
+Epoch 5/300 Iter 99/331: lr=2.5776e-05 loss=0.8611 total_loss=0.7839
+Epoch 5/300 Iter 132/331: lr=2.6375e-05 loss=0.6209 total_loss=0.7710
+Epoch 5/300 Iter 165/331: lr=2.6973e-05 loss=0.7458 total_loss=0.7803
+Epoch 5/300 Iter 198/331: lr=2.7571e-05 loss=1.2220 total_loss=0.7777
+Epoch 5/300 Iter 231/331: lr=2.8169e-05 loss=0.6818 total_loss=0.7748
+Epoch 5/300 Iter 264/331: lr=2.8767e-05 loss=0.8009 total_loss=0.7689
+Epoch 5/300 Iter 297/331: lr=2.9366e-05 loss=0.7090 total_loss=0.7666
+Epoch 5/300 Iter 330/331: lr=2.9964e-05 loss=0.7266 total_loss=0.7611
+2025-11-14 10:03:37,485 - train.py[line:611] - INFO: Epoch 5/300 Iter 331/331: lr=2.9982e-05 loss=0.6407 total_loss=0.7608
+2025-11-14 10:03:37,486 - train.py[line:614] - INFO: [Train] epoch 5 - before is_eval()
+2025-11-14 10:03:37,486 - train.py[line:732] - INFO: Avg train time: 186.30s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 05:03:25
+Epoch 6/300 Iter 1/331: lr=3.0000e-05 loss=0.7113 total_loss=0.7113
+Epoch 6/300 Iter 33/331: lr=3.0580e-05 loss=0.5990 total_loss=0.6773
+Epoch 6/300 Iter 66/331: lr=3.1178e-05 loss=0.5523 total_loss=0.6941
+Epoch 6/300 Iter 99/331: lr=3.1776e-05 loss=0.7874 total_loss=0.6972
+Epoch 6/300 Iter 132/331: lr=3.2375e-05 loss=0.5538 total_loss=0.6985
+Epoch 6/300 Iter 165/331: lr=3.2973e-05 loss=0.6404 total_loss=0.6936
+Epoch 6/300 Iter 198/331: lr=3.3571e-05 loss=0.9476 total_loss=0.7000
+Epoch 6/300 Iter 231/331: lr=3.4169e-05 loss=0.5271 total_loss=0.6966
+Epoch 6/300 Iter 264/331: lr=3.4767e-05 loss=0.9029 total_loss=0.6908
+Epoch 6/300 Iter 297/331: lr=3.5366e-05 loss=0.6638 total_loss=0.6887
+Epoch 6/300 Iter 330/331: lr=3.5964e-05 loss=0.5824 total_loss=0.6884
+2025-11-14 10:06:42,113 - train.py[line:611] - INFO: Epoch 6/300 Iter 331/331: lr=3.5982e-05 loss=1.3753 total_loss=0.6905
+2025-11-14 10:06:42,113 - train.py[line:614] - INFO: [Train] epoch 6 - before is_eval()
+2025-11-14 10:06:42,114 - train.py[line:732] - INFO: Avg train time: 185.50s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 04:59:27
+Epoch 7/300 Iter 1/331: lr=3.6000e-05 loss=0.6445 total_loss=0.6445
+Epoch 7/300 Iter 33/331: lr=3.6580e-05 loss=0.7371 total_loss=0.6571
+Epoch 7/300 Iter 66/331: lr=3.7178e-05 loss=0.7316 total_loss=0.6455
+Epoch 7/300 Iter 99/331: lr=3.7776e-05 loss=0.3754 total_loss=0.6487
+Epoch 7/300 Iter 132/331: lr=3.8375e-05 loss=0.5953 total_loss=0.6343
+Epoch 7/300 Iter 165/331: lr=3.8973e-05 loss=0.7322 total_loss=0.6400
+Epoch 7/300 Iter 198/331: lr=3.9571e-05 loss=0.6149 total_loss=0.6369
+Epoch 7/300 Iter 231/331: lr=4.0169e-05 loss=0.5808 total_loss=0.6333
+Epoch 7/300 Iter 264/331: lr=4.0767e-05 loss=0.5383 total_loss=0.6339
+Epoch 7/300 Iter 297/331: lr=4.1366e-05 loss=0.5339 total_loss=0.6372
+Epoch 7/300 Iter 330/331: lr=4.1964e-05 loss=0.8471 total_loss=0.6453
+2025-11-14 10:09:45,094 - train.py[line:611] - INFO: Epoch 7/300 Iter 331/331: lr=4.1982e-05 loss=0.6954 total_loss=0.6455
+2025-11-14 10:09:45,095 - train.py[line:614] - INFO: [Train] epoch 7 - before is_eval()
+2025-11-14 10:09:45,095 - train.py[line:732] - INFO: Avg train time: 184.36s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 04:53:51
+Epoch 8/300 Iter 1/331: lr=4.2000e-05 loss=0.4410 total_loss=0.4410
+Epoch 8/300 Iter 33/331: lr=4.2580e-05 loss=0.6249 total_loss=0.5408
+Epoch 8/300 Iter 66/331: lr=4.3178e-05 loss=0.6466 total_loss=0.5859
+Epoch 8/300 Iter 99/331: lr=4.3776e-05 loss=0.4968 total_loss=0.5677
+Epoch 8/300 Iter 132/331: lr=4.4375e-05 loss=0.7014 total_loss=0.5697
+Epoch 8/300 Iter 165/331: lr=4.4973e-05 loss=0.5233 total_loss=0.5752
+Epoch 8/300 Iter 198/331: lr=4.5571e-05 loss=0.4984 total_loss=0.5673
+Epoch 8/300 Iter 231/331: lr=4.6169e-05 loss=0.9239 total_loss=0.5754
+Epoch 8/300 Iter 264/331: lr=4.6767e-05 loss=0.3462 total_loss=0.5776
+Epoch 8/300 Iter 297/331: lr=4.7366e-05 loss=0.5302 total_loss=0.5781
+Epoch 8/300 Iter 330/331: lr=4.7964e-05 loss=0.6625 total_loss=0.5809
+2025-11-14 10:12:47,246 - train.py[line:611] - INFO: Epoch 8/300 Iter 331/331: lr=4.7982e-05 loss=0.6935 total_loss=0.5813
+2025-11-14 10:12:47,247 - train.py[line:614] - INFO: [Train] epoch 8 - before is_eval()
+2025-11-14 10:12:47,247 - train.py[line:732] - INFO: Avg train time: 183.35s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 04:48:53
+Epoch 9/300 Iter 1/331: lr=4.8000e-05 loss=0.4742 total_loss=0.4742
+Epoch 9/300 Iter 33/331: lr=4.8580e-05 loss=0.5108 total_loss=0.5091
+Epoch 9/300 Iter 66/331: lr=4.9178e-05 loss=0.6904 total_loss=0.5156
+Epoch 9/300 Iter 99/331: lr=4.9776e-05 loss=0.4229 total_loss=0.5167
+Epoch 9/300 Iter 132/331: lr=5.0375e-05 loss=0.5012 total_loss=0.5267
+Epoch 9/300 Iter 165/331: lr=5.0973e-05 loss=0.6460 total_loss=0.5292
+Epoch 9/300 Iter 198/331: lr=5.1571e-05 loss=0.4010 total_loss=0.5282
+Epoch 9/300 Iter 231/331: lr=5.2169e-05 loss=0.7158 total_loss=0.5260
+Epoch 9/300 Iter 264/331: lr=5.2767e-05 loss=0.6026 total_loss=0.5263
+Epoch 9/300 Iter 297/331: lr=5.3366e-05 loss=0.5254 total_loss=0.5317
+Epoch 9/300 Iter 330/331: lr=5.3964e-05 loss=0.4370 total_loss=0.5365
+2025-11-14 10:15:52,498 - train.py[line:611] - INFO: Epoch 9/300 Iter 331/331: lr=5.3982e-05 loss=0.5015 total_loss=0.5364
+2025-11-14 10:15:52,499 - train.py[line:614] - INFO: [Train] epoch 9 - before is_eval()
+2025-11-14 10:15:52,499 - train.py[line:732] - INFO: Avg train time: 183.97s, avg eval time: 86.08s, left eval count: 156, ETA: 2025-11-15 04:51:55
+Epoch 10/300 Iter 1/331: lr=5.4000e-05 loss=0.5111 total_loss=0.5111
+Epoch 10/300 Iter 33/331: lr=5.4580e-05 loss=0.5005 total_loss=0.5306
+Epoch 10/300 Iter 66/331: lr=5.5178e-05 loss=0.7972 total_loss=0.5072
+Epoch 10/300 Iter 99/331: lr=5.5776e-05 loss=0.5859 total_loss=0.5206
+Epoch 10/300 Iter 132/331: lr=5.6375e-05 loss=0.5193 total_loss=0.5174
+Epoch 10/300 Iter 165/331: lr=5.6973e-05 loss=0.8481 total_loss=0.5090
+Epoch 10/300 Iter 198/331: lr=5.7571e-05 loss=0.4852 total_loss=0.5074
+Epoch 10/300 Iter 231/331: lr=5.8169e-05 loss=0.5472 total_loss=0.5059
+Epoch 10/300 Iter 264/331: lr=5.8767e-05 loss=0.5178 total_loss=0.5044
+Epoch 10/300 Iter 297/331: lr=5.9366e-05 loss=0.4087 total_loss=0.5042
+Epoch 10/300 Iter 330/331: lr=5.9964e-05 loss=0.4201 total_loss=0.5067
+2025-11-14 10:18:57,153 - train.py[line:611] - INFO: Epoch 10/300 Iter 331/331: lr=5.9982e-05 loss=1.1446 total_loss=0.5087
+2025-11-14 10:18:57,154 - train.py[line:614] - INFO: [Train] epoch 10 - before is_eval()
+2025-11-14 10:18:57,154 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 158
+Evaluating...
+2025-11-14 10:18:57,450 - val_mm.py[line:21] - INFO: [evaluate] Entered evaluate(), dataloader size=158
+Evaluating...
+2025-11-14 10:18:58,492 - val_mm.py[line:33] - INFO: [evaluate] Batch 0/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 1 / 158
+2025-11-14 10:18:59,617 - val_mm.py[line:33] - INFO: [evaluate] Batch 1/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:00,131 - val_mm.py[line:33] - INFO: [evaluate] Batch 2/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:00,648 - val_mm.py[line:33] - INFO: [evaluate] Batch 3/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:01,162 - val_mm.py[line:33] - INFO: [evaluate] Batch 4/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:01,659 - val_mm.py[line:33] - INFO: [evaluate] Batch 5/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:02,173 - val_mm.py[line:33] - INFO: [evaluate] Batch 6/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:02,680 - val_mm.py[line:33] - INFO: [evaluate] Batch 7/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:03,189 - val_mm.py[line:33] - INFO: [evaluate] Batch 8/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:03,712 - val_mm.py[line:33] - INFO: [evaluate] Batch 9/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:04,223 - val_mm.py[line:33] - INFO: [evaluate] Batch 10/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:04,738 - val_mm.py[line:33] - INFO: [evaluate] Batch 11/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:05,237 - val_mm.py[line:33] - INFO: [evaluate] Batch 12/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:05,754 - val_mm.py[line:33] - INFO: [evaluate] Batch 13/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:06,263 - val_mm.py[line:33] - INFO: [evaluate] Batch 14/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:06,765 - val_mm.py[line:33] - INFO: [evaluate] Batch 15/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:07,278 - val_mm.py[line:33] - INFO: [evaluate] Batch 16/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:07,792 - val_mm.py[line:33] - INFO: [evaluate] Batch 17/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:08,299 - val_mm.py[line:33] - INFO: [evaluate] Batch 18/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:08,797 - val_mm.py[line:33] - INFO: [evaluate] Batch 19/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:09,308 - val_mm.py[line:33] - INFO: [evaluate] Batch 20/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:09,813 - val_mm.py[line:33] - INFO: [evaluate] Batch 21/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:10,314 - val_mm.py[line:33] - INFO: [evaluate] Batch 22/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:10,825 - val_mm.py[line:33] - INFO: [evaluate] Batch 23/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:11,338 - val_mm.py[line:33] - INFO: [evaluate] Batch 24/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:11,844 - val_mm.py[line:33] - INFO: [evaluate] Batch 25/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:12,348 - val_mm.py[line:33] - INFO: [evaluate] Batch 26/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:12,855 - val_mm.py[line:33] - INFO: [evaluate] Batch 27/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:13,369 - val_mm.py[line:33] - INFO: [evaluate] Batch 28/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:13,883 - val_mm.py[line:33] - INFO: [evaluate] Batch 29/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:14,401 - val_mm.py[line:33] - INFO: [evaluate] Batch 30/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:14,917 - val_mm.py[line:33] - INFO: [evaluate] Batch 31/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:15,428 - val_mm.py[line:33] - INFO: [evaluate] Batch 32/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:15,926 - val_mm.py[line:33] - INFO: [evaluate] Batch 33/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:16,456 - val_mm.py[line:33] - INFO: [evaluate] Batch 34/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:16,966 - val_mm.py[line:33] - INFO: [evaluate] Batch 35/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:17,464 - val_mm.py[line:33] - INFO: [evaluate] Batch 36/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:17,981 - val_mm.py[line:33] - INFO: [evaluate] Batch 37/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:18,502 - val_mm.py[line:33] - INFO: [evaluate] Batch 38/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:19,009 - val_mm.py[line:33] - INFO: [evaluate] Batch 39/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:19,508 - val_mm.py[line:33] - INFO: [evaluate] Batch 40/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:20,020 - val_mm.py[line:33] - INFO: [evaluate] Batch 41/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:20,530 - val_mm.py[line:33] - INFO: [evaluate] Batch 42/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:21,032 - val_mm.py[line:33] - INFO: [evaluate] Batch 43/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:21,536 - val_mm.py[line:33] - INFO: [evaluate] Batch 44/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:22,049 - val_mm.py[line:33] - INFO: [evaluate] Batch 45/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:22,562 - val_mm.py[line:33] - INFO: [evaluate] Batch 46/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:23,070 - val_mm.py[line:33] - INFO: [evaluate] Batch 47/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:23,577 - val_mm.py[line:33] - INFO: [evaluate] Batch 48/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:24,092 - val_mm.py[line:33] - INFO: [evaluate] Batch 49/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:24,604 - val_mm.py[line:33] - INFO: [evaluate] Batch 50/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:25,115 - val_mm.py[line:33] - INFO: [evaluate] Batch 51/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:25,628 - val_mm.py[line:33] - INFO: [evaluate] Batch 52/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:26,131 - val_mm.py[line:33] - INFO: [evaluate] Batch 53/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:26,637 - val_mm.py[line:33] - INFO: [evaluate] Batch 54/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:27,143 - val_mm.py[line:33] - INFO: [evaluate] Batch 55/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:27,656 - val_mm.py[line:33] - INFO: [evaluate] Batch 56/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:28,166 - val_mm.py[line:33] - INFO: [evaluate] Batch 57/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:28,667 - val_mm.py[line:33] - INFO: [evaluate] Batch 58/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:29,175 - val_mm.py[line:33] - INFO: [evaluate] Batch 59/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:29,689 - val_mm.py[line:33] - INFO: [evaluate] Batch 60/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:30,194 - val_mm.py[line:33] - INFO: [evaluate] Batch 61/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:30,706 - val_mm.py[line:33] - INFO: [evaluate] Batch 62/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:31,211 - val_mm.py[line:33] - INFO: [evaluate] Batch 63/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:31,731 - val_mm.py[line:33] - INFO: [evaluate] Batch 64/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:32,244 - val_mm.py[line:33] - INFO: [evaluate] Batch 65/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:32,768 - val_mm.py[line:33] - INFO: [evaluate] Batch 66/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:33,271 - val_mm.py[line:33] - INFO: [evaluate] Batch 67/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:33,768 - val_mm.py[line:33] - INFO: [evaluate] Batch 68/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:34,274 - val_mm.py[line:33] - INFO: [evaluate] Batch 69/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:34,792 - val_mm.py[line:33] - INFO: [evaluate] Batch 70/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:35,299 - val_mm.py[line:33] - INFO: [evaluate] Batch 71/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:35,815 - val_mm.py[line:33] - INFO: [evaluate] Batch 72/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:36,323 - val_mm.py[line:33] - INFO: [evaluate] Batch 73/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:36,835 - val_mm.py[line:33] - INFO: [evaluate] Batch 74/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:37,338 - val_mm.py[line:33] - INFO: [evaluate] Batch 75/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:37,853 - val_mm.py[line:33] - INFO: [evaluate] Batch 76/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:38,362 - val_mm.py[line:33] - INFO: [evaluate] Batch 77/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:38,871 - val_mm.py[line:33] - INFO: [evaluate] Batch 78/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 79 / 158
+2025-11-14 10:19:39,383 - val_mm.py[line:33] - INFO: [evaluate] Batch 79/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:39,894 - val_mm.py[line:33] - INFO: [evaluate] Batch 80/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:40,399 - val_mm.py[line:33] - INFO: [evaluate] Batch 81/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:40,903 - val_mm.py[line:33] - INFO: [evaluate] Batch 82/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:41,427 - val_mm.py[line:33] - INFO: [evaluate] Batch 83/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:41,934 - val_mm.py[line:33] - INFO: [evaluate] Batch 84/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:42,447 - val_mm.py[line:33] - INFO: [evaluate] Batch 85/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:42,959 - val_mm.py[line:33] - INFO: [evaluate] Batch 86/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:43,476 - val_mm.py[line:33] - INFO: [evaluate] Batch 87/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:43,988 - val_mm.py[line:33] - INFO: [evaluate] Batch 88/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:44,494 - val_mm.py[line:33] - INFO: [evaluate] Batch 89/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:45,004 - val_mm.py[line:33] - INFO: [evaluate] Batch 90/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:45,510 - val_mm.py[line:33] - INFO: [evaluate] Batch 91/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:46,005 - val_mm.py[line:33] - INFO: [evaluate] Batch 92/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:46,514 - val_mm.py[line:33] - INFO: [evaluate] Batch 93/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:47,020 - val_mm.py[line:33] - INFO: [evaluate] Batch 94/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:47,515 - val_mm.py[line:33] - INFO: [evaluate] Batch 95/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:48,028 - val_mm.py[line:33] - INFO: [evaluate] Batch 96/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:48,520 - val_mm.py[line:33] - INFO: [evaluate] Batch 97/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:49,029 - val_mm.py[line:33] - INFO: [evaluate] Batch 98/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:49,541 - val_mm.py[line:33] - INFO: [evaluate] Batch 99/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:50,032 - val_mm.py[line:33] - INFO: [evaluate] Batch 100/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:50,543 - val_mm.py[line:33] - INFO: [evaluate] Batch 101/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:51,061 - val_mm.py[line:33] - INFO: [evaluate] Batch 102/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:51,577 - val_mm.py[line:33] - INFO: [evaluate] Batch 103/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:52,082 - val_mm.py[line:33] - INFO: [evaluate] Batch 104/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:52,594 - val_mm.py[line:33] - INFO: [evaluate] Batch 105/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:53,100 - val_mm.py[line:33] - INFO: [evaluate] Batch 106/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:53,613 - val_mm.py[line:33] - INFO: [evaluate] Batch 107/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:54,130 - val_mm.py[line:33] - INFO: [evaluate] Batch 108/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:54,644 - val_mm.py[line:33] - INFO: [evaluate] Batch 109/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:55,156 - val_mm.py[line:33] - INFO: [evaluate] Batch 110/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:55,659 - val_mm.py[line:33] - INFO: [evaluate] Batch 111/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:56,177 - val_mm.py[line:33] - INFO: [evaluate] Batch 112/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:56,685 - val_mm.py[line:33] - INFO: [evaluate] Batch 113/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:57,188 - val_mm.py[line:33] - INFO: [evaluate] Batch 114/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:57,702 - val_mm.py[line:33] - INFO: [evaluate] Batch 115/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:58,207 - val_mm.py[line:33] - INFO: [evaluate] Batch 116/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:58,716 - val_mm.py[line:33] - INFO: [evaluate] Batch 117/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:59,214 - val_mm.py[line:33] - INFO: [evaluate] Batch 118/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:19:59,729 - val_mm.py[line:33] - INFO: [evaluate] Batch 119/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:00,240 - val_mm.py[line:33] - INFO: [evaluate] Batch 120/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:00,743 - val_mm.py[line:33] - INFO: [evaluate] Batch 121/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:01,260 - val_mm.py[line:33] - INFO: [evaluate] Batch 122/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:01,774 - val_mm.py[line:33] - INFO: [evaluate] Batch 123/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:02,286 - val_mm.py[line:33] - INFO: [evaluate] Batch 124/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:02,789 - val_mm.py[line:33] - INFO: [evaluate] Batch 125/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:03,299 - val_mm.py[line:33] - INFO: [evaluate] Batch 126/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:03,805 - val_mm.py[line:33] - INFO: [evaluate] Batch 127/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:04,327 - val_mm.py[line:33] - INFO: [evaluate] Batch 128/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:04,814 - val_mm.py[line:33] - INFO: [evaluate] Batch 129/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:05,318 - val_mm.py[line:33] - INFO: [evaluate] Batch 130/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:05,828 - val_mm.py[line:33] - INFO: [evaluate] Batch 131/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:06,344 - val_mm.py[line:33] - INFO: [evaluate] Batch 132/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:06,846 - val_mm.py[line:33] - INFO: [evaluate] Batch 133/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:07,341 - val_mm.py[line:33] - INFO: [evaluate] Batch 134/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:07,851 - val_mm.py[line:33] - INFO: [evaluate] Batch 135/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:08,362 - val_mm.py[line:33] - INFO: [evaluate] Batch 136/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:08,854 - val_mm.py[line:33] - INFO: [evaluate] Batch 137/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:09,360 - val_mm.py[line:33] - INFO: [evaluate] Batch 138/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:09,839 - val_mm.py[line:33] - INFO: [evaluate] Batch 139/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:10,317 - val_mm.py[line:33] - INFO: [evaluate] Batch 140/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:10,804 - val_mm.py[line:33] - INFO: [evaluate] Batch 141/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:11,281 - val_mm.py[line:33] - INFO: [evaluate] Batch 142/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:11,761 - val_mm.py[line:33] - INFO: [evaluate] Batch 143/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:12,239 - val_mm.py[line:33] - INFO: [evaluate] Batch 144/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:12,723 - val_mm.py[line:33] - INFO: [evaluate] Batch 145/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:13,200 - val_mm.py[line:33] - INFO: [evaluate] Batch 146/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:13,683 - val_mm.py[line:33] - INFO: [evaluate] Batch 147/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:14,161 - val_mm.py[line:33] - INFO: [evaluate] Batch 148/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:14,640 - val_mm.py[line:33] - INFO: [evaluate] Batch 149/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:15,125 - val_mm.py[line:33] - INFO: [evaluate] Batch 150/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:15,606 - val_mm.py[line:33] - INFO: [evaluate] Batch 151/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:16,086 - val_mm.py[line:33] - INFO: [evaluate] Batch 152/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:16,567 - val_mm.py[line:33] - INFO: [evaluate] Batch 153/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:17,046 - val_mm.py[line:33] - INFO: [evaluate] Batch 154/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:17,525 - val_mm.py[line:33] - INFO: [evaluate] Batch 155/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:18,003 - val_mm.py[line:33] - INFO: [evaluate] Batch 156/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:20:18,481 - val_mm.py[line:33] - INFO: [evaluate] Batch 157/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 158 / 158
+2025-11-14 10:20:19,044 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-10_miou_44.26.pth
+2025-11-14 10:20:20,530 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-10_miou_44.26.pth, Time usage:
+	prepare checkpoint: 0.01076364517211914, IO: 1.4745182991027832
+miou 44.26 best 44.26
+2025-11-14 10:20:20,531 - train.py[line:717] - INFO: Epoch 10 validation result: mIoU: 44.2600,Best mIoU: 44.2600, 
+2025-11-14 10:20:20,532 - train.py[line:732] - INFO: Avg train time: 184.10s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:49:45
+Epoch 11/300 Iter 1/331: lr=5.8197e-05 loss=0.4015 total_loss=0.4015
+Epoch 11/300 Iter 33/331: lr=5.8180e-05 loss=0.7600 total_loss=0.4830
+Epoch 11/300 Iter 66/331: lr=5.8161e-05 loss=0.3364 total_loss=0.4651
+Epoch 11/300 Iter 99/331: lr=5.8143e-05 loss=0.3245 total_loss=0.4639
+Epoch 11/300 Iter 132/331: lr=5.8125e-05 loss=0.4542 total_loss=0.4640
+Epoch 11/300 Iter 165/331: lr=5.8107e-05 loss=0.5637 total_loss=0.4676
+Epoch 11/300 Iter 198/331: lr=5.8089e-05 loss=0.5335 total_loss=0.4782
+Epoch 11/300 Iter 231/331: lr=5.8071e-05 loss=0.4632 total_loss=0.4813
+Epoch 11/300 Iter 264/331: lr=5.8053e-05 loss=0.3897 total_loss=0.4767
+Epoch 11/300 Iter 297/331: lr=5.8035e-05 loss=0.3994 total_loss=0.4768
+Epoch 11/300 Iter 330/331: lr=5.8017e-05 loss=0.4412 total_loss=0.4810
+2025-11-14 10:23:43,205 - train.py[line:611] - INFO: Epoch 11/300 Iter 331/331: lr=5.8017e-05 loss=0.4001 total_loss=0.4808
+2025-11-14 10:23:43,205 - train.py[line:614] - INFO: [Train] epoch 11 - before is_eval()
+2025-11-14 10:23:43,205 - train.py[line:732] - INFO: Avg train time: 191.40s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 05:25:13
+Epoch 12/300 Iter 1/331: lr=5.8016e-05 loss=0.5074 total_loss=0.5074
+Epoch 12/300 Iter 33/331: lr=5.7999e-05 loss=0.4762 total_loss=0.4036
+Epoch 12/300 Iter 66/331: lr=5.7981e-05 loss=0.3851 total_loss=0.4115
+Epoch 12/300 Iter 99/331: lr=5.7963e-05 loss=0.2984 total_loss=0.4165
+Epoch 12/300 Iter 132/331: lr=5.7945e-05 loss=0.3954 total_loss=0.4240
+Epoch 12/300 Iter 165/331: lr=5.7927e-05 loss=0.3610 total_loss=0.4215
+Epoch 12/300 Iter 198/331: lr=5.7909e-05 loss=0.5134 total_loss=0.4235
+Epoch 12/300 Iter 231/331: lr=5.7891e-05 loss=0.5835 total_loss=0.4316
+Epoch 12/300 Iter 264/331: lr=5.7873e-05 loss=0.5363 total_loss=0.4363
+Epoch 12/300 Iter 297/331: lr=5.7855e-05 loss=0.4587 total_loss=0.4372
+Epoch 12/300 Iter 330/331: lr=5.7837e-05 loss=0.3051 total_loss=0.4403
+2025-11-14 10:26:47,471 - train.py[line:611] - INFO: Epoch 12/300 Iter 331/331: lr=5.7836e-05 loss=0.4211 total_loss=0.4403
+2025-11-14 10:26:47,472 - train.py[line:614] - INFO: [Train] epoch 12 - before is_eval()
+2025-11-14 10:26:47,472 - train.py[line:732] - INFO: Avg train time: 188.41s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 05:10:44
+Epoch 13/300 Iter 1/331: lr=5.7836e-05 loss=0.3083 total_loss=0.3083
+Epoch 13/300 Iter 33/331: lr=5.7818e-05 loss=0.2925 total_loss=0.3853
+Epoch 13/300 Iter 66/331: lr=5.7800e-05 loss=0.3910 total_loss=0.3912
+Epoch 13/300 Iter 99/331: lr=5.7782e-05 loss=0.4513 total_loss=0.3949
+Epoch 13/300 Iter 132/331: lr=5.7764e-05 loss=0.3699 total_loss=0.4062
+Epoch 13/300 Iter 165/331: lr=5.7746e-05 loss=0.5372 total_loss=0.4093
+Epoch 13/300 Iter 198/331: lr=5.7728e-05 loss=0.3335 total_loss=0.4091
+Epoch 13/300 Iter 231/331: lr=5.7710e-05 loss=0.4996 total_loss=0.4124
+Epoch 13/300 Iter 264/331: lr=5.7692e-05 loss=0.5025 total_loss=0.4108
+Epoch 13/300 Iter 297/331: lr=5.7674e-05 loss=0.3550 total_loss=0.4145
+Epoch 13/300 Iter 330/331: lr=5.7656e-05 loss=0.3540 total_loss=0.4171
+2025-11-14 10:29:51,072 - train.py[line:611] - INFO: Epoch 13/300 Iter 331/331: lr=5.7655e-05 loss=0.4619 total_loss=0.4173
+2025-11-14 10:29:51,073 - train.py[line:614] - INFO: [Train] epoch 13 - before is_eval()
+2025-11-14 10:29:51,073 - train.py[line:732] - INFO: Avg train time: 186.35s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 05:00:49
+Epoch 14/300 Iter 1/331: lr=5.7655e-05 loss=0.4109 total_loss=0.4109
+Epoch 14/300 Iter 33/331: lr=5.7637e-05 loss=0.3060 total_loss=0.3891
+Epoch 14/300 Iter 66/331: lr=5.7619e-05 loss=0.3449 total_loss=0.3851
+Epoch 14/300 Iter 99/331: lr=5.7601e-05 loss=0.3515 total_loss=0.3866
+Epoch 14/300 Iter 132/331: lr=5.7583e-05 loss=0.3904 total_loss=0.3767
+Epoch 14/300 Iter 165/331: lr=5.7565e-05 loss=0.2323 total_loss=0.3786
+Epoch 14/300 Iter 198/331: lr=5.7547e-05 loss=0.3317 total_loss=0.3802
+Epoch 14/300 Iter 231/331: lr=5.7529e-05 loss=0.3996 total_loss=0.3794
+Epoch 14/300 Iter 264/331: lr=5.7511e-05 loss=0.5521 total_loss=0.3817
+Epoch 14/300 Iter 297/331: lr=5.7493e-05 loss=0.4362 total_loss=0.3854
+Epoch 14/300 Iter 330/331: lr=5.7475e-05 loss=0.3385 total_loss=0.3864
+2025-11-14 10:32:56,295 - train.py[line:611] - INFO: Epoch 14/300 Iter 331/331: lr=5.7475e-05 loss=0.3154 total_loss=0.3861
+2025-11-14 10:32:56,295 - train.py[line:614] - INFO: [Train] epoch 14 - before is_eval()
+2025-11-14 10:32:56,296 - train.py[line:732] - INFO: Avg train time: 185.76s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:57:58
+Epoch 15/300 Iter 1/331: lr=5.7474e-05 loss=0.4669 total_loss=0.4669
+Epoch 15/300 Iter 33/331: lr=5.7457e-05 loss=0.4080 total_loss=0.3367
+Epoch 15/300 Iter 66/331: lr=5.7438e-05 loss=0.3855 total_loss=0.3361
+Epoch 15/300 Iter 99/331: lr=5.7420e-05 loss=0.2760 total_loss=0.3348
+Epoch 15/300 Iter 132/331: lr=5.7402e-05 loss=0.3173 total_loss=0.3427
+Epoch 15/300 Iter 165/331: lr=5.7384e-05 loss=0.3005 total_loss=0.3533
+Epoch 15/300 Iter 198/331: lr=5.7366e-05 loss=0.3095 total_loss=0.3527
+Epoch 15/300 Iter 231/331: lr=5.7348e-05 loss=0.2781 total_loss=0.3543
+Epoch 15/300 Iter 264/331: lr=5.7330e-05 loss=0.3589 total_loss=0.3540
+Epoch 15/300 Iter 297/331: lr=5.7312e-05 loss=0.4339 total_loss=0.3549
+Epoch 15/300 Iter 330/331: lr=5.7294e-05 loss=0.4568 total_loss=0.3558
+2025-11-14 10:36:02,656 - train.py[line:611] - INFO: Epoch 15/300 Iter 331/331: lr=5.7294e-05 loss=0.3771 total_loss=0.3559
+2025-11-14 10:36:02,656 - train.py[line:614] - INFO: [Train] epoch 15 - before is_eval()
+2025-11-14 10:36:02,657 - train.py[line:732] - INFO: Avg train time: 185.87s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:58:30
+Epoch 16/300 Iter 1/331: lr=5.7293e-05 loss=0.2441 total_loss=0.2441
+Epoch 16/300 Iter 33/331: lr=5.7276e-05 loss=0.2407 total_loss=0.3341
+Epoch 16/300 Iter 66/331: lr=5.7258e-05 loss=0.2961 total_loss=0.3284
+Epoch 16/300 Iter 99/331: lr=5.7240e-05 loss=0.2211 total_loss=0.3308
+Epoch 16/300 Iter 132/331: lr=5.7222e-05 loss=0.3940 total_loss=0.3342
+Epoch 16/300 Iter 165/331: lr=5.7203e-05 loss=0.3291 total_loss=0.3292
+Epoch 16/300 Iter 198/331: lr=5.7185e-05 loss=0.4428 total_loss=0.3350
+Epoch 16/300 Iter 231/331: lr=5.7167e-05 loss=0.3676 total_loss=0.3372
+Epoch 16/300 Iter 264/331: lr=5.7149e-05 loss=0.1723 total_loss=0.3405
+Epoch 16/300 Iter 297/331: lr=5.7131e-05 loss=0.2300 total_loss=0.3384
+Epoch 16/300 Iter 330/331: lr=5.7113e-05 loss=0.2431 total_loss=0.3396
+2025-11-14 10:39:06,467 - train.py[line:611] - INFO: Epoch 16/300 Iter 331/331: lr=5.7113e-05 loss=0.3812 total_loss=0.3397
+2025-11-14 10:39:06,468 - train.py[line:614] - INFO: [Train] epoch 16 - before is_eval()
+2025-11-14 10:39:06,468 - train.py[line:732] - INFO: Avg train time: 184.91s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:53:56
+Epoch 17/300 Iter 1/331: lr=5.7112e-05 loss=0.4189 total_loss=0.4189
+Epoch 17/300 Iter 33/331: lr=5.7095e-05 loss=0.4057 total_loss=0.3356
+Epoch 17/300 Iter 66/331: lr=5.7077e-05 loss=0.3421 total_loss=0.3236
+Epoch 17/300 Iter 99/331: lr=5.7059e-05 loss=0.2806 total_loss=0.3211
+Epoch 17/300 Iter 132/331: lr=5.7041e-05 loss=0.3010 total_loss=0.3235
+Epoch 17/300 Iter 165/331: lr=5.7022e-05 loss=0.2487 total_loss=0.3283
+Epoch 17/300 Iter 198/331: lr=5.7004e-05 loss=0.2132 total_loss=0.3259
+Epoch 17/300 Iter 231/331: lr=5.6986e-05 loss=0.4269 total_loss=0.3281
+Epoch 17/300 Iter 264/331: lr=5.6968e-05 loss=0.2658 total_loss=0.3258
+Epoch 17/300 Iter 297/331: lr=5.6950e-05 loss=0.1886 total_loss=0.3226
+Epoch 17/300 Iter 330/331: lr=5.6932e-05 loss=0.4358 total_loss=0.3229
+2025-11-14 10:42:11,569 - train.py[line:611] - INFO: Epoch 17/300 Iter 331/331: lr=5.6932e-05 loss=0.4173 total_loss=0.3232
+2025-11-14 10:42:11,569 - train.py[line:614] - INFO: [Train] epoch 17 - before is_eval()
+2025-11-14 10:42:11,570 - train.py[line:732] - INFO: Avg train time: 184.85s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:53:39
+Epoch 18/300 Iter 1/331: lr=5.6931e-05 loss=0.3853 total_loss=0.3853
+Epoch 18/300 Iter 33/331: lr=5.6914e-05 loss=0.2100 total_loss=0.3120
+Epoch 18/300 Iter 66/331: lr=5.6896e-05 loss=0.3848 total_loss=0.3015
+Epoch 18/300 Iter 99/331: lr=5.6878e-05 loss=0.3881 total_loss=0.2983
+Epoch 18/300 Iter 132/331: lr=5.6859e-05 loss=0.2610 total_loss=0.2952
+Epoch 18/300 Iter 165/331: lr=5.6841e-05 loss=0.2766 total_loss=0.2948
+Epoch 18/300 Iter 198/331: lr=5.6823e-05 loss=0.2767 total_loss=0.2931
+Epoch 18/300 Iter 231/331: lr=5.6805e-05 loss=0.3042 total_loss=0.2998
+Epoch 18/300 Iter 264/331: lr=5.6787e-05 loss=0.1987 total_loss=0.3033
+Epoch 18/300 Iter 297/331: lr=5.6769e-05 loss=0.1612 total_loss=0.3044
+Epoch 18/300 Iter 330/331: lr=5.6751e-05 loss=0.2658 total_loss=0.3030
+2025-11-14 10:45:16,327 - train.py[line:611] - INFO: Epoch 18/300 Iter 331/331: lr=5.6751e-05 loss=0.3820 total_loss=0.3033
+2025-11-14 10:45:16,328 - train.py[line:614] - INFO: [Train] epoch 18 - before is_eval()
+2025-11-14 10:45:16,328 - train.py[line:732] - INFO: Avg train time: 184.68s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:52:51
+Epoch 19/300 Iter 1/331: lr=5.6750e-05 loss=0.2053 total_loss=0.2053
+Epoch 19/300 Iter 33/331: lr=5.6733e-05 loss=0.2301 total_loss=0.2676
+Epoch 19/300 Iter 66/331: lr=5.6714e-05 loss=0.4424 total_loss=0.2712
+Epoch 19/300 Iter 99/331: lr=5.6696e-05 loss=0.5321 total_loss=0.2765
+Epoch 19/300 Iter 132/331: lr=5.6678e-05 loss=0.3134 total_loss=0.2847
+Epoch 19/300 Iter 165/331: lr=5.6660e-05 loss=0.3377 total_loss=0.2899
+Epoch 19/300 Iter 198/331: lr=5.6642e-05 loss=0.4115 total_loss=0.2873
+Epoch 19/300 Iter 231/331: lr=5.6624e-05 loss=0.2971 total_loss=0.2903
+Epoch 19/300 Iter 264/331: lr=5.6606e-05 loss=0.4396 total_loss=0.2909
+Epoch 19/300 Iter 297/331: lr=5.6588e-05 loss=0.1768 total_loss=0.2908
+Epoch 19/300 Iter 330/331: lr=5.6570e-05 loss=0.2080 total_loss=0.2908
+2025-11-14 10:48:21,850 - train.py[line:611] - INFO: Epoch 19/300 Iter 331/331: lr=5.6569e-05 loss=0.2432 total_loss=0.2907
+2025-11-14 10:48:21,850 - train.py[line:614] - INFO: [Train] epoch 19 - before is_eval()
+2025-11-14 10:48:21,850 - train.py[line:732] - INFO: Avg train time: 184.88s, avg eval time: 85.00s, left eval count: 155, ETA: 2025-11-15 04:53:49
+Epoch 20/300 Iter 1/331: lr=5.6569e-05 loss=0.2504 total_loss=0.2504
+Epoch 20/300 Iter 33/331: lr=5.6551e-05 loss=0.2083 total_loss=0.2696
+Epoch 20/300 Iter 66/331: lr=5.6533e-05 loss=0.2570 total_loss=0.2567
+Epoch 20/300 Iter 99/331: lr=5.6515e-05 loss=0.2349 total_loss=0.2692
+Epoch 20/300 Iter 132/331: lr=5.6497e-05 loss=0.4949 total_loss=0.2729
+Epoch 20/300 Iter 165/331: lr=5.6479e-05 loss=0.2751 total_loss=0.2683
+Epoch 20/300 Iter 198/331: lr=5.6461e-05 loss=0.2813 total_loss=0.2712
+Epoch 20/300 Iter 231/331: lr=5.6443e-05 loss=0.3044 total_loss=0.2726
+Epoch 20/300 Iter 264/331: lr=5.6425e-05 loss=0.2271 total_loss=0.2794
+Epoch 20/300 Iter 297/331: lr=5.6407e-05 loss=0.2791 total_loss=0.2799
+Epoch 20/300 Iter 330/331: lr=5.6389e-05 loss=0.3410 total_loss=0.2780
+2025-11-14 10:51:28,765 - train.py[line:611] - INFO: Epoch 20/300 Iter 331/331: lr=5.6388e-05 loss=0.3550 total_loss=0.2783
+2025-11-14 10:51:28,766 - train.py[line:614] - INFO: [Train] epoch 20 - before is_eval()
+2025-11-14 10:51:28,766 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 158
+Evaluating...
+2025-11-14 10:51:29,067 - val_mm.py[line:21] - INFO: [evaluate] Entered evaluate(), dataloader size=158
+Evaluating...
+2025-11-14 10:51:30,087 - val_mm.py[line:33] - INFO: [evaluate] Batch 0/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 1 / 158
+2025-11-14 10:51:31,196 - val_mm.py[line:33] - INFO: [evaluate] Batch 1/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:31,717 - val_mm.py[line:33] - INFO: [evaluate] Batch 2/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:32,213 - val_mm.py[line:33] - INFO: [evaluate] Batch 3/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:32,726 - val_mm.py[line:33] - INFO: [evaluate] Batch 4/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:33,243 - val_mm.py[line:33] - INFO: [evaluate] Batch 5/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:33,745 - val_mm.py[line:33] - INFO: [evaluate] Batch 6/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:34,243 - val_mm.py[line:33] - INFO: [evaluate] Batch 7/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:34,748 - val_mm.py[line:33] - INFO: [evaluate] Batch 8/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:35,257 - val_mm.py[line:33] - INFO: [evaluate] Batch 9/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:35,767 - val_mm.py[line:33] - INFO: [evaluate] Batch 10/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:36,265 - val_mm.py[line:33] - INFO: [evaluate] Batch 11/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:36,774 - val_mm.py[line:33] - INFO: [evaluate] Batch 12/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:37,283 - val_mm.py[line:33] - INFO: [evaluate] Batch 13/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:37,788 - val_mm.py[line:33] - INFO: [evaluate] Batch 14/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:38,296 - val_mm.py[line:33] - INFO: [evaluate] Batch 15/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:38,804 - val_mm.py[line:33] - INFO: [evaluate] Batch 16/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:39,308 - val_mm.py[line:33] - INFO: [evaluate] Batch 17/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:39,817 - val_mm.py[line:33] - INFO: [evaluate] Batch 18/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:40,321 - val_mm.py[line:33] - INFO: [evaluate] Batch 19/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:40,830 - val_mm.py[line:33] - INFO: [evaluate] Batch 20/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:41,337 - val_mm.py[line:33] - INFO: [evaluate] Batch 21/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:41,848 - val_mm.py[line:33] - INFO: [evaluate] Batch 22/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:42,355 - val_mm.py[line:33] - INFO: [evaluate] Batch 23/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:42,867 - val_mm.py[line:33] - INFO: [evaluate] Batch 24/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:43,371 - val_mm.py[line:33] - INFO: [evaluate] Batch 25/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:43,879 - val_mm.py[line:33] - INFO: [evaluate] Batch 26/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:44,385 - val_mm.py[line:33] - INFO: [evaluate] Batch 27/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:44,906 - val_mm.py[line:33] - INFO: [evaluate] Batch 28/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:45,413 - val_mm.py[line:33] - INFO: [evaluate] Batch 29/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:45,927 - val_mm.py[line:33] - INFO: [evaluate] Batch 30/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:46,422 - val_mm.py[line:33] - INFO: [evaluate] Batch 31/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:46,935 - val_mm.py[line:33] - INFO: [evaluate] Batch 32/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:47,440 - val_mm.py[line:33] - INFO: [evaluate] Batch 33/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:47,951 - val_mm.py[line:33] - INFO: [evaluate] Batch 34/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:48,446 - val_mm.py[line:33] - INFO: [evaluate] Batch 35/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:48,958 - val_mm.py[line:33] - INFO: [evaluate] Batch 36/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:49,465 - val_mm.py[line:33] - INFO: [evaluate] Batch 37/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:49,969 - val_mm.py[line:33] - INFO: [evaluate] Batch 38/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:50,464 - val_mm.py[line:33] - INFO: [evaluate] Batch 39/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:50,970 - val_mm.py[line:33] - INFO: [evaluate] Batch 40/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:51,477 - val_mm.py[line:33] - INFO: [evaluate] Batch 41/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:51,985 - val_mm.py[line:33] - INFO: [evaluate] Batch 42/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:52,483 - val_mm.py[line:33] - INFO: [evaluate] Batch 43/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:52,998 - val_mm.py[line:33] - INFO: [evaluate] Batch 44/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:53,507 - val_mm.py[line:33] - INFO: [evaluate] Batch 45/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:54,012 - val_mm.py[line:33] - INFO: [evaluate] Batch 46/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:54,510 - val_mm.py[line:33] - INFO: [evaluate] Batch 47/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:55,019 - val_mm.py[line:33] - INFO: [evaluate] Batch 48/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:55,524 - val_mm.py[line:33] - INFO: [evaluate] Batch 49/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:56,041 - val_mm.py[line:33] - INFO: [evaluate] Batch 50/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:56,536 - val_mm.py[line:33] - INFO: [evaluate] Batch 51/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:57,050 - val_mm.py[line:33] - INFO: [evaluate] Batch 52/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:57,555 - val_mm.py[line:33] - INFO: [evaluate] Batch 53/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:58,051 - val_mm.py[line:33] - INFO: [evaluate] Batch 54/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:58,554 - val_mm.py[line:33] - INFO: [evaluate] Batch 55/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:59,056 - val_mm.py[line:33] - INFO: [evaluate] Batch 56/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:51:59,566 - val_mm.py[line:33] - INFO: [evaluate] Batch 57/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:00,074 - val_mm.py[line:33] - INFO: [evaluate] Batch 58/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:00,580 - val_mm.py[line:33] - INFO: [evaluate] Batch 59/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:01,078 - val_mm.py[line:33] - INFO: [evaluate] Batch 60/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:01,589 - val_mm.py[line:33] - INFO: [evaluate] Batch 61/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:02,100 - val_mm.py[line:33] - INFO: [evaluate] Batch 62/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:02,604 - val_mm.py[line:33] - INFO: [evaluate] Batch 63/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:03,104 - val_mm.py[line:33] - INFO: [evaluate] Batch 64/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:03,610 - val_mm.py[line:33] - INFO: [evaluate] Batch 65/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:04,120 - val_mm.py[line:33] - INFO: [evaluate] Batch 66/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:04,633 - val_mm.py[line:33] - INFO: [evaluate] Batch 67/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:05,133 - val_mm.py[line:33] - INFO: [evaluate] Batch 68/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:05,643 - val_mm.py[line:33] - INFO: [evaluate] Batch 69/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:06,152 - val_mm.py[line:33] - INFO: [evaluate] Batch 70/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:06,656 - val_mm.py[line:33] - INFO: [evaluate] Batch 71/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:07,154 - val_mm.py[line:33] - INFO: [evaluate] Batch 72/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:07,644 - val_mm.py[line:33] - INFO: [evaluate] Batch 73/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:08,153 - val_mm.py[line:33] - INFO: [evaluate] Batch 74/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:08,660 - val_mm.py[line:33] - INFO: [evaluate] Batch 75/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:09,152 - val_mm.py[line:33] - INFO: [evaluate] Batch 76/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:09,644 - val_mm.py[line:33] - INFO: [evaluate] Batch 77/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:10,140 - val_mm.py[line:33] - INFO: [evaluate] Batch 78/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 79 / 158
+2025-11-14 10:52:10,650 - val_mm.py[line:33] - INFO: [evaluate] Batch 79/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:11,157 - val_mm.py[line:33] - INFO: [evaluate] Batch 80/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:11,662 - val_mm.py[line:33] - INFO: [evaluate] Batch 81/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:12,157 - val_mm.py[line:33] - INFO: [evaluate] Batch 82/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:12,649 - val_mm.py[line:33] - INFO: [evaluate] Batch 83/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:13,158 - val_mm.py[line:33] - INFO: [evaluate] Batch 84/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:13,663 - val_mm.py[line:33] - INFO: [evaluate] Batch 85/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:14,166 - val_mm.py[line:33] - INFO: [evaluate] Batch 86/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:14,660 - val_mm.py[line:33] - INFO: [evaluate] Batch 87/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:15,170 - val_mm.py[line:33] - INFO: [evaluate] Batch 88/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:15,679 - val_mm.py[line:33] - INFO: [evaluate] Batch 89/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:16,181 - val_mm.py[line:33] - INFO: [evaluate] Batch 90/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:16,674 - val_mm.py[line:33] - INFO: [evaluate] Batch 91/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:17,183 - val_mm.py[line:33] - INFO: [evaluate] Batch 92/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:17,696 - val_mm.py[line:33] - INFO: [evaluate] Batch 93/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:18,201 - val_mm.py[line:33] - INFO: [evaluate] Batch 94/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:18,695 - val_mm.py[line:33] - INFO: [evaluate] Batch 95/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:19,193 - val_mm.py[line:33] - INFO: [evaluate] Batch 96/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:19,706 - val_mm.py[line:33] - INFO: [evaluate] Batch 97/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:20,213 - val_mm.py[line:33] - INFO: [evaluate] Batch 98/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:20,720 - val_mm.py[line:33] - INFO: [evaluate] Batch 99/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:21,212 - val_mm.py[line:33] - INFO: [evaluate] Batch 100/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:21,710 - val_mm.py[line:33] - INFO: [evaluate] Batch 101/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:22,220 - val_mm.py[line:33] - INFO: [evaluate] Batch 102/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:22,733 - val_mm.py[line:33] - INFO: [evaluate] Batch 103/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:23,230 - val_mm.py[line:33] - INFO: [evaluate] Batch 104/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:23,745 - val_mm.py[line:33] - INFO: [evaluate] Batch 105/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:24,253 - val_mm.py[line:33] - INFO: [evaluate] Batch 106/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:24,763 - val_mm.py[line:33] - INFO: [evaluate] Batch 107/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:25,262 - val_mm.py[line:33] - INFO: [evaluate] Batch 108/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:25,773 - val_mm.py[line:33] - INFO: [evaluate] Batch 109/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:26,279 - val_mm.py[line:33] - INFO: [evaluate] Batch 110/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:26,779 - val_mm.py[line:33] - INFO: [evaluate] Batch 111/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:27,276 - val_mm.py[line:33] - INFO: [evaluate] Batch 112/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:27,787 - val_mm.py[line:33] - INFO: [evaluate] Batch 113/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:28,296 - val_mm.py[line:33] - INFO: [evaluate] Batch 114/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:28,801 - val_mm.py[line:33] - INFO: [evaluate] Batch 115/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:29,297 - val_mm.py[line:33] - INFO: [evaluate] Batch 116/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:29,807 - val_mm.py[line:33] - INFO: [evaluate] Batch 117/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:30,314 - val_mm.py[line:33] - INFO: [evaluate] Batch 118/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:30,831 - val_mm.py[line:33] - INFO: [evaluate] Batch 119/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:31,329 - val_mm.py[line:33] - INFO: [evaluate] Batch 120/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:31,841 - val_mm.py[line:33] - INFO: [evaluate] Batch 121/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:32,352 - val_mm.py[line:33] - INFO: [evaluate] Batch 122/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:32,856 - val_mm.py[line:33] - INFO: [evaluate] Batch 123/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:33,354 - val_mm.py[line:33] - INFO: [evaluate] Batch 124/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:33,864 - val_mm.py[line:33] - INFO: [evaluate] Batch 125/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:34,368 - val_mm.py[line:33] - INFO: [evaluate] Batch 126/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:34,880 - val_mm.py[line:33] - INFO: [evaluate] Batch 127/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:35,389 - val_mm.py[line:33] - INFO: [evaluate] Batch 128/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:35,903 - val_mm.py[line:33] - INFO: [evaluate] Batch 129/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:36,408 - val_mm.py[line:33] - INFO: [evaluate] Batch 130/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:36,914 - val_mm.py[line:33] - INFO: [evaluate] Batch 131/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:37,421 - val_mm.py[line:33] - INFO: [evaluate] Batch 132/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:37,928 - val_mm.py[line:33] - INFO: [evaluate] Batch 133/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:38,441 - val_mm.py[line:33] - INFO: [evaluate] Batch 134/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:38,938 - val_mm.py[line:33] - INFO: [evaluate] Batch 135/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:39,448 - val_mm.py[line:33] - INFO: [evaluate] Batch 136/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:39,958 - val_mm.py[line:33] - INFO: [evaluate] Batch 137/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:40,460 - val_mm.py[line:33] - INFO: [evaluate] Batch 138/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:40,959 - val_mm.py[line:33] - INFO: [evaluate] Batch 139/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:41,468 - val_mm.py[line:33] - INFO: [evaluate] Batch 140/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:41,948 - val_mm.py[line:33] - INFO: [evaluate] Batch 141/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:42,426 - val_mm.py[line:33] - INFO: [evaluate] Batch 142/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:42,906 - val_mm.py[line:33] - INFO: [evaluate] Batch 143/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:43,384 - val_mm.py[line:33] - INFO: [evaluate] Batch 144/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:43,867 - val_mm.py[line:33] - INFO: [evaluate] Batch 145/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:44,346 - val_mm.py[line:33] - INFO: [evaluate] Batch 146/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:44,825 - val_mm.py[line:33] - INFO: [evaluate] Batch 147/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:45,304 - val_mm.py[line:33] - INFO: [evaluate] Batch 148/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:45,784 - val_mm.py[line:33] - INFO: [evaluate] Batch 149/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:46,263 - val_mm.py[line:33] - INFO: [evaluate] Batch 150/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:46,744 - val_mm.py[line:33] - INFO: [evaluate] Batch 151/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:47,222 - val_mm.py[line:33] - INFO: [evaluate] Batch 152/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:47,704 - val_mm.py[line:33] - INFO: [evaluate] Batch 153/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:48,182 - val_mm.py[line:33] - INFO: [evaluate] Batch 154/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:48,660 - val_mm.py[line:33] - INFO: [evaluate] Batch 155/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:49,137 - val_mm.py[line:33] - INFO: [evaluate] Batch 156/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 10:52:49,617 - val_mm.py[line:33] - INFO: [evaluate] Batch 157/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 158 / 158
+2025-11-14 10:52:50,179 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-20_miou_47.25.pth
+2025-11-14 10:52:51,326 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-20_miou_47.25.pth, Time usage:
+	prepare checkpoint: 0.01046895980834961, IO: 1.135268211364746
+miou 47.25 best 47.25
+2025-11-14 10:52:51,327 - train.py[line:717] - INFO: Epoch 20 validation result: mIoU: 47.2500,Best mIoU: 47.2500, 
+2025-11-14 10:52:51,327 - train.py[line:732] - INFO: Avg train time: 185.55s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:54:24
+Epoch 21/300 Iter 1/331: lr=5.6388e-05 loss=0.4038 total_loss=0.4038
+Epoch 21/300 Iter 33/331: lr=5.6370e-05 loss=0.2045 total_loss=0.2727
+Epoch 21/300 Iter 66/331: lr=5.6352e-05 loss=0.2853 total_loss=0.2596
+Epoch 21/300 Iter 99/331: lr=5.6334e-05 loss=0.2269 total_loss=0.2626
+Epoch 21/300 Iter 132/331: lr=5.6316e-05 loss=0.2684 total_loss=0.2701
+Epoch 21/300 Iter 165/331: lr=5.6298e-05 loss=0.4354 total_loss=0.2677
+Epoch 21/300 Iter 198/331: lr=5.6280e-05 loss=0.2128 total_loss=0.2632
+Epoch 21/300 Iter 231/331: lr=5.6262e-05 loss=0.2362 total_loss=0.2631
+Epoch 21/300 Iter 264/331: lr=5.6244e-05 loss=0.2056 total_loss=0.2611
+Epoch 21/300 Iter 297/331: lr=5.6226e-05 loss=0.1891 total_loss=0.2656
+Epoch 21/300 Iter 330/331: lr=5.6208e-05 loss=0.2950 total_loss=0.2676
+2025-11-14 10:56:14,939 - train.py[line:611] - INFO: Epoch 21/300 Iter 331/331: lr=5.6207e-05 loss=0.2158 total_loss=0.2674
+2025-11-14 10:56:14,940 - train.py[line:614] - INFO: [Train] epoch 21 - before is_eval()
+2025-11-14 10:56:14,940 - train.py[line:732] - INFO: Avg train time: 192.64s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 05:27:42
+Epoch 22/300 Iter 1/331: lr=5.6206e-05 loss=0.2842 total_loss=0.2842
+Epoch 22/300 Iter 33/331: lr=5.6189e-05 loss=0.1844 total_loss=0.2494
+Epoch 22/300 Iter 66/331: lr=5.6171e-05 loss=0.1717 total_loss=0.2477
+Epoch 22/300 Iter 99/331: lr=5.6153e-05 loss=0.2207 total_loss=0.2383
+Epoch 22/300 Iter 132/331: lr=5.6135e-05 loss=0.3017 total_loss=0.2424
+Epoch 22/300 Iter 165/331: lr=5.6117e-05 loss=0.1579 total_loss=0.2425
+Epoch 22/300 Iter 198/331: lr=5.6098e-05 loss=0.1819 total_loss=0.2461
+Epoch 22/300 Iter 231/331: lr=5.6080e-05 loss=0.1761 total_loss=0.2431
+Epoch 22/300 Iter 264/331: lr=5.6062e-05 loss=0.2091 total_loss=0.2453
+Epoch 22/300 Iter 297/331: lr=5.6044e-05 loss=0.2959 total_loss=0.2444
+Epoch 22/300 Iter 330/331: lr=5.6026e-05 loss=0.2585 total_loss=0.2447
+2025-11-14 10:59:20,153 - train.py[line:611] - INFO: Epoch 22/300 Iter 331/331: lr=5.6026e-05 loss=0.2937 total_loss=0.2449
+2025-11-14 10:59:20,154 - train.py[line:614] - INFO: [Train] epoch 22 - before is_eval()
+2025-11-14 10:59:20,154 - train.py[line:732] - INFO: Avg train time: 189.53s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 05:13:09
+Epoch 23/300 Iter 1/331: lr=5.6025e-05 loss=0.5207 total_loss=0.5207
+Epoch 23/300 Iter 33/331: lr=5.6008e-05 loss=0.2014 total_loss=0.2316
+Epoch 23/300 Iter 66/331: lr=5.5989e-05 loss=0.2620 total_loss=0.2368
+Epoch 23/300 Iter 99/331: lr=5.5971e-05 loss=0.2833 total_loss=0.2381
+Epoch 23/300 Iter 132/331: lr=5.5953e-05 loss=0.3449 total_loss=0.2348
+Epoch 23/300 Iter 165/331: lr=5.5935e-05 loss=0.2568 total_loss=0.2323
+Epoch 23/300 Iter 198/331: lr=5.5917e-05 loss=0.2322 total_loss=0.2355
+Epoch 23/300 Iter 231/331: lr=5.5899e-05 loss=0.2087 total_loss=0.2384
+Epoch 23/300 Iter 264/331: lr=5.5881e-05 loss=0.3830 total_loss=0.2387
+Epoch 23/300 Iter 297/331: lr=5.5863e-05 loss=0.3171 total_loss=0.2395
+Epoch 23/300 Iter 330/331: lr=5.5845e-05 loss=0.2721 total_loss=0.2406
+2025-11-14 11:02:26,229 - train.py[line:611] - INFO: Epoch 23/300 Iter 331/331: lr=5.5844e-05 loss=0.2002 total_loss=0.2405
+2025-11-14 11:02:26,230 - train.py[line:614] - INFO: [Train] epoch 23 - before is_eval()
+2025-11-14 11:02:26,230 - train.py[line:732] - INFO: Avg train time: 188.02s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 05:06:08
+Epoch 24/300 Iter 1/331: lr=5.5844e-05 loss=0.3213 total_loss=0.3213
+Epoch 24/300 Iter 33/331: lr=5.5826e-05 loss=0.1904 total_loss=0.2168
+Epoch 24/300 Iter 66/331: lr=5.5808e-05 loss=0.2117 total_loss=0.2250
+Epoch 24/300 Iter 99/331: lr=5.5790e-05 loss=0.2692 total_loss=0.2247
+Epoch 24/300 Iter 132/331: lr=5.5772e-05 loss=0.1901 total_loss=0.2249
+Epoch 24/300 Iter 165/331: lr=5.5754e-05 loss=0.1528 total_loss=0.2296
+Epoch 24/300 Iter 198/331: lr=5.5736e-05 loss=0.1759 total_loss=0.2316
+Epoch 24/300 Iter 231/331: lr=5.5718e-05 loss=0.3163 total_loss=0.2312
+Epoch 24/300 Iter 264/331: lr=5.5699e-05 loss=0.2178 total_loss=0.2326
+Epoch 24/300 Iter 297/331: lr=5.5681e-05 loss=0.7587 total_loss=0.2347
+Epoch 24/300 Iter 330/331: lr=5.5663e-05 loss=0.1668 total_loss=0.2353
+2025-11-14 11:05:31,171 - train.py[line:611] - INFO: Epoch 24/300 Iter 331/331: lr=5.5663e-05 loss=0.4005 total_loss=0.2358
+2025-11-14 11:05:31,172 - train.py[line:614] - INFO: [Train] epoch 24 - before is_eval()
+2025-11-14 11:05:31,172 - train.py[line:732] - INFO: Avg train time: 186.66s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:59:47
+Epoch 25/300 Iter 1/331: lr=5.5662e-05 loss=0.2297 total_loss=0.2297
+Epoch 25/300 Iter 33/331: lr=5.5645e-05 loss=0.1217 total_loss=0.2011
+Epoch 25/300 Iter 66/331: lr=5.5627e-05 loss=0.1954 total_loss=0.2046
+Epoch 25/300 Iter 99/331: lr=5.5608e-05 loss=0.2039 total_loss=0.2095
+Epoch 25/300 Iter 132/331: lr=5.5590e-05 loss=0.2675 total_loss=0.2159
+Epoch 25/300 Iter 165/331: lr=5.5572e-05 loss=0.4021 total_loss=0.2208
+Epoch 25/300 Iter 198/331: lr=5.5554e-05 loss=0.2464 total_loss=0.2221
+Epoch 25/300 Iter 231/331: lr=5.5536e-05 loss=0.1302 total_loss=0.2220
+Epoch 25/300 Iter 264/331: lr=5.5518e-05 loss=0.2410 total_loss=0.2224
+Epoch 25/300 Iter 297/331: lr=5.5500e-05 loss=0.2322 total_loss=0.2223
+Epoch 25/300 Iter 330/331: lr=5.5482e-05 loss=0.1697 total_loss=0.2231
+2025-11-14 11:08:36,244 - train.py[line:611] - INFO: Epoch 25/300 Iter 331/331: lr=5.5481e-05 loss=0.1616 total_loss=0.2229
+2025-11-14 11:08:36,244 - train.py[line:614] - INFO: [Train] epoch 25 - before is_eval()
+2025-11-14 11:08:36,245 - train.py[line:732] - INFO: Avg train time: 185.89s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:56:16
+Epoch 26/300 Iter 1/331: lr=5.5481e-05 loss=0.1395 total_loss=0.1395
+Epoch 26/300 Iter 33/331: lr=5.5463e-05 loss=0.2037 total_loss=0.2178
+Epoch 26/300 Iter 66/331: lr=5.5445e-05 loss=0.1575 total_loss=0.2093
+Epoch 26/300 Iter 99/331: lr=5.5427e-05 loss=0.1833 total_loss=0.2098
+Epoch 26/300 Iter 132/331: lr=5.5409e-05 loss=0.1734 total_loss=0.2148
+Epoch 26/300 Iter 165/331: lr=5.5391e-05 loss=0.1972 total_loss=0.2144
+Epoch 26/300 Iter 198/331: lr=5.5373e-05 loss=0.2381 total_loss=0.2142
+Epoch 26/300 Iter 231/331: lr=5.5354e-05 loss=0.1627 total_loss=0.2137
+Epoch 26/300 Iter 264/331: lr=5.5336e-05 loss=0.2223 total_loss=0.2164
+Epoch 26/300 Iter 297/331: lr=5.5318e-05 loss=0.2988 total_loss=0.2173
+Epoch 26/300 Iter 330/331: lr=5.5300e-05 loss=0.2271 total_loss=0.2182
+2025-11-14 11:11:42,551 - train.py[line:611] - INFO: Epoch 26/300 Iter 331/331: lr=5.5300e-05 loss=0.2001 total_loss=0.2181
+2025-11-14 11:11:42,552 - train.py[line:614] - INFO: [Train] epoch 26 - before is_eval()
+2025-11-14 11:11:42,552 - train.py[line:732] - INFO: Avg train time: 185.92s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:56:23
+Epoch 27/300 Iter 1/331: lr=5.5299e-05 loss=0.1645 total_loss=0.1645
+Epoch 27/300 Iter 33/331: lr=5.5281e-05 loss=0.2009 total_loss=0.2015
+Epoch 27/300 Iter 66/331: lr=5.5263e-05 loss=0.2518 total_loss=0.2042
+Epoch 27/300 Iter 99/331: lr=5.5245e-05 loss=0.2007 total_loss=0.2038
+Epoch 27/300 Iter 132/331: lr=5.5227e-05 loss=0.1700 total_loss=0.2064
+Epoch 27/300 Iter 165/331: lr=5.5209e-05 loss=0.1529 total_loss=0.2046
+Epoch 27/300 Iter 198/331: lr=5.5191e-05 loss=0.2013 total_loss=0.2084
+Epoch 27/300 Iter 231/331: lr=5.5173e-05 loss=0.2216 total_loss=0.2089
+Epoch 27/300 Iter 264/331: lr=5.5155e-05 loss=0.1667 total_loss=0.2096
+Epoch 27/300 Iter 297/331: lr=5.5137e-05 loss=0.1316 total_loss=0.2084
+Epoch 27/300 Iter 330/331: lr=5.5118e-05 loss=0.1689 total_loss=0.2074
+2025-11-14 11:14:48,452 - train.py[line:611] - INFO: Epoch 27/300 Iter 331/331: lr=5.5118e-05 loss=0.2405 total_loss=0.2075
+2025-11-14 11:14:48,453 - train.py[line:614] - INFO: [Train] epoch 27 - before is_eval()
+2025-11-14 11:14:48,453 - train.py[line:732] - INFO: Avg train time: 185.77s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:55:42
+Epoch 28/300 Iter 1/331: lr=5.5117e-05 loss=0.1622 total_loss=0.1622
+Epoch 28/300 Iter 33/331: lr=5.5100e-05 loss=0.1785 total_loss=0.2010
+Epoch 28/300 Iter 66/331: lr=5.5082e-05 loss=0.2341 total_loss=0.2008
+Epoch 28/300 Iter 99/331: lr=5.5064e-05 loss=0.2128 total_loss=0.1984
+Epoch 28/300 Iter 132/331: lr=5.5045e-05 loss=0.2348 total_loss=0.1962
+Epoch 28/300 Iter 165/331: lr=5.5027e-05 loss=0.1326 total_loss=0.1952
+Epoch 28/300 Iter 198/331: lr=5.5009e-05 loss=0.1960 total_loss=0.1949
+Epoch 28/300 Iter 231/331: lr=5.4991e-05 loss=0.1632 total_loss=0.1982
+Epoch 28/300 Iter 264/331: lr=5.4973e-05 loss=0.1652 total_loss=0.1994
+Epoch 28/300 Iter 297/331: lr=5.4955e-05 loss=0.1406 total_loss=0.1979
+Epoch 28/300 Iter 330/331: lr=5.4937e-05 loss=0.1411 total_loss=0.1993
+2025-11-14 11:17:51,295 - train.py[line:611] - INFO: Epoch 28/300 Iter 331/331: lr=5.4936e-05 loss=0.2849 total_loss=0.1995
+2025-11-14 11:17:51,295 - train.py[line:614] - INFO: [Train] epoch 28 - before is_eval()
+2025-11-14 11:17:51,296 - train.py[line:732] - INFO: Avg train time: 184.45s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:49:41
+Epoch 29/300 Iter 1/331: lr=5.4936e-05 loss=0.2032 total_loss=0.2032
+Epoch 29/300 Iter 33/331: lr=5.4918e-05 loss=0.1434 total_loss=0.1794
+Epoch 29/300 Iter 66/331: lr=5.4900e-05 loss=0.1963 total_loss=0.1960
+Epoch 29/300 Iter 99/331: lr=5.4882e-05 loss=0.1932 total_loss=0.1907
+Epoch 29/300 Iter 132/331: lr=5.4864e-05 loss=0.1727 total_loss=0.1936
+Epoch 29/300 Iter 165/331: lr=5.4846e-05 loss=0.1310 total_loss=0.1936
+Epoch 29/300 Iter 198/331: lr=5.4827e-05 loss=0.2324 total_loss=0.1962
+Epoch 29/300 Iter 231/331: lr=5.4809e-05 loss=0.1738 total_loss=0.1977
+Epoch 29/300 Iter 264/331: lr=5.4791e-05 loss=0.2482 total_loss=0.1991
+Epoch 29/300 Iter 297/331: lr=5.4773e-05 loss=0.3127 total_loss=0.1981
+Epoch 29/300 Iter 330/331: lr=5.4755e-05 loss=0.1786 total_loss=0.1970
+2025-11-14 11:20:55,746 - train.py[line:611] - INFO: Epoch 29/300 Iter 331/331: lr=5.4754e-05 loss=0.1742 total_loss=0.1969
+2025-11-14 11:20:55,747 - train.py[line:614] - INFO: [Train] epoch 29 - before is_eval()
+2025-11-14 11:20:55,747 - train.py[line:732] - INFO: Avg train time: 184.32s, avg eval time: 84.02s, left eval count: 154, ETA: 2025-11-15 04:49:04
+Epoch 30/300 Iter 1/331: lr=5.4754e-05 loss=0.2990 total_loss=0.2990
+Epoch 30/300 Iter 33/331: lr=5.4736e-05 loss=0.1998 total_loss=0.2045
+Epoch 30/300 Iter 66/331: lr=5.4718e-05 loss=0.2565 total_loss=0.1925
+Epoch 30/300 Iter 99/331: lr=5.4700e-05 loss=0.1518 total_loss=0.1894
+Epoch 30/300 Iter 132/331: lr=5.4682e-05 loss=0.1497 total_loss=0.1968
+Epoch 30/300 Iter 165/331: lr=5.4664e-05 loss=0.1379 total_loss=0.1950
+Epoch 30/300 Iter 198/331: lr=5.4646e-05 loss=0.2088 total_loss=0.1928
+Epoch 30/300 Iter 231/331: lr=5.4627e-05 loss=0.1249 total_loss=0.1911
+Epoch 30/300 Iter 264/331: lr=5.4609e-05 loss=0.1356 total_loss=0.1909
+Epoch 30/300 Iter 297/331: lr=5.4591e-05 loss=0.2492 total_loss=0.1951
+Epoch 30/300 Iter 330/331: lr=5.4573e-05 loss=0.2284 total_loss=0.1963
+2025-11-14 11:24:00,868 - train.py[line:611] - INFO: Epoch 30/300 Iter 331/331: lr=5.4573e-05 loss=0.2105 total_loss=0.1963
+2025-11-14 11:24:00,869 - train.py[line:614] - INFO: [Train] epoch 30 - before is_eval()
+2025-11-14 11:24:00,869 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 158
+Evaluating...
+2025-11-14 11:24:01,189 - val_mm.py[line:21] - INFO: [evaluate] Entered evaluate(), dataloader size=158
+Evaluating...
+2025-11-14 11:24:02,227 - val_mm.py[line:33] - INFO: [evaluate] Batch 0/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 1 / 158
+2025-11-14 11:24:03,350 - val_mm.py[line:33] - INFO: [evaluate] Batch 1/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:03,872 - val_mm.py[line:33] - INFO: [evaluate] Batch 2/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:04,388 - val_mm.py[line:33] - INFO: [evaluate] Batch 3/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:04,903 - val_mm.py[line:33] - INFO: [evaluate] Batch 4/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:05,403 - val_mm.py[line:33] - INFO: [evaluate] Batch 5/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:05,918 - val_mm.py[line:33] - INFO: [evaluate] Batch 6/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:06,432 - val_mm.py[line:33] - INFO: [evaluate] Batch 7/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:06,935 - val_mm.py[line:33] - INFO: [evaluate] Batch 8/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:07,448 - val_mm.py[line:33] - INFO: [evaluate] Batch 9/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:07,973 - val_mm.py[line:33] - INFO: [evaluate] Batch 10/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:08,480 - val_mm.py[line:33] - INFO: [evaluate] Batch 11/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:08,993 - val_mm.py[line:33] - INFO: [evaluate] Batch 12/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:09,507 - val_mm.py[line:33] - INFO: [evaluate] Batch 13/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:10,027 - val_mm.py[line:33] - INFO: [evaluate] Batch 14/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:10,527 - val_mm.py[line:33] - INFO: [evaluate] Batch 15/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:11,045 - val_mm.py[line:33] - INFO: [evaluate] Batch 16/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:11,554 - val_mm.py[line:33] - INFO: [evaluate] Batch 17/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:12,067 - val_mm.py[line:33] - INFO: [evaluate] Batch 18/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:12,564 - val_mm.py[line:33] - INFO: [evaluate] Batch 19/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:13,078 - val_mm.py[line:33] - INFO: [evaluate] Batch 20/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:13,584 - val_mm.py[line:33] - INFO: [evaluate] Batch 21/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:14,081 - val_mm.py[line:33] - INFO: [evaluate] Batch 22/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:14,596 - val_mm.py[line:33] - INFO: [evaluate] Batch 23/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:15,106 - val_mm.py[line:33] - INFO: [evaluate] Batch 24/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:15,614 - val_mm.py[line:33] - INFO: [evaluate] Batch 25/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:16,115 - val_mm.py[line:33] - INFO: [evaluate] Batch 26/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:16,621 - val_mm.py[line:33] - INFO: [evaluate] Batch 27/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:17,134 - val_mm.py[line:33] - INFO: [evaluate] Batch 28/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:17,647 - val_mm.py[line:33] - INFO: [evaluate] Batch 29/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:18,148 - val_mm.py[line:33] - INFO: [evaluate] Batch 30/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:18,657 - val_mm.py[line:33] - INFO: [evaluate] Batch 31/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:19,176 - val_mm.py[line:33] - INFO: [evaluate] Batch 32/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:19,684 - val_mm.py[line:33] - INFO: [evaluate] Batch 33/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:20,178 - val_mm.py[line:33] - INFO: [evaluate] Batch 34/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:20,691 - val_mm.py[line:33] - INFO: [evaluate] Batch 35/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:21,210 - val_mm.py[line:33] - INFO: [evaluate] Batch 36/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:21,710 - val_mm.py[line:33] - INFO: [evaluate] Batch 37/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:22,225 - val_mm.py[line:33] - INFO: [evaluate] Batch 38/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:22,741 - val_mm.py[line:33] - INFO: [evaluate] Batch 39/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:23,245 - val_mm.py[line:33] - INFO: [evaluate] Batch 40/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:23,744 - val_mm.py[line:33] - INFO: [evaluate] Batch 41/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:24,252 - val_mm.py[line:33] - INFO: [evaluate] Batch 42/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:24,758 - val_mm.py[line:33] - INFO: [evaluate] Batch 43/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:25,273 - val_mm.py[line:33] - INFO: [evaluate] Batch 44/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:25,769 - val_mm.py[line:33] - INFO: [evaluate] Batch 45/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:26,279 - val_mm.py[line:33] - INFO: [evaluate] Batch 46/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:26,788 - val_mm.py[line:33] - INFO: [evaluate] Batch 47/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:27,297 - val_mm.py[line:33] - INFO: [evaluate] Batch 48/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:27,794 - val_mm.py[line:33] - INFO: [evaluate] Batch 49/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:28,302 - val_mm.py[line:33] - INFO: [evaluate] Batch 50/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:28,810 - val_mm.py[line:33] - INFO: [evaluate] Batch 51/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:29,318 - val_mm.py[line:33] - INFO: [evaluate] Batch 52/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:29,819 - val_mm.py[line:33] - INFO: [evaluate] Batch 53/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:30,328 - val_mm.py[line:33] - INFO: [evaluate] Batch 54/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:30,845 - val_mm.py[line:33] - INFO: [evaluate] Batch 55/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:31,352 - val_mm.py[line:33] - INFO: [evaluate] Batch 56/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:31,854 - val_mm.py[line:33] - INFO: [evaluate] Batch 57/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:32,364 - val_mm.py[line:33] - INFO: [evaluate] Batch 58/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:32,878 - val_mm.py[line:33] - INFO: [evaluate] Batch 59/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:33,376 - val_mm.py[line:33] - INFO: [evaluate] Batch 60/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:33,887 - val_mm.py[line:33] - INFO: [evaluate] Batch 61/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:34,397 - val_mm.py[line:33] - INFO: [evaluate] Batch 62/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:34,892 - val_mm.py[line:33] - INFO: [evaluate] Batch 63/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:35,395 - val_mm.py[line:33] - INFO: [evaluate] Batch 64/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:35,895 - val_mm.py[line:33] - INFO: [evaluate] Batch 65/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:36,403 - val_mm.py[line:33] - INFO: [evaluate] Batch 66/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:36,914 - val_mm.py[line:33] - INFO: [evaluate] Batch 67/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:37,424 - val_mm.py[line:33] - INFO: [evaluate] Batch 68/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:37,923 - val_mm.py[line:33] - INFO: [evaluate] Batch 69/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:38,433 - val_mm.py[line:33] - INFO: [evaluate] Batch 70/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:38,946 - val_mm.py[line:33] - INFO: [evaluate] Batch 71/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:39,453 - val_mm.py[line:33] - INFO: [evaluate] Batch 72/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:39,955 - val_mm.py[line:33] - INFO: [evaluate] Batch 73/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:40,464 - val_mm.py[line:33] - INFO: [evaluate] Batch 74/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:40,985 - val_mm.py[line:33] - INFO: [evaluate] Batch 75/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:41,486 - val_mm.py[line:33] - INFO: [evaluate] Batch 76/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:41,997 - val_mm.py[line:33] - INFO: [evaluate] Batch 77/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:42,506 - val_mm.py[line:33] - INFO: [evaluate] Batch 78/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 79 / 158
+2025-11-14 11:24:43,016 - val_mm.py[line:33] - INFO: [evaluate] Batch 79/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:43,516 - val_mm.py[line:33] - INFO: [evaluate] Batch 80/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:44,027 - val_mm.py[line:33] - INFO: [evaluate] Batch 81/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:44,533 - val_mm.py[line:33] - INFO: [evaluate] Batch 82/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:45,047 - val_mm.py[line:33] - INFO: [evaluate] Batch 83/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:45,556 - val_mm.py[line:33] - INFO: [evaluate] Batch 84/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:46,065 - val_mm.py[line:33] - INFO: [evaluate] Batch 85/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:46,561 - val_mm.py[line:33] - INFO: [evaluate] Batch 86/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:47,063 - val_mm.py[line:33] - INFO: [evaluate] Batch 87/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:47,562 - val_mm.py[line:33] - INFO: [evaluate] Batch 88/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:48,070 - val_mm.py[line:33] - INFO: [evaluate] Batch 89/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:48,580 - val_mm.py[line:33] - INFO: [evaluate] Batch 90/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:49,075 - val_mm.py[line:33] - INFO: [evaluate] Batch 91/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:49,570 - val_mm.py[line:33] - INFO: [evaluate] Batch 92/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:50,070 - val_mm.py[line:33] - INFO: [evaluate] Batch 93/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:50,579 - val_mm.py[line:33] - INFO: [evaluate] Batch 94/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:51,092 - val_mm.py[line:33] - INFO: [evaluate] Batch 95/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:51,597 - val_mm.py[line:33] - INFO: [evaluate] Batch 96/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:52,099 - val_mm.py[line:33] - INFO: [evaluate] Batch 97/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:52,607 - val_mm.py[line:33] - INFO: [evaluate] Batch 98/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:53,115 - val_mm.py[line:33] - INFO: [evaluate] Batch 99/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:53,619 - val_mm.py[line:33] - INFO: [evaluate] Batch 100/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:54,117 - val_mm.py[line:33] - INFO: [evaluate] Batch 101/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:54,628 - val_mm.py[line:33] - INFO: [evaluate] Batch 102/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:55,138 - val_mm.py[line:33] - INFO: [evaluate] Batch 103/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:55,640 - val_mm.py[line:33] - INFO: [evaluate] Batch 104/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:56,150 - val_mm.py[line:33] - INFO: [evaluate] Batch 105/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:56,660 - val_mm.py[line:33] - INFO: [evaluate] Batch 106/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:57,169 - val_mm.py[line:33] - INFO: [evaluate] Batch 107/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:57,670 - val_mm.py[line:33] - INFO: [evaluate] Batch 108/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:58,181 - val_mm.py[line:33] - INFO: [evaluate] Batch 109/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:58,691 - val_mm.py[line:33] - INFO: [evaluate] Batch 110/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:59,187 - val_mm.py[line:33] - INFO: [evaluate] Batch 111/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:24:59,694 - val_mm.py[line:33] - INFO: [evaluate] Batch 112/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:00,194 - val_mm.py[line:33] - INFO: [evaluate] Batch 113/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:00,706 - val_mm.py[line:33] - INFO: [evaluate] Batch 114/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:01,213 - val_mm.py[line:33] - INFO: [evaluate] Batch 115/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:01,712 - val_mm.py[line:33] - INFO: [evaluate] Batch 116/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:02,209 - val_mm.py[line:33] - INFO: [evaluate] Batch 117/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:02,723 - val_mm.py[line:33] - INFO: [evaluate] Batch 118/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:03,235 - val_mm.py[line:33] - INFO: [evaluate] Batch 119/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:03,739 - val_mm.py[line:33] - INFO: [evaluate] Batch 120/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:04,242 - val_mm.py[line:33] - INFO: [evaluate] Batch 121/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:04,752 - val_mm.py[line:33] - INFO: [evaluate] Batch 122/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:05,258 - val_mm.py[line:33] - INFO: [evaluate] Batch 123/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:05,760 - val_mm.py[line:33] - INFO: [evaluate] Batch 124/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:06,273 - val_mm.py[line:33] - INFO: [evaluate] Batch 125/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:06,783 - val_mm.py[line:33] - INFO: [evaluate] Batch 126/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:07,289 - val_mm.py[line:33] - INFO: [evaluate] Batch 127/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:07,794 - val_mm.py[line:33] - INFO: [evaluate] Batch 128/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:08,292 - val_mm.py[line:33] - INFO: [evaluate] Batch 129/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:08,800 - val_mm.py[line:33] - INFO: [evaluate] Batch 130/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:09,309 - val_mm.py[line:33] - INFO: [evaluate] Batch 131/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:09,801 - val_mm.py[line:33] - INFO: [evaluate] Batch 132/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:10,312 - val_mm.py[line:33] - INFO: [evaluate] Batch 133/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:10,825 - val_mm.py[line:33] - INFO: [evaluate] Batch 134/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:11,317 - val_mm.py[line:33] - INFO: [evaluate] Batch 135/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:11,825 - val_mm.py[line:33] - INFO: [evaluate] Batch 136/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:12,326 - val_mm.py[line:33] - INFO: [evaluate] Batch 137/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:12,841 - val_mm.py[line:33] - INFO: [evaluate] Batch 138/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:13,337 - val_mm.py[line:33] - INFO: [evaluate] Batch 139/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:13,823 - val_mm.py[line:33] - INFO: [evaluate] Batch 140/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:14,302 - val_mm.py[line:33] - INFO: [evaluate] Batch 141/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:14,781 - val_mm.py[line:33] - INFO: [evaluate] Batch 142/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:15,270 - val_mm.py[line:33] - INFO: [evaluate] Batch 143/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:15,747 - val_mm.py[line:33] - INFO: [evaluate] Batch 144/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:16,227 - val_mm.py[line:33] - INFO: [evaluate] Batch 145/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:16,707 - val_mm.py[line:33] - INFO: [evaluate] Batch 146/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:17,185 - val_mm.py[line:33] - INFO: [evaluate] Batch 147/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:17,664 - val_mm.py[line:33] - INFO: [evaluate] Batch 148/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:18,159 - val_mm.py[line:33] - INFO: [evaluate] Batch 149/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:18,641 - val_mm.py[line:33] - INFO: [evaluate] Batch 150/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:19,125 - val_mm.py[line:33] - INFO: [evaluate] Batch 151/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:19,606 - val_mm.py[line:33] - INFO: [evaluate] Batch 152/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:20,084 - val_mm.py[line:33] - INFO: [evaluate] Batch 153/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:20,562 - val_mm.py[line:33] - INFO: [evaluate] Batch 154/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:21,040 - val_mm.py[line:33] - INFO: [evaluate] Batch 155/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:21,520 - val_mm.py[line:33] - INFO: [evaluate] Batch 156/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+2025-11-14 11:25:22,001 - val_mm.py[line:33] - INFO: [evaluate] Batch 157/158, keys=['data', 'label', 'modal_x', 'fn', 'n', 'text_features', 'text_token_meta']
+Validation Iter: 158 / 158
+2025-11-14 11:25:22,600 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-30_miou_48.65.pth
+2025-11-14 11:25:24,133 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251114-094611/epoch-30_miou_48.65.pth, Time usage:
+	prepare checkpoint: 0.010775566101074219, IO: 1.5218923091888428
+miou 48.65 best 48.65
+2025-11-14 11:25:24,134 - train.py[line:717] - INFO: Epoch 30 validation result: mIoU: 48.6500,Best mIoU: 48.6500, 
+2025-11-14 11:25:24,135 - train.py[line:732] - INFO: Avg train time: 184.51s, avg eval time: 83.72s, left eval count: 153, ETA: 2025-11-15 04:49:10
+Epoch 31/300 Iter 1/331: lr=5.4572e-05 loss=0.2922 total_loss=0.2922
+Epoch 31/300 Iter 33/331: lr=5.4554e-05 loss=0.1857 total_loss=0.2182
+Epoch 31/300 Iter 66/331: lr=5.4536e-05 loss=0.1863 total_loss=0.2091
+Epoch 31/300 Iter 99/331: lr=5.4518e-05 loss=0.1370 total_loss=0.2021
+Epoch 31/300 Iter 132/331: lr=5.4500e-05 loss=0.1947 total_loss=0.2046
+Epoch 31/300 Iter 165/331: lr=5.4482e-05 loss=0.2396 total_loss=0.2000
+Epoch 31/300 Iter 198/331: lr=5.4464e-05 loss=0.1602 total_loss=0.1965
+Epoch 31/300 Iter 231/331: lr=5.4446e-05 loss=0.1573 total_loss=0.1957
+Epoch 31/300 Iter 264/331: lr=5.4427e-05 loss=0.2135 total_loss=0.1937
+Epoch 31/300 Iter 297/331: lr=5.4409e-05 loss=0.1523 total_loss=0.1943
+Epoch 31/300 Iter 330/331: lr=5.4391e-05 loss=0.1891 total_loss=0.1940
+2025-11-14 11:28:48,860 - train.py[line:611] - INFO: Epoch 31/300 Iter 331/331: lr=5.4391e-05 loss=0.1826 total_loss=0.1940
+2025-11-14 11:28:48,862 - train.py[line:614] - INFO: [Train] epoch 31 - before is_eval()
+2025-11-14 11:28:48,863 - train.py[line:732] - INFO: Avg train time: 192.47s, avg eval time: 83.72s, left eval count: 153, ETA: 2025-11-15 05:25:12
+Epoch 32/300 Iter 1/331: lr=5.4390e-05 loss=0.1702 total_loss=0.1702
+Epoch 32/300 Iter 33/331: lr=5.4372e-05 loss=0.0999 total_loss=0.1724
+Epoch 32/300 Iter 66/331: lr=5.4354e-05 loss=0.1146 total_loss=0.1783
+Epoch 32/300 Iter 99/331: lr=5.4336e-05 loss=0.2025 total_loss=0.1795
+Epoch 32/300 Iter 132/331: lr=5.4318e-05 loss=0.1112 total_loss=0.1802
+Epoch 32/300 Iter 165/331: lr=5.4300e-05 loss=0.1162 total_loss=0.1794
+slurmstepd: error: *** JOB 5382902 ON lrz-hgx-h100-002 CANCELLED AT 2025-11-14T11:30:30 ***

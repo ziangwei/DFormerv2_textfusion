@@ -1,0 +1,265 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1109 08:41:07.390000 3778064 site-packages/torch/distributed/run.py:766] 
+W1109 08:41:07.390000 3778064 site-packages/torch/distributed/run.py:766] *****************************************
+W1109 08:41:07.390000 3778064 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1109 08:41:07.390000 3778064 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-09 08:41:20,066 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-09 08:41:20,076 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+2025-11-09 08:41:20,225 - train.py[line:221] - WARNING: pad_SUNRGBD is only used for SUNRGBD dataset
+1
+pad_SUNRGBD is only used for SUNRGBD dataset
+2025-11-09 08:41:22,316 - train.py[line:259] - INFO: ✓ Non-deterministic training (faster) with seed: 67319
+2025-11-09 08:41:22,316 - train.py[line:260] - INFO:   To reproduce: modify config.seed=67319 and use --use_seed
+2025-11-09 08:41:22,316 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-013
+2025-11-09 08:41:22,316 - train.py[line:362] - INFO: [warmup] rank0 start
+2025-11-09 08:41:23,746 - factory.py[line:326] - INFO: Parsing model identifier. Schema: None, Identifier: ViT-B-16
+2025-11-09 08:41:23,746 - factory.py[line:403] - INFO: Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+2025-11-09 08:41:23,932 - factory.py[line:500] - INFO: Instantiating model architecture: CLIP
+2025-11-09 08:41:25,405 - factory.py[line:507] - INFO: Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-09 08:41:27,147 - factory.py[line:621] - INFO: Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-11-09 08:41:27,148 - factory.py[line:624] - INFO: Model ViT-B-16 creation process complete.
+2025-11-09 08:41:27,148 - factory.py[line:649] - INFO: Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+2025-11-09 08:41:27,148 - factory.py[line:694] - INFO: Attempting to load config from built-in: ViT-B-16
+2025-11-09 08:41:27,148 - factory.py[line:749] - INFO: Using default SimpleTokenizer.
+2025-11-09 08:41:27,683 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-09 08:41:27,684 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-09 08:41:27,684 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+2025-11-09 08:41:27,684 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-09 08:41:27,686 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-09 08:41:27,990 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 08:41:27,991 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: imglabels.
+2025-11-09 08:41:27,992 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-09 08:41:27,992 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-09 08:41:28,191 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 08:41:28,191 - train.py[line:400] - INFO: Using 4x training batch for validation: 64
+2025-11-09 08:41:28,400 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-09 08:41:28,402 - train.py[line:409] - INFO: val dataset len:22
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 08:41:30,430 - train.py[line:425] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'actual_seed': 67319,
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_L',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_json_path': 'datasets/NYUDepthv2/generated_rgb_descriptions_internvl3.json',
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/checkpoint',
+    'checkpoint_start_epoch': 250,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'refridgerator',
+                       'television',
+                       'paper',
+                       'towel',
+                       'shower curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag',
+                       'otherstructure',
+                       'otherfurniture',
+                       'otherprop'],
+    'dataset_name': 'NYUDepthv2',
+    'dataset_path': 'datasets/NYUDepthv2',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 1024,
+    'drop_path_rate': 0.3,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 640],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [1],
+    'eval_source': 'datasets/NYUDepthv2/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/NYUDepthv2/Label',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/NYUDepthv2/out.json',
+    'image_width': 640,
+    'is_test': True,
+    'label_txt_path': 'datasets/NYUDepthv2/nyu40_labels.txt',
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/log_2025_11_09_08_41_20.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/log_2025_11_09_08_41_20.log',
+    'lr': 6e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 6,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 500,
+    'niters_per_epoch': 50,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 40,
+    'num_eval_imgs': 654,
+    'num_train_imgs': 795,
+    'num_workers': 0,
+    'optimizer': 'AdamW',
+    'pad': False,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Large_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/NYUDepthv2/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': True,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/tb',
+    'text_encoder': 'clip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'imglabels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/NYUDepthv2/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/val_2025_11_09_08_41_20.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/NYUDepthv2/Depth'}
+2025-11-09 08:41:30,432 - train.py[line:427] - INFO: args parsed:
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: config: local_configs.NYUDepthv2.DFormerv2_L
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: gpus: 2
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: verbose: False
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: epochs: 0
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: show_image: False
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: save_path: None
+2025-11-09 08:41:30,432 - train.py[line:429] - INFO: checkpoint_dir: None
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: continue_fpath: None
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: sliding: False
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: compile: False
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: compile_mode: default
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: syncbn: True
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: mst: True
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: amp: False
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: val_amp: True
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: pad_SUNRGBD: False
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: use_seed: False
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: seed: None
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: local_rank: 0
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: text_source: imglabels
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: text_encoder: clip
+2025-11-09 08:41:30,433 - train.py[line:429] - INFO: text_encoder_name: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: text_feature_dim: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: label_txt_path: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: caption_json_path: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: text_template_set: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: max_templates_per_label: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: max_caption_sentences: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: caption_topk: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: caption_topk_mode: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: image_labels_json_path: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: sam_enc_stages: 1,2,3
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: sam_dec_stages: 1,2,3
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: superpower: True
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: sam_decoder_use_cosine: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: sam_decoder_learnable_temp: None
+2025-11-09 08:41:30,434 - train.py[line:429] - INFO: sam_decoder_logit_init: None
+2025-11-09 08:41:30,435 - train.py[line:429] - INFO: sam_encoder_use_cosine: None
+2025-11-09 08:41:30,435 - train.py[line:429] - INFO: sam_encoder_learnable_temp: None
+2025-11-09 08:41:30,435 - train.py[line:429] - INFO: sam_encoder_logit_init: None
+2025-11-09 08:41:30,435 - train.py[line:429] - INFO: devices: 
+2025-11-09 08:41:30,435 - train.py[line:429] - INFO: port: 16005
+2025-11-09 08:41:30,435 - train.py[line:435] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 08:41:33,011 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-09 08:41:33,166 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+The model and loaded state dict do not match exactly
+
+missing keys in source state_dict: encoder_sam_blocks.1.0.decoder_logit_scale, encoder_sam_blocks.1.0.encoder_logit_scale, encoder_sam_blocks.1.0.alpha, encoder_sam_blocks.1.0.gamma, encoder_sam_blocks.1.0.total_ops, encoder_sam_blocks.1.0.total_params, encoder_sam_blocks.1.0._inv_sqrt_dk, encoder_sam_blocks.1.0.gamma_scale, encoder_sam_blocks.1.0.norm1.weight, encoder_sam_blocks.1.0.norm1.bias, encoder_sam_blocks.1.0.norm2.weight, encoder_sam_blocks.1.0.norm2.bias, encoder_sam_blocks.1.0.q_proj.weight, encoder_sam_blocks.1.0.q_proj.bias, encoder_sam_blocks.1.0.k_proj.weight, encoder_sam_blocks.1.0.k_proj.bias, encoder_sam_blocks.1.0.v_proj.weight, encoder_sam_blocks.1.0.v_proj.bias, encoder_sam_blocks.1.0.out_proj.weight, encoder_sam_blocks.1.0.out_proj.bias, encoder_sam_blocks.1.0.ffn.0.weight, encoder_sam_blocks.1.0.ffn.0.bias, encoder_sam_blocks.1.0.ffn.3.weight, encoder_sam_blocks.1.0.ffn.3.bias, encoder_sam_blocks.1.1.decoder_logit_scale, encoder_sam_blocks.1.1.encoder_logit_scale, encoder_sam_blocks.1.1.alpha, encoder_sam_blocks.1.1.gamma, encoder_sam_blocks.1.1.total_ops, encoder_sam_blocks.1.1.total_params, encoder_sam_blocks.1.1._inv_sqrt_dk, encoder_sam_blocks.1.1.gamma_scale, encoder_sam_blocks.1.1.norm1.weight, encoder_sam_blocks.1.1.norm1.bias, encoder_sam_blocks.1.1.norm2.weight, encoder_sam_blocks.1.1.norm2.bias, encoder_sam_blocks.1.1.q_proj.weight, encoder_sam_blocks.1.1.q_proj.bias, encoder_sam_blocks.1.1.k_proj.weight, encoder_sam_blocks.1.1.k_proj.bias, encoder_sam_blocks.1.1.v_proj.weight, encoder_sam_blocks.1.1.v_proj.bias, encoder_sam_blocks.1.1.out_proj.weight, encoder_sam_blocks.1.1.out_proj.bias, encoder_sam_blocks.1.1.ffn.0.weight, encoder_sam_blocks.1.1.ffn.0.bias, encoder_sam_blocks.1.1.ffn.3.weight, encoder_sam_blocks.1.1.ffn.3.bias, encoder_sam_blocks.1.2.decoder_logit_scale, encoder_sam_blocks.1.2.encoder_logit_scale, encoder_sam_blocks.1.2.alpha, encoder_sam_blocks.1.2.gamma, encoder_sam_blocks.1.2.total_ops, encoder_sam_blocks.1.2.total_params, encoder_sam_blocks.1.2._inv_sqrt_dk, encoder_sam_blocks.1.2.gamma_scale, encoder_sam_blocks.1.2.norm1.weight, encoder_sam_blocks.1.2.norm1.bias, encoder_sam_blocks.1.2.norm2.weight, encoder_sam_blocks.1.2.norm2.bias, encoder_sam_blocks.1.2.q_proj.weight, encoder_sam_blocks.1.2.q_proj.bias, encoder_sam_blocks.1.2.k_proj.weight, encoder_sam_blocks.1.2.k_proj.bias, encoder_sam_blocks.1.2.v_proj.weight, encoder_sam_blocks.1.2.v_proj.bias, encoder_sam_blocks.1.2.out_proj.weight, encoder_sam_blocks.1.2.out_proj.bias, encoder_sam_blocks.1.2.ffn.0.weight, encoder_sam_blocks.1.2.ffn.0.bias, encoder_sam_blocks.1.2.ffn.3.weight, encoder_sam_blocks.1.2.ffn.3.bias, encoder_sam_blocks.1.3.decoder_logit_scale, encoder_sam_blocks.1.3.encoder_logit_scale, encoder_sam_blocks.1.3.alpha, encoder_sam_blocks.1.3.gamma, encoder_sam_blocks.1.3.total_ops, encoder_sam_blocks.1.3.total_params, encoder_sam_blocks.1.3._inv_sqrt_dk, encoder_sam_blocks.1.3.gamma_scale, encoder_sam_blocks.1.3.norm1.weight, encoder_sam_blocks.1.3.norm1.bias, encoder_sam_blocks.1.3.norm2.weight, encoder_sam_blocks.1.3.norm2.bias, encoder_sam_blocks.1.3.q_proj.weight, encoder_sam_blocks.1.3.q_proj.bias, encoder_sam_blocks.1.3.k_proj.weight, encoder_sam_blocks.1.3.k_proj.bias, encoder_sam_blocks.1.3.v_proj.weight, encoder_sam_blocks.1.3.v_proj.bias, encoder_sam_blocks.1.3.out_proj.weight, encoder_sam_blocks.1.3.out_proj.bias, encoder_sam_blocks.1.3.ffn.0.weight, encoder_sam_blocks.1.3.ffn.0.bias, encoder_sam_blocks.1.3.ffn.3.weight, encoder_sam_blocks.1.3.ffn.3.bias, encoder_sam_blocks.2.0.decoder_logit_scale, encoder_sam_blocks.2.0.encoder_logit_scale, encoder_sam_blocks.2.0.alpha, encoder_sam_blocks.2.0.gamma, encoder_sam_blocks.2.0.total_ops, encoder_sam_blocks.2.0.total_params, encoder_sam_blocks.2.0._inv_sqrt_dk, encoder_sam_blocks.2.0.gamma_scale, encoder_sam_blocks.2.0.norm1.weight, encoder_sam_blocks.2.0.norm1.bias, encoder_sam_blocks.2.0.norm2.weight, encoder_sam_blocks.2.0.norm2.bias, encoder_sam_blocks.2.0.q_proj.weight, encoder_sam_blocks.2.0.q_proj.bias, encoder_sam_blocks.2.0.k_proj.weight, encoder_sam_blocks.2.0.k_proj.bias, encoder_sam_blocks.2.0.v_proj.weight, encoder_sam_blocks.2.0.v_proj.bias, encoder_sam_blocks.2.0.out_proj.weight, encoder_sam_blocks.2.0.out_proj.bias, encoder_sam_blocks.2.0.ffn.0.weight, encoder_sam_blocks.2.0.ffn.0.bias, encoder_sam_blocks.2.0.ffn.3.weight, encoder_sam_blocks.2.0.ffn.3.bias, encoder_sam_blocks.2.1.decoder_logit_scale, encoder_sam_blocks.2.1.encoder_logit_scale, encoder_sam_blocks.2.1.alpha, encoder_sam_blocks.2.1.gamma, encoder_sam_blocks.2.1.total_ops, encoder_sam_blocks.2.1.total_params, encoder_sam_blocks.2.1._inv_sqrt_dk, encoder_sam_blocks.2.1.gamma_scale, encoder_sam_blocks.2.1.norm1.weight, encoder_sam_blocks.2.1.norm1.bias, encoder_sam_blocks.2.1.norm2.weight, encoder_sam_blocks.2.1.norm2.bias, encoder_sam_blocks.2.1.q_proj.weight, encoder_sam_blocks.2.1.q_proj.bias, encoder_sam_blocks.2.1.k_proj.weight, encoder_sam_blocks.2.1.k_proj.bias, encoder_sam_blocks.2.1.v_proj.weight, encoder_sam_blocks.2.1.v_proj.bias, encoder_sam_blocks.2.1.out_proj.weight, encoder_sam_blocks.2.1.out_proj.bias, encoder_sam_blocks.2.1.ffn.0.weight, encoder_sam_blocks.2.1.ffn.0.bias, encoder_sam_blocks.2.1.ffn.3.weight, encoder_sam_blocks.2.1.ffn.3.bias, encoder_sam_blocks.2.2.decoder_logit_scale, encoder_sam_blocks.2.2.encoder_logit_scale, encoder_sam_blocks.2.2.alpha, encoder_sam_blocks.2.2.gamma, encoder_sam_blocks.2.2.total_ops, encoder_sam_blocks.2.2.total_params, encoder_sam_blocks.2.2._inv_sqrt_dk, encoder_sam_blocks.2.2.gamma_scale, encoder_sam_blocks.2.2.norm1.weight, encoder_sam_blocks.2.2.norm1.bias, encoder_sam_blocks.2.2.norm2.weight, encoder_sam_blocks.2.2.norm2.bias, encoder_sam_blocks.2.2.q_proj.weight, encoder_sam_blocks.2.2.q_proj.bias, encoder_sam_blocks.2.2.k_proj.weight, encoder_sam_blocks.2.2.k_proj.bias, encoder_sam_blocks.2.2.v_proj.weight, encoder_sam_blocks.2.2.v_proj.bias, encoder_sam_blocks.2.2.out_proj.weight, encoder_sam_blocks.2.2.out_proj.bias, encoder_sam_blocks.2.2.ffn.0.weight, encoder_sam_blocks.2.2.ffn.0.bias, encoder_sam_blocks.2.2.ffn.3.weight, encoder_sam_blocks.2.2.ffn.3.bias, encoder_sam_blocks.2.3.decoder_logit_scale, encoder_sam_blocks.2.3.encoder_logit_scale, encoder_sam_blocks.2.3.alpha, encoder_sam_blocks.2.3.gamma, encoder_sam_blocks.2.3.total_ops, encoder_sam_blocks.2.3.total_params, encoder_sam_blocks.2.3._inv_sqrt_dk, encoder_sam_blocks.2.3.gamma_scale, encoder_sam_blocks.2.3.norm1.weight, encoder_sam_blocks.2.3.norm1.bias, encoder_sam_blocks.2.3.norm2.weight, encoder_sam_blocks.2.3.norm2.bias, encoder_sam_blocks.2.3.q_proj.weight, encoder_sam_blocks.2.3.q_proj.bias, encoder_sam_blocks.2.3.k_proj.weight, encoder_sam_blocks.2.3.k_proj.bias, encoder_sam_blocks.2.3.v_proj.weight, encoder_sam_blocks.2.3.v_proj.bias, encoder_sam_blocks.2.3.out_proj.weight, encoder_sam_blocks.2.3.out_proj.bias, encoder_sam_blocks.2.3.ffn.0.weight, encoder_sam_blocks.2.3.ffn.0.bias, encoder_sam_blocks.2.3.ffn.3.weight, encoder_sam_blocks.2.3.ffn.3.bias, encoder_sam_blocks.3.0.decoder_logit_scale, encoder_sam_blocks.3.0.encoder_logit_scale, encoder_sam_blocks.3.0.alpha, encoder_sam_blocks.3.0.gamma, encoder_sam_blocks.3.0.total_ops, encoder_sam_blocks.3.0.total_params, encoder_sam_blocks.3.0._inv_sqrt_dk, encoder_sam_blocks.3.0.gamma_scale, encoder_sam_blocks.3.0.norm1.weight, encoder_sam_blocks.3.0.norm1.bias, encoder_sam_blocks.3.0.norm2.weight, encoder_sam_blocks.3.0.norm2.bias, encoder_sam_blocks.3.0.q_proj.weight, encoder_sam_blocks.3.0.q_proj.bias, encoder_sam_blocks.3.0.k_proj.weight, encoder_sam_blocks.3.0.k_proj.bias, encoder_sam_blocks.3.0.v_proj.weight, encoder_sam_blocks.3.0.v_proj.bias, encoder_sam_blocks.3.0.out_proj.weight, encoder_sam_blocks.3.0.out_proj.bias, encoder_sam_blocks.3.0.ffn.0.weight, encoder_sam_blocks.3.0.ffn.0.bias, encoder_sam_blocks.3.0.ffn.3.weight, encoder_sam_blocks.3.0.ffn.3.bias, encoder_sam_blocks.3.1.decoder_logit_scale, encoder_sam_blocks.3.1.encoder_logit_scale, encoder_sam_blocks.3.1.alpha, encoder_sam_blocks.3.1.gamma, encoder_sam_blocks.3.1.total_ops, encoder_sam_blocks.3.1.total_params, encoder_sam_blocks.3.1._inv_sqrt_dk, encoder_sam_blocks.3.1.gamma_scale, encoder_sam_blocks.3.1.norm1.weight, encoder_sam_blocks.3.1.norm1.bias, encoder_sam_blocks.3.1.norm2.weight, encoder_sam_blocks.3.1.norm2.bias, encoder_sam_blocks.3.1.q_proj.weight, encoder_sam_blocks.3.1.q_proj.bias, encoder_sam_blocks.3.1.k_proj.weight, encoder_sam_blocks.3.1.k_proj.bias, encoder_sam_blocks.3.1.v_proj.weight, encoder_sam_blocks.3.1.v_proj.bias, encoder_sam_blocks.3.1.out_proj.weight, encoder_sam_blocks.3.1.out_proj.bias, encoder_sam_blocks.3.1.ffn.0.weight, encoder_sam_blocks.3.1.ffn.0.bias, encoder_sam_blocks.3.1.ffn.3.weight, encoder_sam_blocks.3.1.ffn.3.bias
+
+2025-11-09 08:41:35,114 - builder.py[line:170] - INFO: Initing weights ...
+Weight Decay: 658 Weight No Decay: 750 Total: 1408
+Weight Decay: 658 Weight No Decay: 750 Total: 1408
+2025-11-09 08:41:35,150 - train.py[line:483] - INFO: .............distributed training.............
+2025-11-09 08:41:35,276 - train.py[line:502] - INFO: begin trainning:
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1920, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1920, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/autograd/graph.py:824: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [1920, 1, 3, 3], strides() = [9, 1, 3, 1]
+bucket_view.sizes() = [1920, 1, 3, 3], strides() = [9, 9, 3, 1] (Triggered internally at /pytorch/torch/csrc/distributed/c10d/reducer.cpp:328.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Epoch 1/500 Iter 1/50: lr=0.0000e+00 loss=4.2052 total_loss=4.2052
+Epoch 1/500 Iter 5/50: lr=4.8000e-07 loss=4.2509 total_loss=4.1485
+Epoch 1/500 Iter 10/50: lr=1.0800e-06 loss=4.1640 total_loss=4.1693
+Epoch 1/500 Iter 15/50: lr=1.6800e-06 loss=4.1327 total_loss=4.1649
+Epoch 1/500 Iter 20/50: lr=2.2800e-06 loss=4.1250 total_loss=4.1603
+Epoch 1/500 Iter 25/50: lr=2.8800e-06 loss=4.1505 total_loss=4.1444
+Epoch 1/500 Iter 30/50: lr=3.4800e-06 loss=3.9211 total_loss=4.1395
+Epoch 1/500 Iter 35/50: lr=4.0800e-06 loss=3.9869 total_loss=4.1347
+Epoch 1/500 Iter 40/50: lr=4.6800e-06 loss=3.9913 total_loss=4.1252
+Epoch 1/500 Iter 45/50: lr=5.2800e-06 loss=3.9044 total_loss=4.1063
+Epoch 1/500 Iter 50/50: lr=5.8800e-06 loss=3.9754 total_loss=4.0912
+2025-11-09 08:42:25,565 - train.py[line:611] - INFO: Epoch 1/500 Iter 50/50: lr=5.8800e-06 loss=3.9754 total_loss=4.0912
+2025-11-09 08:42:25,566 - train.py[line:614] - INFO: [Train] epoch 1 - before is_eval()
+2025-11-09 08:42:25,566 - train.py[line:618] - INFO: [Eval] Entering evaluation—val_loader length = 11
+Validation Iter: 1 / 11
+Validation Iter: 5 / 11
+Validation Iter: 10 / 11
+2025-11-09 08:44:31,738 - engine.py[line:102] - INFO: Saving checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/epoch-1_miou_0.9.pth
+2025-11-09 08:44:32,896 - engine.py[line:125] - INFO: Save checkpoint to file /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/NYUDepthv2_DFormerv2_L_20251109-084120/epoch-1_miou_0.9.pth, Time usage:
+	prepare checkpoint: 0.00982046127319336, IO: 1.1475038528442383
+miou 0.9 best 0.9
+2025-11-09 08:44:32,897 - train.py[line:717] - INFO: Epoch 1 validation result: mIoU: 0.9000,Best mIoU: 0.9000, 
+2025-11-09 08:44:32,897 - train.py[line:729] - INFO: Avg train time: 50.28s, avg eval time: 127.33s, left eval count: 275, ETA: 2025-11-10 01:26:20
+Epoch 2/500 Iter 1/50: lr=6.0000e-06 loss=3.9238 total_loss=3.9238
+Epoch 2/500 Iter 5/50: lr=6.4800e-06 loss=4.1021 total_loss=3.9868
+Epoch 2/500 Iter 10/50: lr=7.0800e-06 loss=3.6070 total_loss=3.9731
+Epoch 2/500 Iter 15/50: lr=7.6800e-06 loss=3.7835 total_loss=3.9694
+Epoch 2/500 Iter 20/50: lr=8.2800e-06 loss=3.6576 total_loss=3.9195
+Epoch 2/500 Iter 25/50: lr=8.8800e-06 loss=3.8558 total_loss=3.8736
+Epoch 2/500 Iter 30/50: lr=9.4800e-06 loss=3.5798 total_loss=3.8375
+Epoch 2/500 Iter 35/50: lr=1.0080e-05 loss=3.5626 total_loss=3.8168
+Epoch 2/500 Iter 40/50: lr=1.0680e-05 loss=3.4142 total_loss=3.7807
+Epoch 2/500 Iter 45/50: lr=1.1280e-05 loss=3.3981 total_loss=3.7457
+slurmstepd: error: *** JOB 5377116 ON lrz-hgx-h100-013 CANCELLED AT 2025-11-09T08:45:29 ***

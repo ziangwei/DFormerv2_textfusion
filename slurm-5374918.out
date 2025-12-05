@@ -1,0 +1,65 @@
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-06 18:26:36,396 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-06 18:26:36,547 - builder.py[line:170] - INFO: Initing weights ...
+================================================================================
+模型Benchmark工具
+================================================================================
+
+配置文件: local_configs.NYUDepthv2.DFormerv2_S
+Backbone:  DFormerv2_S
+Decoder:   HSGHead
+输入尺寸: RGB: 3x480x640, Depth: 1x480x640
+文本引导: Enabled (source=imglabels, tokens=6 (max=6))
+Encoder SAM stages: [1, 2, 3] (superpower=False)
+Decoder SAM stages: [1, 2, 3]
+设备: cpu
+--------------------------------------------------------------------------------
+
+参数统计:
+  总参数:      37.64 M (37.64M)
+  可训练参数:  37.64 M (37.64M)
+
+正在计算FLOPs...
+  MACs:  35.919G (35.92G)
+  FLOPs: 71.84 G (71.84G)
+  注: FLOPs ≈ 2 × MACs
+
+正在进行详细分析...
+
+================================================================================
+模型参数详细统计
+================================================================================
+
+配置: local_configs.NYUDepthv2.DFormerv2_S
+总参数: 37.64 M (37.64M)
+总FLOPs: 71.84 G (71.84G)
+总MACs:  35.92 G (35.92G)
+
+--------------------------------------------------------------------------------
+分层参数统计:
+--------------------------------------------------------------------------------
+  backbone            :    33.37 M ( 33.37M)   88.7%
+  decode_head         :     4.26 M (  4.26M)   11.3%
+
+--------------------------------------------------------------------------------
+SAM组件统计:
+--------------------------------------------------------------------------------
+  Encoder侧SAM:     7.96 M (  7.96M)
+    - backbone.encoder_sam_blocks.1.0                   :   0.23M
+    - backbone.encoder_sam_blocks.1.1                   :   0.23M
+    - backbone.encoder_sam_blocks.2.0                   :   0.66M
+    - backbone.encoder_sam_blocks.2.1                   :   0.66M
+    - backbone.encoder_sam_blocks.2.2                   :   0.66M
+    ... 及其他 4 个模块
+
+  Decoder侧SAM:     2.99 M (  2.99M)
+    - decode_head.dec_sam_layers.0                      :   0.23M
+    - decode_head.dec_sam_layers.1                      :   0.66M
+    - decode_head.dec_sam_layers.2                      :   2.10M
+
+  SAM总参数:    10.95 M ( 10.95M)   29.1%
+
+================================================================================
+
+================================================================================

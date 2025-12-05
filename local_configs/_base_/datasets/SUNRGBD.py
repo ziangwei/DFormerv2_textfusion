@@ -66,3 +66,15 @@ C.image_height = 480
 C.image_width = 480
 C.norm_mean = np.array([0.485, 0.456, 0.406])
 C.norm_std = np.array([0.229, 0.224, 0.225])
+
+C.enable_text_guidance = True
+C.text_feature_dim = 512
+C.max_caption_sentences = 6
+C.text_template_set = "clip"
+C.max_templates_per_label = 3
+
+# Per-image labels configuration (for inference visualization)
+# Set text_source to "imglabels" to use per-image labels from JSON
+C.text_source = "imglabels"  # Options: "labels" (global), "captions", "both", "imglabels" (per-image)
+C.image_labels_json_path = osp.join(C.dataset_path, "out.json")  # JSON: {"RGB/0.jpg": ["wall", "floor", ...], ...}
+C.max_image_labels = 0  # 0 = no limit, use max length from data

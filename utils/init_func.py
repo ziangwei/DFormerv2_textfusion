@@ -24,18 +24,33 @@ def init_weight(module_list, conv_init, norm_layer, bn_eps, bn_momentum, **kwarg
 
 
 def group_weight(weight_group, module, norm_layer, lr):
+
     group_decay = []
     group_no_decay = []
-    count = 0
+    decay_ids = set()
+    no_decay_ids = set()
     for m in module.modules():
         if isinstance(m, nn.Linear):
             group_decay.append(m.weight)
+            decay_ids.add(id(m.weight))
             if m.bias is not None:
                 group_no_decay.append(m.bias)
-        elif isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.ConvTranspose2d, nn.ConvTranspose3d)):
+                no_decay_ids.add(id(m.bias))
+        elif isinstance(
+            m,
+            (
+                nn.Conv1d,
+                nn.Conv2d,
+                nn.Conv3d,
+                nn.ConvTranspose2d,
+                nn.ConvTranspose3d,
+            ),
+        ):
             group_decay.append(m.weight)
+            decay_ids.add(id(m.weight))
             if m.bias is not None:
                 group_no_decay.append(m.bias)
+                no_decay_ids.add(id(m.bias))
         elif (
             isinstance(m, norm_layer)
             or isinstance(m, nn.BatchNorm1d)
@@ -47,10 +62,14 @@ def group_weight(weight_group, module, norm_layer, lr):
         ):
             if m.weight is not None:
                 group_no_decay.append(m.weight)
+                no_decay_ids.add(id(m.weight))
             if m.bias is not None:
                 group_no_decay.append(m.bias)
-        elif isinstance(m, nn.Parameter):
-            group_decay.append(m)
+                no_decay_ids.add(id(m.bias))
+    for p in module.parameters():
+        if id(p) not in decay_ids and id(p) not in no_decay_ids:
+            group_decay.append(p)
+            decay_ids.add(id(p))
 
     # assert len(list(module.parameters())) >= len(group_decay) + len(group_no_decay)
     print(

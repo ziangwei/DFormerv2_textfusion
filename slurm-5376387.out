@@ -1,0 +1,62 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1108 07:55:12.570000 1885138 site-packages/torch/distributed/run.py:766] 
+W1108 07:55:12.570000 1885138 site-packages/torch/distributed/run.py:766] *****************************************
+W1108 07:55:12.570000 1885138 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1108 07:55:12.570000 1885138 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-08 07:55:31,928 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-08 07:55:31,935 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+1
+[rank1]:[W1108 07:55:34.126093942 ProcessGroupNCCL.cpp:4715] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+A exception occurred during Engine initialization, give up running process
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 217, in <module>
+[rank0]:     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/engine/logger.py", line 113, in get_logger
+[rank0]:     file_handler = logging.FileHandler(log_file)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1169, in __init__
+[rank0]:     StreamHandler.__init__(self, self._open())
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1201, in _open
+[rank0]:     return open_func(self.baseFilename, self.mode,
+[rank0]: OSError: [Errno 122] Disk quota exceeded: '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_S_20251108-075532/log_2025_11_08_07_55_34.log'
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 734, in <module>
+[rank0]:     logger.exception("Engine initialization or training loop failed with exception")
+[rank0]: NameError: name 'logger' is not defined
+[rank0]:[W1108 07:55:35.790825967 ProcessGroupNCCL.cpp:1476] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+W1108 07:55:36.381000 1885138 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1885182 closing signal SIGTERM
+E1108 07:55:36.847000 1885138 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 1885181) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-08_07:55:36
+  host      : lrz-hgx-h100-024
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1885181)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

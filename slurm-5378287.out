@@ -1,0 +1,54 @@
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-10 04:13:34,526 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-10 04:13:35,086 - builder.py[line:170] - INFO: Initing weights ...
+
+======================================================================
+COMPACT BENCHMARK: Visual vs Text Component Analysis
+======================================================================
+Config:       local_configs.NYUDepthv2.DFormerv2_L
+Input size:   480x640
+Text guidance: Enabled
+Text tokens:  6 (source: imglabels)
+Device:       cpu
+----------------------------------------------------------------------
+
+📊 PARAMETER ANALYSIS:
+----------------------------------------------------------------------
+Component                      Parameters   Percentage
+----------------------------------------------------------------------
+Visual (Pure)                      94.61M        83.0%
+Text-related (incl SAM)            19.40M        17.0%
+----------------------------------------------------------------------
+Total                             114.01M       100.0%
+----------------------------------------------------------------------
+
+  SAM Module Breakdown:
+  - Encoder SAM:                    7.72M (  6.8%)
+  - Decoder SAM:                    7.97M (  7.0%)
+  - SAM Total:                     15.69M ( 13.8%)
+
+⚡ MACs ANALYSIS:
+----------------------------------------------------------------------
+Component                            MACs   Percentage
+----------------------------------------------------------------------
+Visual (pure backbone)            137.06G        85.1%
+Text (SAM overhead)                24.03G        14.9%
+----------------------------------------------------------------------
+Total MACs                        161.09G       100.0%
+----------------------------------------------------------------------
+
+  Note: Reporting MACs to match baseline convention
+        FLOPs ≈ 2 × MACs = 322.18G (322.18G)
+        Visual MACs = model without text features
+        Text MACs = additional overhead from SAM modules
+
+======================================================================
+
+📝 SUMMARY:
+  Total Params: 114.01M = 94.61M (visual) + 19.40M (text)
+  Visual FLOPs: 137.06G (pure backbone)
+  Text FLOPs:   24.03G (SAM overhead)
+  Total FLOPs:  161.09G
+  SAM Params:   15.69M (13.8% of total)
+

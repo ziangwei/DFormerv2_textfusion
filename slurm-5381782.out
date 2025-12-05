@@ -1,0 +1,69 @@
+W1113 00:09:18.218000 3522488 site-packages/torch/distributed/run.py:766] 
+W1113 00:09:18.218000 3522488 site-packages/torch/distributed/run.py:766] *****************************************
+W1113 00:09:18.218000 3522488 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1113 00:09:18.218000 3522488 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-13 00:09:25,252 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-13 00:09:25,260 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+1
+2025-11-13 00:09:26,956 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-13 00:09:26,956 - eval.py[line:194] - INFO: val dataset len:632
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+--- Logging error ---
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1104, in emit
+    self.flush()
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1084, in flush
+    self.stream.flush()
+OSError: [Errno 122] Disk quota exceeded
+Call stack:
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/eval.py", line 202, in <module>
+    logger.info("config: \n" + pp.pformat(config))
+Unable to print the message and arguments - possible formatting error.
+Use the traceback above to help find the error.
+--- Logging error ---
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1103, in emit
+    stream.write(msg + self.terminator)
+OSError: [Errno 122] Disk quota exceeded
+Call stack:
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/eval.py", line 202, in <module>
+    logger.info("config: \n" + pp.pformat(config))
+Unable to print the message and arguments - possible formatting error.
+Use the traceback above to help find the error.
+--- Logging error ---
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1104, in emit
+    self.flush()
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1084, in flush
+    self.stream.flush()
+OSError: [Errno 122] Disk quota exceeded
+Call stack:
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/eval.py", line 204, in <module>
+    logger.info("args parsed:")
+Message: 'args parsed:'
+Arguments: ()
+2025-11-13 00:09:30,065 - eval.py[line:204] - INFO: args parsed:
+--- Logging error ---
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1104, in emit
+    self.flush()
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/logging/__init__.py", line 1084, in flush
+    self.stream.flush()
+OSError: [Errno 122] Disk quota exceeded
+Call stack:
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/eval.py", line 206, in <module>
+    logger.info(k + ": " + str(args.__dict__[k]))
+Message: 'config: local_configs.SUNRGBD.DFormerv2_L'
+Arguments: ()
+2025-11-13 00:09:30,080 - eval.py[line:206] - INFO: config: local_configs.SUNRGBD.DFormerv2_L
+--- Logging error ---
+Traceback (most recent call last):
+2025-11-13 00:09:30,091 - eval.py[line:206] - INFO: gpus: 2
+--- Logging error ---
+--- Logging error ---
+
+

@@ -1,0 +1,292 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1111 07:18:17.056000 1269372 site-packages/torch/distributed/run.py:766] 
+W1111 07:18:17.056000 1269372 site-packages/torch/distributed/run.py:766] *****************************************
+W1111 07:18:17.056000 1269372 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1111 07:18:17.056000 1269372 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-11 07:18:33,047 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+2025-11-11 07:18:33,053 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+0
+1
+2025-11-11 07:18:35,318 - train.py[line:259] - INFO: ✓ Non-deterministic training (faster) with seed: 82847
+2025-11-11 07:18:35,319 - train.py[line:260] - INFO:   To reproduce: modify config.seed=82847 and use --use_seed
+2025-11-11 07:18:35,319 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-010
+2025-11-11 07:18:35,319 - train.py[line:362] - INFO: [warmup] rank0 start
+2025-11-11 07:18:37,125 - factory.py[line:326] - INFO: Parsing model identifier. Schema: None, Identifier: ViT-B-16
+2025-11-11 07:18:37,125 - factory.py[line:403] - INFO: Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+2025-11-11 07:18:37,304 - factory.py[line:500] - INFO: Instantiating model architecture: CLIP
+2025-11-11 07:18:38,780 - factory.py[line:507] - INFO: Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-11 07:18:39,349 - factory.py[line:621] - INFO: Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-11-11 07:18:39,350 - factory.py[line:624] - INFO: Model ViT-B-16 creation process complete.
+2025-11-11 07:18:39,350 - factory.py[line:649] - INFO: Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+2025-11-11 07:18:39,350 - factory.py[line:694] - INFO: Attempting to load config from built-in: ViT-B-16
+2025-11-11 07:18:39,350 - factory.py[line:749] - INFO: Using default SimpleTokenizer.
+2025-11-11 07:18:39,826 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-11 07:18:39,826 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-11 07:18:39,826 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+2025-11-11 07:18:39,827 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-11 07:18:39,829 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-11 07:18:41,434 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-11 07:18:41,434 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: imglabels.
+2025-11-11 07:18:41,447 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-11 07:18:41,447 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-11 07:18:42,906 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-11 07:18:42,907 - train.py[line:397] - INFO: Using larger validation batch size for SUNRGBD: 32
+2025-11-11 07:18:44,328 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-11 07:18:44,328 - train.py[line:409] - INFO: val dataset len:316
+2025-11-11 07:18:44,353 - train.py[line:425] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'actual_seed': 82847,
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_L',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833/checkpoint',
+    'checkpoint_start_epoch': 140,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor_mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'fridge',
+                       'tv',
+                       'paper',
+                       'towel',
+                       'shower_curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night_stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag'],
+    'dataset_name': 'SUNRGBD',
+    'dataset_path': 'datasets/SUNRGBD',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 1024,
+    'drop_path_rate': 0.2,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 480],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [0.5, 0.75, 1, 1.25, 1.5],
+    'eval_source': 'datasets/SUNRGBD/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/SUNRGBD/labels',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/SUNRGBD/out2.json',
+    'image_width': 480,
+    'is_test': True,
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833/log_2025_11_11_07_18_33.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833/log_2025_11_11_07_18_33.log',
+    'lr': 6e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 6,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 300,
+    'niters_per_epoch': 331,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 37,
+    'num_eval_imgs': 5050,
+    'num_train_imgs': 5285,
+    'num_workers': 2,
+    'optimizer': 'AdamW',
+    'pad': True,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Large_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/SUNRGBD/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_encoder_learnable_temp': True,
+    'sam_encoder_use_cosine': True,
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': False,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833/tb',
+    'text_encoder': 'clip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'imglabels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/SUNRGBD/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251111-071833/val_2025_11_11_07_18_33.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/SUNRGBD/Depth'}
+2025-11-11 07:18:44,355 - train.py[line:427] - INFO: args parsed:
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: config: local_configs.SUNRGBD.DFormerv2_L
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: gpus: 2
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: verbose: False
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: epochs: 0
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: show_image: False
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: save_path: None
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: checkpoint_dir: None
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: continue_fpath: checkpoints/SUNRGBD_DFormerv2_L_20251110-090307/epoch-146_miou_52.89.pth
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: sliding: False
+2025-11-11 07:18:44,355 - train.py[line:429] - INFO: compile: False
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: compile_mode: default
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: syncbn: True
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: mst: True
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: amp: False
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: val_amp: True
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: pad_SUNRGBD: True
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: use_seed: False
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: seed: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: local_rank: 0
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: text_source: imglabels
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: text_encoder: clip
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: text_encoder_name: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: text_feature_dim: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: label_txt_path: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: caption_json_path: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: text_template_set: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: max_templates_per_label: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: max_caption_sentences: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: caption_topk: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: caption_topk_mode: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: image_labels_json_path: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: sam_enc_stages: 1,2,3
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: sam_dec_stages: 1,2,3
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: superpower: False
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: sam_decoder_use_cosine: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: sam_decoder_learnable_temp: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: sam_decoder_logit_init: None
+2025-11-11 07:18:44,356 - train.py[line:429] - INFO: sam_encoder_use_cosine: True
+2025-11-11 07:18:44,357 - train.py[line:429] - INFO: sam_encoder_learnable_temp: True
+2025-11-11 07:18:44,357 - train.py[line:429] - INFO: sam_encoder_logit_init: None
+2025-11-11 07:18:44,357 - train.py[line:429] - INFO: devices: 
+2025-11-11 07:18:44,357 - train.py[line:429] - INFO: port: 16005
+2025-11-11 07:18:44,357 - train.py[line:435] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-11 07:18:47,325 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-11 07:18:47,489 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+2025-11-11 07:18:48,895 - builder.py[line:170] - INFO: Initing weights ...
+Weight Decay: 552 Weight No Decay: 650 Total: 1202
+2025-11-11 07:18:48,935 - train.py[line:483] - INFO: .............distributed training.............
+Weight Decay: 552 Weight No Decay: 650 Total: 1202
+Engine initialization or training loop failed with exception
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 498, in <module>
+    engine.restore_checkpoint()
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/engine/engine.py", line 170, in restore_checkpoint
+    self.state.model = load_model(self.state.model, tmp["model"], is_restore=True)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/pyt_utils.py", line 187, in load_model
+    model.load_state_dict(state_dict, strict=True)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 2593, in load_state_dict
+    raise RuntimeError(
+RuntimeError: Error(s) in loading state_dict for DistributedDataParallel:
+	Unexpected key(s) in state_dict: "module.backbone.encoder_sam_stage_modules.1.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.alpha", "module.backbone.encoder_sam_stage_modules.1.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.gamma", "module.backbone.encoder_sam_stage_modules.1.total_ops", "module.backbone.encoder_sam_stage_modules.1.total_params", "module.backbone.encoder_sam_stage_modules.1._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.1.gamma_scale", "module.backbone.encoder_sam_stage_modules.1.norm1.weight", "module.backbone.encoder_sam_stage_modules.1.norm1.bias", "module.backbone.encoder_sam_stage_modules.1.norm2.weight", "module.backbone.encoder_sam_stage_modules.1.norm2.bias", "module.backbone.encoder_sam_stage_modules.1.q_proj.weight", "module.backbone.encoder_sam_stage_modules.1.q_proj.bias", "module.backbone.encoder_sam_stage_modules.1.k_proj.weight", "module.backbone.encoder_sam_stage_modules.1.k_proj.bias", "module.backbone.encoder_sam_stage_modules.1.v_proj.weight", "module.backbone.encoder_sam_stage_modules.1.v_proj.bias", "module.backbone.encoder_sam_stage_modules.1.out_proj.weight", "module.backbone.encoder_sam_stage_modules.1.out_proj.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.2.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.alpha", "module.backbone.encoder_sam_stage_modules.2.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.gamma", "module.backbone.encoder_sam_stage_modules.2.total_ops", "module.backbone.encoder_sam_stage_modules.2.total_params", "module.backbone.encoder_sam_stage_modules.2._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.2.gamma_scale", "module.backbone.encoder_sam_stage_modules.2.norm1.weight", "module.backbone.encoder_sam_stage_modules.2.norm1.bias", "module.backbone.encoder_sam_stage_modules.2.norm2.weight", "module.backbone.encoder_sam_stage_modules.2.norm2.bias", "module.backbone.encoder_sam_stage_modules.2.q_proj.weight", "module.backbone.encoder_sam_stage_modules.2.q_proj.bias", "module.backbone.encoder_sam_stage_modules.2.k_proj.weight", "module.backbone.encoder_sam_stage_modules.2.k_proj.bias", "module.backbone.encoder_sam_stage_modules.2.v_proj.weight", "module.backbone.encoder_sam_stage_modules.2.v_proj.bias", "module.backbone.encoder_sam_stage_modules.2.out_proj.weight", "module.backbone.encoder_sam_stage_modules.2.out_proj.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.3.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.alpha", "module.backbone.encoder_sam_stage_modules.3.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.gamma", "module.backbone.encoder_sam_stage_modules.3.total_ops", "module.backbone.encoder_sam_stage_modules.3.total_params", "module.backbone.encoder_sam_stage_modules.3._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.3.gamma_scale", "module.backbone.encoder_sam_stage_modules.3.norm1.weight", "module.backbone.encoder_sam_stage_modules.3.norm1.bias", "module.backbone.encoder_sam_stage_modules.3.norm2.weight", "module.backbone.encoder_sam_stage_modules.3.norm2.bias", "module.backbone.encoder_sam_stage_modules.3.q_proj.weight", "module.backbone.encoder_sam_stage_modules.3.q_proj.bias", "module.backbone.encoder_sam_stage_modules.3.k_proj.weight", "module.backbone.encoder_sam_stage_modules.3.k_proj.bias", "module.backbone.encoder_sam_stage_modules.3.v_proj.weight", "module.backbone.encoder_sam_stage_modules.3.v_proj.bias", "module.backbone.encoder_sam_stage_modules.3.out_proj.weight", "module.backbone.encoder_sam_stage_modules.3.out_proj.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.3.bias". 
+2025-11-11 07:18:50,254 - train.py[line:734] - ERROR: Engine initialization or training loop failed with exception
+Traceback (most recent call last):
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 498, in <module>
+    engine.restore_checkpoint()
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/engine/engine.py", line 170, in restore_checkpoint
+    self.state.model = load_model(self.state.model, tmp["model"], is_restore=True)
+  File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/pyt_utils.py", line 187, in load_model
+    model.load_state_dict(state_dict, strict=True)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 2593, in load_state_dict
+    raise RuntimeError(
+RuntimeError: Error(s) in loading state_dict for DistributedDataParallel:
+	Unexpected key(s) in state_dict: "module.backbone.encoder_sam_stage_modules.1.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.alpha", "module.backbone.encoder_sam_stage_modules.1.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.gamma", "module.backbone.encoder_sam_stage_modules.1.total_ops", "module.backbone.encoder_sam_stage_modules.1.total_params", "module.backbone.encoder_sam_stage_modules.1._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.1.gamma_scale", "module.backbone.encoder_sam_stage_modules.1.norm1.weight", "module.backbone.encoder_sam_stage_modules.1.norm1.bias", "module.backbone.encoder_sam_stage_modules.1.norm2.weight", "module.backbone.encoder_sam_stage_modules.1.norm2.bias", "module.backbone.encoder_sam_stage_modules.1.q_proj.weight", "module.backbone.encoder_sam_stage_modules.1.q_proj.bias", "module.backbone.encoder_sam_stage_modules.1.k_proj.weight", "module.backbone.encoder_sam_stage_modules.1.k_proj.bias", "module.backbone.encoder_sam_stage_modules.1.v_proj.weight", "module.backbone.encoder_sam_stage_modules.1.v_proj.bias", "module.backbone.encoder_sam_stage_modules.1.out_proj.weight", "module.backbone.encoder_sam_stage_modules.1.out_proj.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.2.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.alpha", "module.backbone.encoder_sam_stage_modules.2.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.gamma", "module.backbone.encoder_sam_stage_modules.2.total_ops", "module.backbone.encoder_sam_stage_modules.2.total_params", "module.backbone.encoder_sam_stage_modules.2._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.2.gamma_scale", "module.backbone.encoder_sam_stage_modules.2.norm1.weight", "module.backbone.encoder_sam_stage_modules.2.norm1.bias", "module.backbone.encoder_sam_stage_modules.2.norm2.weight", "module.backbone.encoder_sam_stage_modules.2.norm2.bias", "module.backbone.encoder_sam_stage_modules.2.q_proj.weight", "module.backbone.encoder_sam_stage_modules.2.q_proj.bias", "module.backbone.encoder_sam_stage_modules.2.k_proj.weight", "module.backbone.encoder_sam_stage_modules.2.k_proj.bias", "module.backbone.encoder_sam_stage_modules.2.v_proj.weight", "module.backbone.encoder_sam_stage_modules.2.v_proj.bias", "module.backbone.encoder_sam_stage_modules.2.out_proj.weight", "module.backbone.encoder_sam_stage_modules.2.out_proj.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.3.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.alpha", "module.backbone.encoder_sam_stage_modules.3.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.gamma", "module.backbone.encoder_sam_stage_modules.3.total_ops", "module.backbone.encoder_sam_stage_modules.3.total_params", "module.backbone.encoder_sam_stage_modules.3._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.3.gamma_scale", "module.backbone.encoder_sam_stage_modules.3.norm1.weight", "module.backbone.encoder_sam_stage_modules.3.norm1.bias", "module.backbone.encoder_sam_stage_modules.3.norm2.weight", "module.backbone.encoder_sam_stage_modules.3.norm2.bias", "module.backbone.encoder_sam_stage_modules.3.q_proj.weight", "module.backbone.encoder_sam_stage_modules.3.q_proj.bias", "module.backbone.encoder_sam_stage_modules.3.k_proj.weight", "module.backbone.encoder_sam_stage_modules.3.k_proj.bias", "module.backbone.encoder_sam_stage_modules.3.v_proj.weight", "module.backbone.encoder_sam_stage_modules.3.v_proj.bias", "module.backbone.encoder_sam_stage_modules.3.out_proj.weight", "module.backbone.encoder_sam_stage_modules.3.out_proj.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.3.bias". 
+2025-11-11 07:18:50,267 - engine.py[line:188] - WARNING: A exception occurred during Engine initialization, give up running process
+A exception occurred during Engine initialization, give up running process
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 498, in <module>
+[rank0]:     engine.restore_checkpoint()
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/engine/engine.py", line 170, in restore_checkpoint
+[rank0]:     self.state.model = load_model(self.state.model, tmp["model"], is_restore=True)
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/pyt_utils.py", line 187, in load_model
+[rank0]:     model.load_state_dict(state_dict, strict=True)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 2593, in load_state_dict
+[rank0]:     raise RuntimeError(
+[rank0]: RuntimeError: Error(s) in loading state_dict for DistributedDataParallel:
+[rank0]: 	Unexpected key(s) in state_dict: "module.backbone.encoder_sam_stage_modules.1.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.alpha", "module.backbone.encoder_sam_stage_modules.1.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.gamma", "module.backbone.encoder_sam_stage_modules.1.total_ops", "module.backbone.encoder_sam_stage_modules.1.total_params", "module.backbone.encoder_sam_stage_modules.1._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.1.gamma_scale", "module.backbone.encoder_sam_stage_modules.1.norm1.weight", "module.backbone.encoder_sam_stage_modules.1.norm1.bias", "module.backbone.encoder_sam_stage_modules.1.norm2.weight", "module.backbone.encoder_sam_stage_modules.1.norm2.bias", "module.backbone.encoder_sam_stage_modules.1.q_proj.weight", "module.backbone.encoder_sam_stage_modules.1.q_proj.bias", "module.backbone.encoder_sam_stage_modules.1.k_proj.weight", "module.backbone.encoder_sam_stage_modules.1.k_proj.bias", "module.backbone.encoder_sam_stage_modules.1.v_proj.weight", "module.backbone.encoder_sam_stage_modules.1.v_proj.bias", "module.backbone.encoder_sam_stage_modules.1.out_proj.weight", "module.backbone.encoder_sam_stage_modules.1.out_proj.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.2.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.alpha", "module.backbone.encoder_sam_stage_modules.2.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.gamma", "module.backbone.encoder_sam_stage_modules.2.total_ops", "module.backbone.encoder_sam_stage_modules.2.total_params", "module.backbone.encoder_sam_stage_modules.2._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.2.gamma_scale", "module.backbone.encoder_sam_stage_modules.2.norm1.weight", "module.backbone.encoder_sam_stage_modules.2.norm1.bias", "module.backbone.encoder_sam_stage_modules.2.norm2.weight", "module.backbone.encoder_sam_stage_modules.2.norm2.bias", "module.backbone.encoder_sam_stage_modules.2.q_proj.weight", "module.backbone.encoder_sam_stage_modules.2.q_proj.bias", "module.backbone.encoder_sam_stage_modules.2.k_proj.weight", "module.backbone.encoder_sam_stage_modules.2.k_proj.bias", "module.backbone.encoder_sam_stage_modules.2.v_proj.weight", "module.backbone.encoder_sam_stage_modules.2.v_proj.bias", "module.backbone.encoder_sam_stage_modules.2.out_proj.weight", "module.backbone.encoder_sam_stage_modules.2.out_proj.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.3.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.alpha", "module.backbone.encoder_sam_stage_modules.3.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.gamma", "module.backbone.encoder_sam_stage_modules.3.total_ops", "module.backbone.encoder_sam_stage_modules.3.total_params", "module.backbone.encoder_sam_stage_modules.3._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.3.gamma_scale", "module.backbone.encoder_sam_stage_modules.3.norm1.weight", "module.backbone.encoder_sam_stage_modules.3.norm1.bias", "module.backbone.encoder_sam_stage_modules.3.norm2.weight", "module.backbone.encoder_sam_stage_modules.3.norm2.bias", "module.backbone.encoder_sam_stage_modules.3.q_proj.weight", "module.backbone.encoder_sam_stage_modules.3.q_proj.bias", "module.backbone.encoder_sam_stage_modules.3.k_proj.weight", "module.backbone.encoder_sam_stage_modules.3.k_proj.bias", "module.backbone.encoder_sam_stage_modules.3.v_proj.weight", "module.backbone.encoder_sam_stage_modules.3.v_proj.bias", "module.backbone.encoder_sam_stage_modules.3.out_proj.weight", "module.backbone.encoder_sam_stage_modules.3.out_proj.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.3.bias". 
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/train.py", line 498, in <module>
+[rank1]:     engine.restore_checkpoint()
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/engine/engine.py", line 170, in restore_checkpoint
+[rank1]:     self.state.model = load_model(self.state.model, tmp["model"], is_restore=True)
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/pyt_utils.py", line 187, in load_model
+[rank1]:     model.load_state_dict(state_dict, strict=True)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 2593, in load_state_dict
+[rank1]:     raise RuntimeError(
+[rank1]: RuntimeError: Error(s) in loading state_dict for DistributedDataParallel:
+[rank1]: 	Unexpected key(s) in state_dict: "module.backbone.encoder_sam_stage_modules.1.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.alpha", "module.backbone.encoder_sam_stage_modules.1.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.1.gamma", "module.backbone.encoder_sam_stage_modules.1.total_ops", "module.backbone.encoder_sam_stage_modules.1.total_params", "module.backbone.encoder_sam_stage_modules.1._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.1.gamma_scale", "module.backbone.encoder_sam_stage_modules.1.norm1.weight", "module.backbone.encoder_sam_stage_modules.1.norm1.bias", "module.backbone.encoder_sam_stage_modules.1.norm2.weight", "module.backbone.encoder_sam_stage_modules.1.norm2.bias", "module.backbone.encoder_sam_stage_modules.1.q_proj.weight", "module.backbone.encoder_sam_stage_modules.1.q_proj.bias", "module.backbone.encoder_sam_stage_modules.1.k_proj.weight", "module.backbone.encoder_sam_stage_modules.1.k_proj.bias", "module.backbone.encoder_sam_stage_modules.1.v_proj.weight", "module.backbone.encoder_sam_stage_modules.1.v_proj.bias", "module.backbone.encoder_sam_stage_modules.1.out_proj.weight", "module.backbone.encoder_sam_stage_modules.1.out_proj.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.1.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.1.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.2.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.alpha", "module.backbone.encoder_sam_stage_modules.2.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.2.gamma", "module.backbone.encoder_sam_stage_modules.2.total_ops", "module.backbone.encoder_sam_stage_modules.2.total_params", "module.backbone.encoder_sam_stage_modules.2._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.2.gamma_scale", "module.backbone.encoder_sam_stage_modules.2.norm1.weight", "module.backbone.encoder_sam_stage_modules.2.norm1.bias", "module.backbone.encoder_sam_stage_modules.2.norm2.weight", "module.backbone.encoder_sam_stage_modules.2.norm2.bias", "module.backbone.encoder_sam_stage_modules.2.q_proj.weight", "module.backbone.encoder_sam_stage_modules.2.q_proj.bias", "module.backbone.encoder_sam_stage_modules.2.k_proj.weight", "module.backbone.encoder_sam_stage_modules.2.k_proj.bias", "module.backbone.encoder_sam_stage_modules.2.v_proj.weight", "module.backbone.encoder_sam_stage_modules.2.v_proj.bias", "module.backbone.encoder_sam_stage_modules.2.out_proj.weight", "module.backbone.encoder_sam_stage_modules.2.out_proj.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.2.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.2.ffn.3.bias", "module.backbone.encoder_sam_stage_modules.3.decoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.alpha", "module.backbone.encoder_sam_stage_modules.3.encoder_logit_scale", "module.backbone.encoder_sam_stage_modules.3.gamma", "module.backbone.encoder_sam_stage_modules.3.total_ops", "module.backbone.encoder_sam_stage_modules.3.total_params", "module.backbone.encoder_sam_stage_modules.3._inv_sqrt_dk", "module.backbone.encoder_sam_stage_modules.3.gamma_scale", "module.backbone.encoder_sam_stage_modules.3.norm1.weight", "module.backbone.encoder_sam_stage_modules.3.norm1.bias", "module.backbone.encoder_sam_stage_modules.3.norm2.weight", "module.backbone.encoder_sam_stage_modules.3.norm2.bias", "module.backbone.encoder_sam_stage_modules.3.q_proj.weight", "module.backbone.encoder_sam_stage_modules.3.q_proj.bias", "module.backbone.encoder_sam_stage_modules.3.k_proj.weight", "module.backbone.encoder_sam_stage_modules.3.k_proj.bias", "module.backbone.encoder_sam_stage_modules.3.v_proj.weight", "module.backbone.encoder_sam_stage_modules.3.v_proj.bias", "module.backbone.encoder_sam_stage_modules.3.out_proj.weight", "module.backbone.encoder_sam_stage_modules.3.out_proj.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.0.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.0.bias", "module.backbone.encoder_sam_stage_modules.3.ffn.3.weight", "module.backbone.encoder_sam_stage_modules.3.ffn.3.bias". 
+W1111 07:18:55.109000 1269372 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1269422 closing signal SIGTERM
+E1111 07:18:55.475000 1269372 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 1269423) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-11_07:18:55
+  host      : lrz-hgx-h100-010
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1269423)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

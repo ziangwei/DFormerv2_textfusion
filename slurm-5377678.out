@@ -1,0 +1,54 @@
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-09 16:58:35,190 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-09 16:58:35,765 - builder.py[line:170] - INFO: Initing weights ...
+
+======================================================================
+COMPACT BENCHMARK: Visual vs Text Component Analysis
+======================================================================
+Config:       local_configs.NYUDepthv2.DFormerv2_S
+Input size:   480x640
+Text guidance: Enabled
+Text tokens:  6 (source: imglabels)
+Device:       cpu
+----------------------------------------------------------------------
+
+📊 PARAMETER ANALYSIS:
+----------------------------------------------------------------------
+Component                      Parameters   Percentage
+----------------------------------------------------------------------
+Visual (Pure)                      25.14M        70.9%
+Text-related (incl SAM)            10.32M        29.1%
+----------------------------------------------------------------------
+Total                              35.46M       100.0%
+----------------------------------------------------------------------
+
+  SAM Module Breakdown:
+  - Encoder SAM:                    4.40M ( 12.4%)
+  - Decoder SAM:                    4.37M ( 12.3%)
+  - SAM Total:                      8.77M ( 24.7%)
+
+⚡ FLOPS ANALYSIS:
+----------------------------------------------------------------------
+Warning: Failed to profile backbone: dformerv2.forward() takes from 3 to 4 positional arguments but 5 were given
+Warning: Failed to profile decoder: dformerv2.forward() takes from 3 to 4 positional arguments but 5 were given
+Warning: Failed to profile total model: gelu(): argument 'input' (position 1) must be Tensor, not int
+Component                           FLOPs   Percentage
+----------------------------------------------------------------------
+Backbone (incl Enc SAM)             0.00K
+Decoder (incl Dec SAM)              0.00K
+----------------------------------------------------------------------
+Visual (estimated)                  0.00K         0.0%
+Text (estimated)                    0.00K         0.0%
+----------------------------------------------------------------------
+Total FLOPs                         0.00K       100.0%
+----------------------------------------------------------------------
+  Note: Text FLOPs are estimated based on parameter ratio
+        Actual text processing includes cross-attention with visual features
+
+======================================================================
+
+📝 SUMMARY:
+  Total Params: 35.46M = 25.14M (visual) + 10.32M (text)
+  SAM Params:   8.77M (24.7% of total)
+

@@ -1,7 +1,6 @@
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 import pathlib
-import matplotlib as mpl
 import torch
 import argparse
 import yaml
@@ -9,89 +8,41 @@ import math
 import os
 import time
 from pathlib import Path
-from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
-
-# from semseg.models import *
-# from semseg.datasets import *
-# from semseg.augmentations_mm import get_val_augmentation
+from utils.engine.logger import get_logger
 from utils.metrics_new import Metrics
-
-# from semseg.utils.utils import setup_cudnn
-from math import ceil
 import numpy as np
-from torch.utils.data import DistributedSampler, RandomSampler
-from torch import distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-import cv2
-
-# from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
-
-
-# def pad_image(img, target_size):
-#     rows_to_pad = max(target_size[0] - img.shape[2], 0)
-#     cols_to_pad = max(target_size[1] - img.shape[3], 0)
-#     padded_img = F.pad(img, (0, cols_to_pad, 0, rows_to_pad), "constant", 0)
-#     return padded_img
-
-
-# @torch.no_grad()
-# def sliding_predict(model, image, num_classes, flip=True):
-#     image_size = image[0].shape
-#     tile_size = (int(ceil(image_size[2] * 1)), int(ceil(image_size[3] * 1)))
-#     overlap = 1 / 3
-
-#     stride = ceil(tile_size[0] * (1 - overlap))
-
-#     num_rows = int(ceil((image_size[2] - tile_size[0]) / stride) + 1)
-#     num_cols = int(ceil((image_size[3] - tile_size[1]) / stride) + 1)
-#     total_predictions = torch.zeros(
-#         (num_classes, image_size[2], image_size[3]), device=torch.device("cuda")
-#     )
-#     count_predictions = torch.zeros(
-#         (image_size[2], image_size[3]), device=torch.device("cuda")
-#     )
-#     tile_counter = 0
-
-#     for row in range(num_rows):
-#         for col in range(num_cols):
-#             x_min, y_min = int(col * stride), int(row * stride)
-#             x_max = min(x_min + tile_size[1], image_size[3])
-#             y_max = min(y_min + tile_size[0], image_size[2])
-
-#             img = [modal[:, :, y_min:y_max, x_min:x_max] for modal in image]
-#             padded_img = [pad_image(modal, tile_size) for modal in img]
-#             tile_counter += 1
-#             # print(padded_img[0].shape,padded_img[1].shape)
-#             padded_prediction = model(padded_img[0], padded_img[1])
-#             if flip:
-#                 fliped_img = [padded_modal.flip(-1) for padded_modal in padded_img]
-#                 fliped_predictions = model(fliped_img[0], fliped_img[1])
-#                 padded_prediction += fliped_predictions.flip(-1)
-#             predictions = padded_prediction[:, :, : img[0].shape[2], : img[0].shape[3]]
-#             count_predictions[y_min:y_max, x_min:x_max] += 1
-#             total_predictions[:, y_min:y_max, x_min:x_max] += predictions.squeeze(0)
-
-#     return total_predictions.unsqueeze(0)
-
 
 @torch.no_grad()
-def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False):
+def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False, classbank_KD: torch.Tensor | None = None, prompt_mode: str = "single"):
+    logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
+    logger.info(f"[evaluate] Entered evaluate(), dataloader size={len(dataloader)}")
+    for h in logger.handlers:
+        h.flush()
+
     print("Evaluating...")
     model.eval()
     n_classes = config.num_classes
     metrics = Metrics(n_classes, config.background, device)
 
+
     for idx, minibatch in enumerate(dataloader):
+
+        logger.info(f"[evaluate] Batch {idx}/{len(dataloader)}, keys={list(minibatch.keys())}")
+        for h in logger.handlers: h.flush()
+
         if ((idx + 1) % int(len(dataloader) * 0.5) == 0 or idx == 0) and (
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
         ):
             print(f"Validation Iter: {idx + 1} / {len(dataloader)}")
+
         images = minibatch["data"]
         labels = minibatch["label"]
         modal_xs = minibatch["modal_x"]
+        text_feats = minibatch.get("text_features")
+
         if len(images.shape) == 3:
             images = images.unsqueeze(0)
         if len(modal_xs.shape) == 3:
@@ -99,18 +50,31 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
         if len(labels.shape) == 2:
             labels = labels.unsqueeze(0)
         # print(images.shape,labels.shape)
+
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
+        if text_feats is not None:
+            text_feats = text_feats.to(device).float()
         if sliding:
-            preds = slide_inference(model, images, modal_xs, config).softmax(dim=1)
+            preds = slide_inference(
+                model,
+                images[0],
+                images[1],
+                text_feats,
+                config,
+            ).softmax(dim=1)
         else:
-            preds = model(images[0], images[1]).softmax(dim=1)
+            preds = model(images[0], images[1], text_features=text_feats).softmax(dim=1)
         # print(preds.shape,labels.shape)
         B, H, W = labels.shape
         metrics.update(preds, labels)
         # for i in range(B):
         #     metrics.update(preds[i].unsqueeze(0), labels[i].unsqueeze(0))
         # metrics.update(preds, labels)
+
+        # 安全释放eval缓存：在no_grad上下文中清理，不影响训练
+        # 每处理完一个batch就清理，防止内存累积导致OOM
+        torch.cuda.empty_cache()
 
         if save_dir is not None:
             palette = [
@@ -179,7 +143,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=F
     return all_metrics
 
 
-def slide_inference(model, imgs, modal_xs, config):
+def slide_inference(model, imgs, modal_xs,text_features, config=None):
     """Inference by sliding-window with overlap.
 
     If h_crop > h_img or w_crop > w_img, the small patch will be used to
@@ -199,7 +163,12 @@ def slide_inference(model, imgs, modal_xs, config):
             input image.
     """
 
+
     h_crop, w_crop = config.eval_crop_size
+
+    logger = get_logger(config.log_dir, config.log_file, rank=None)
+    logger.info(f"[slide_inference] Entered slide_inference(), h_grids={h_crop}, w_grids={w_crop}")
+    for h in logger.handlers: h.flush()
 
     # new add:
     if h_crop > imgs.shape[-2] or w_crop > imgs.shape[-1]:
@@ -229,7 +198,7 @@ def slide_inference(model, imgs, modal_xs, config):
             crop_modal_xs = modal_xs[:, :, y1:y2, x1:x2]
             # the output of encode_decode is seg logits tensor map
             # with shape [N, C, H, W]
-            crop_seg_logit = model(crop_img, crop_modal_xs)
+            crop_seg_logit = model(crop_img, crop_modal_xs, text_features=text_features)
             preds += F.pad(
                 crop_seg_logit,
                 (int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)),
@@ -254,6 +223,7 @@ def evaluate_msf(
     save_dir=None,
     sliding=False,
 ):
+
     model.eval()
 
     n_classes = config.num_classes
@@ -264,12 +234,16 @@ def evaluate_msf(
             (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed)
         ):
             print(f"Validation Iter: {idx + 1} / {len(dataloader)}")
+
         images = minibatch["data"]
         labels = minibatch["label"]
         modal_xs = minibatch["modal_x"]
+        text_feats = minibatch.get("text_features")
         # print(images.shape,labels.shape)
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
+        if text_feats is not None:
+            text_feats = text_feats.to(device).float()
         B, H, W = labels.shape
         scaled_logits = torch.zeros(B, n_classes, H, W).to(device)
 
@@ -283,19 +257,29 @@ def evaluate_msf(
                 F.interpolate(img, size=(new_H, new_W), mode="bilinear", align_corners=True) for img in images
             ]
             scaled_images = [scaled_img.to(device) for scaled_img in scaled_images]
+
             if sliding:
-                logits = slide_inference(model, scaled_images[0], scaled_images[1], config)
+                logits = slide_inference(
+                    model, scaled_images[0], scaled_images[1], text_feats, config=config
+                )
             else:
-                logits = model(scaled_images[0], scaled_images[1])
+                logits = model(scaled_images[0], scaled_images[1], text_features=text_feats)
+
             logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
             scaled_logits += logits.softmax(dim=1)
 
             if flip:
                 scaled_images = [torch.flip(scaled_img, dims=(3,)) for scaled_img in scaled_images]
                 if sliding:
-                    logits = slide_inference(model, scaled_images[0], scaled_images[1], config)
+                    logits = slide_inference(
+                        model,
+                        scaled_images[0],
+                        scaled_images[1],
+                        text_feats,
+                        config,
+                    )
                 else:
-                    logits = model(scaled_images[0], scaled_images[1])
+                    logits = model(scaled_images[0], scaled_images[1], text_features=text_feats)
                 logits = torch.flip(logits, dims=(3,))
                 logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=True)
                 scaled_logits += logits.softmax(dim=1)
@@ -357,17 +341,21 @@ def evaluate_msf(
 
         metrics.update(scaled_logits, labels)
 
+        # 安全释放eval缓存：在no_grad上下文中清理，不影响训练
+        # MSF模式下每个图像内存消耗更大（多尺度+flip），必须及时清理
+        torch.cuda.empty_cache()
+
     # ious, miou = metrics.compute_iou()
     # acc, macc = metrics.compute_pixel_acc()
     # f1, mf1 = metrics.compute_f1()
+
     if engine.distributed:
         all_metrics = [None for _ in range(engine.world_size)]
-        # all_predictions = Metrics(n_classes, config.background, device)
-        torch.distributed.all_gather_object(all_metrics, metrics)  # list of lists
+        # 每个进程把自己的 metrics 发送/接收到 all_metrics 列表中
+        torch.distributed.all_gather_object(all_metrics, metrics)
     else:
         all_metrics = metrics
     return all_metrics
-
 
 def main(cfg):
     device = torch.device(cfg["DEVICE"])
@@ -442,6 +430,4 @@ if __name__ == "__main__":
         cfg = yaml.load(f, Loader=yaml.SafeLoader)
 
     setup_cudnn()
-    # gpu = setup_ddp()
-    # main(cfg, gpu)
     main(cfg)

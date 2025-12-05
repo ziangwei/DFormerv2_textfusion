@@ -1,0 +1,237 @@
+W1116 08:17:09.124000 1513689 site-packages/torch/distributed/run.py:766] 
+W1116 08:17:09.124000 1513689 site-packages/torch/distributed/run.py:766] *****************************************
+W1116 08:17:09.124000 1513689 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1116 08:17:09.124000 1513689 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-16 08:17:18,292 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+2025-11-16 08:17:18,292 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+True
+0
+1
+2025-11-16 08:17:19,954 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-16 08:17:19,955 - eval.py[line:194] - INFO: val dataset len:632
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-16 08:17:21,976 - eval.py[line:202] - INFO: config: 
+{   'abs_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer',
+    'aux_rate': 0.0,
+    'backbone': 'DFormerv2_L',
+    'background': 255,
+    'batch_size': 16,
+    'bn_eps': 0.001,
+    'bn_momentum': 0.1,
+    'caption_topk': 0,
+    'caption_topk_mode': 'class_sim',
+    'checkpoint_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718/checkpoint',
+    'checkpoint_start_epoch': 160,
+    'checkpoint_step': 25,
+    'class_names': [   'wall',
+                       'floor',
+                       'cabinet',
+                       'bed',
+                       'chair',
+                       'sofa',
+                       'table',
+                       'door',
+                       'window',
+                       'bookshelf',
+                       'picture',
+                       'counter',
+                       'blinds',
+                       'desk',
+                       'shelves',
+                       'curtain',
+                       'dresser',
+                       'pillow',
+                       'mirror',
+                       'floor_mat',
+                       'clothes',
+                       'ceiling',
+                       'books',
+                       'fridge',
+                       'tv',
+                       'paper',
+                       'towel',
+                       'shower_curtain',
+                       'box',
+                       'whiteboard',
+                       'person',
+                       'night_stand',
+                       'toilet',
+                       'sink',
+                       'lamp',
+                       'bathtub',
+                       'bag'],
+    'dataset_name': 'SUNRGBD',
+    'dataset_path': 'datasets/SUNRGBD',
+    'decoder': 'HSGHead',
+    'decoder_embed_dim': 1024,
+    'drop_path_rate': 0.2,
+    'enable_text_guidance': True,
+    'eval_crop_size': [480, 480],
+    'eval_flip': True,
+    'eval_iter': 25,
+    'eval_scale_array': [0.5, 0.75, 1, 1.25, 1.5],
+    'eval_source': 'datasets/SUNRGBD/test.txt',
+    'eval_stride_rate': 0.6666666666666666,
+    'fix_bias': True,
+    'gt_format': '.png',
+    'gt_root_folder': 'datasets/SUNRGBD/labels',
+    'gt_transform': True,
+    'image_height': 480,
+    'image_labels_json_path': 'datasets/SUNRGBD/out2.json',
+    'image_width': 480,
+    'is_test': True,
+    'link_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718/log_2025_11_16_08_17_18.log/log_last.log',
+    'link_val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718/val_last.log',
+    'log_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718',
+    'log_dir_link': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718',
+    'log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718/log_2025_11_16_08_17_18.log',
+    'lr': 6e-05,
+    'lr_power': 0.9,
+    'max_caption_sentences': 10,
+    'max_image_labels': 6,
+    'max_templates_per_label': 3,
+    'momentum': 0.9,
+    'nepochs': 300,
+    'niters_per_epoch': 331,
+    'norm_mean': array([0.485, 0.456, 0.406]),
+    'norm_std': array([0.229, 0.224, 0.225]),
+    'num_classes': 37,
+    'num_eval_imgs': 5050,
+    'num_train_imgs': 5285,
+    'num_workers': 2,
+    'optimizer': 'AdamW',
+    'pad': True,
+    'pretrained_model': 'checkpoints/pretrained/DFormerv2_Large_pretrained.pth',
+    'rgb_format': '.jpg',
+    'rgb_root_folder': 'datasets/SUNRGBD/RGB',
+    'root_dir': 'datasets',
+    'sam_dec_stages': [1, 2, 3],
+    'sam_enc_stages': [1, 2, 3],
+    'sam_encoder_learnable_temp': True,
+    'sam_encoder_use_cosine': True,
+    'sam_top_m': 5,
+    'sam_use_topk': False,
+    'seed': 12345,
+    'superpower': True,
+    'tb_dir': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718/tb',
+    'text_encoder': 'clip',
+    'text_encoder_name': None,
+    'text_feature_dim': 512,
+    'text_source': 'imglabels',
+    'text_template_set': 'clip',
+    'train_scale_array': [0.5, 0.75, 1, 1.25, 1.5, 1.75],
+    'train_source': 'datasets/SUNRGBD/train.txt',
+    'val_log_file': '/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/checkpoints/SUNRGBD_DFormerv2_L_20251116-081718/val_2025_11_16_08_17_18.log',
+    'warm_up_epoch': 10,
+    'weight_decay': 0.01,
+    'x_format': '.png',
+    'x_is_single_channel': True,
+    'x_root_folder': 'datasets/SUNRGBD/Depth'}
+2025-11-16 08:17:21,980 - eval.py[line:204] - INFO: args parsed:
+2025-11-16 08:17:21,980 - eval.py[line:206] - INFO: config: local_configs.SUNRGBD.DFormerv2_L
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: gpus: 2
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: verbose: False
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: epochs: 0
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: show_image: False
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: save_path: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: checkpoint_dir: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: continue_fpath: checkpoints/SUNRGBD_DFormerv2_L_20251115-103957/epoch-202_miou_50.53.pth
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: sliding: True
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: compile: False
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: compile_mode: default
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: syncbn: True
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: mst: True
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: amp: True
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: val_amp: True
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: pad_SUNRGBD: True
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: text_source: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: text_encoder: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: text_encoder_name: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: text_feature_dim: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: label_txt_path: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: caption_json_path: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: text_template_set: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: max_templates_per_label: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: max_caption_sentences: None
+2025-11-16 08:17:21,981 - eval.py[line:206] - INFO: caption_topk: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: caption_topk_mode: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: image_labels_json_path: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_enc_stages: 1,2,3
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_dec_stages: 1,2,3
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: superpower: True
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_decoder_use_cosine: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_decoder_learnable_temp: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_decoder_logit_init: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_encoder_use_cosine: True
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_encoder_learnable_temp: True
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: sam_encoder_logit_init: None
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: devices: 
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: local_rank: 0
+2025-11-16 08:17:21,982 - eval.py[line:206] - INFO: port: 16005
+2025-11-16 08:17:21,982 - eval.py[line:212] - INFO: using syncbn
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2025-11-16 08:17:24,679 - builder.py[line:72] - INFO: Using Hierarchical Semantic-Guided Decoder
+2025-11-16 08:17:24,834 - builder.py[line:168] - INFO: Loading pretrained model: checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+load checkpoints/pretrained/DFormerv2_Large_pretrained.pth
+The model and loaded state dict do not match exactly
+
+missing keys in source state_dict: encoder_sam_blocks.1.0.encoder_logit_scale, encoder_sam_blocks.1.0.gamma, encoder_sam_blocks.1.0.total_ops, encoder_sam_blocks.1.0.total_params, encoder_sam_blocks.1.0._inv_sqrt_dk, encoder_sam_blocks.1.0.gamma_scale, encoder_sam_blocks.1.0.q_proj.weight, encoder_sam_blocks.1.0.q_proj.bias, encoder_sam_blocks.1.0.k_proj.weight, encoder_sam_blocks.1.0.k_proj.bias, encoder_sam_blocks.1.0.v_proj.weight, encoder_sam_blocks.1.0.v_proj.bias, encoder_sam_blocks.1.0.out_proj.weight, encoder_sam_blocks.1.0.out_proj.bias, encoder_sam_blocks.1.1.encoder_logit_scale, encoder_sam_blocks.1.1.gamma, encoder_sam_blocks.1.1.total_ops, encoder_sam_blocks.1.1.total_params, encoder_sam_blocks.1.1._inv_sqrt_dk, encoder_sam_blocks.1.1.gamma_scale, encoder_sam_blocks.1.1.q_proj.weight, encoder_sam_blocks.1.1.q_proj.bias, encoder_sam_blocks.1.1.k_proj.weight, encoder_sam_blocks.1.1.k_proj.bias, encoder_sam_blocks.1.1.v_proj.weight, encoder_sam_blocks.1.1.v_proj.bias, encoder_sam_blocks.1.1.out_proj.weight, encoder_sam_blocks.1.1.out_proj.bias, encoder_sam_blocks.1.2.encoder_logit_scale, encoder_sam_blocks.1.2.gamma, encoder_sam_blocks.1.2.total_ops, encoder_sam_blocks.1.2.total_params, encoder_sam_blocks.1.2._inv_sqrt_dk, encoder_sam_blocks.1.2.gamma_scale, encoder_sam_blocks.1.2.q_proj.weight, encoder_sam_blocks.1.2.q_proj.bias, encoder_sam_blocks.1.2.k_proj.weight, encoder_sam_blocks.1.2.k_proj.bias, encoder_sam_blocks.1.2.v_proj.weight, encoder_sam_blocks.1.2.v_proj.bias, encoder_sam_blocks.1.2.out_proj.weight, encoder_sam_blocks.1.2.out_proj.bias, encoder_sam_blocks.1.3.encoder_logit_scale, encoder_sam_blocks.1.3.gamma, encoder_sam_blocks.1.3.total_ops, encoder_sam_blocks.1.3.total_params, encoder_sam_blocks.1.3._inv_sqrt_dk, encoder_sam_blocks.1.3.gamma_scale, encoder_sam_blocks.1.3.q_proj.weight, encoder_sam_blocks.1.3.q_proj.bias, encoder_sam_blocks.1.3.k_proj.weight, encoder_sam_blocks.1.3.k_proj.bias, encoder_sam_blocks.1.3.v_proj.weight, encoder_sam_blocks.1.3.v_proj.bias, encoder_sam_blocks.1.3.out_proj.weight, encoder_sam_blocks.1.3.out_proj.bias, encoder_sam_blocks.2.0.encoder_logit_scale, encoder_sam_blocks.2.0.gamma, encoder_sam_blocks.2.0.total_ops, encoder_sam_blocks.2.0.total_params, encoder_sam_blocks.2.0._inv_sqrt_dk, encoder_sam_blocks.2.0.gamma_scale, encoder_sam_blocks.2.0.q_proj.weight, encoder_sam_blocks.2.0.q_proj.bias, encoder_sam_blocks.2.0.k_proj.weight, encoder_sam_blocks.2.0.k_proj.bias, encoder_sam_blocks.2.0.v_proj.weight, encoder_sam_blocks.2.0.v_proj.bias, encoder_sam_blocks.2.0.out_proj.weight, encoder_sam_blocks.2.0.out_proj.bias, encoder_sam_blocks.2.1.encoder_logit_scale, encoder_sam_blocks.2.1.gamma, encoder_sam_blocks.2.1.total_ops, encoder_sam_blocks.2.1.total_params, encoder_sam_blocks.2.1._inv_sqrt_dk, encoder_sam_blocks.2.1.gamma_scale, encoder_sam_blocks.2.1.q_proj.weight, encoder_sam_blocks.2.1.q_proj.bias, encoder_sam_blocks.2.1.k_proj.weight, encoder_sam_blocks.2.1.k_proj.bias, encoder_sam_blocks.2.1.v_proj.weight, encoder_sam_blocks.2.1.v_proj.bias, encoder_sam_blocks.2.1.out_proj.weight, encoder_sam_blocks.2.1.out_proj.bias, encoder_sam_blocks.2.2.encoder_logit_scale, encoder_sam_blocks.2.2.gamma, encoder_sam_blocks.2.2.total_ops, encoder_sam_blocks.2.2.total_params, encoder_sam_blocks.2.2._inv_sqrt_dk, encoder_sam_blocks.2.2.gamma_scale, encoder_sam_blocks.2.2.q_proj.weight, encoder_sam_blocks.2.2.q_proj.bias, encoder_sam_blocks.2.2.k_proj.weight, encoder_sam_blocks.2.2.k_proj.bias, encoder_sam_blocks.2.2.v_proj.weight, encoder_sam_blocks.2.2.v_proj.bias, encoder_sam_blocks.2.2.out_proj.weight, encoder_sam_blocks.2.2.out_proj.bias, encoder_sam_blocks.2.3.encoder_logit_scale, encoder_sam_blocks.2.3.gamma, encoder_sam_blocks.2.3.total_ops, encoder_sam_blocks.2.3.total_params, encoder_sam_blocks.2.3._inv_sqrt_dk, encoder_sam_blocks.2.3.gamma_scale, encoder_sam_blocks.2.3.q_proj.weight, encoder_sam_blocks.2.3.q_proj.bias, encoder_sam_blocks.2.3.k_proj.weight, encoder_sam_blocks.2.3.k_proj.bias, encoder_sam_blocks.2.3.v_proj.weight, encoder_sam_blocks.2.3.v_proj.bias, encoder_sam_blocks.2.3.out_proj.weight, encoder_sam_blocks.2.3.out_proj.bias, encoder_sam_blocks.3.0.encoder_logit_scale, encoder_sam_blocks.3.0.gamma, encoder_sam_blocks.3.0.total_ops, encoder_sam_blocks.3.0.total_params, encoder_sam_blocks.3.0._inv_sqrt_dk, encoder_sam_blocks.3.0.gamma_scale, encoder_sam_blocks.3.0.q_proj.weight, encoder_sam_blocks.3.0.q_proj.bias, encoder_sam_blocks.3.0.k_proj.weight, encoder_sam_blocks.3.0.k_proj.bias, encoder_sam_blocks.3.0.v_proj.weight, encoder_sam_blocks.3.0.v_proj.bias, encoder_sam_blocks.3.0.out_proj.weight, encoder_sam_blocks.3.0.out_proj.bias, encoder_sam_blocks.3.1.encoder_logit_scale, encoder_sam_blocks.3.1.gamma, encoder_sam_blocks.3.1.total_ops, encoder_sam_blocks.3.1.total_params, encoder_sam_blocks.3.1._inv_sqrt_dk, encoder_sam_blocks.3.1.gamma_scale, encoder_sam_blocks.3.1.q_proj.weight, encoder_sam_blocks.3.1.q_proj.bias, encoder_sam_blocks.3.1.k_proj.weight, encoder_sam_blocks.3.1.k_proj.bias, encoder_sam_blocks.3.1.v_proj.weight, encoder_sam_blocks.3.1.v_proj.bias, encoder_sam_blocks.3.1.out_proj.weight, encoder_sam_blocks.3.1.out_proj.bias
+
+2025-11-16 08:17:26,132 - builder.py[line:170] - INFO: Initing weights ...
+2025-11-16 08:17:26,158 - engine.py[line:188] - WARNING: A exception occurred during Engine initialization, give up running process
+A exception occurred during Engine initialization, give up running process
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/eval.py", line 224, in <module>
+[rank0]:     weight = torch.load(args.continue_fpath, map_location=torch.device("cpu"))
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/serialization.py", line 1479, in load
+[rank0]:     with _open_file_like(f, "rb") as opened_file:
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/serialization.py", line 759, in _open_file_like
+[rank0]:     return _open_file(name_or_buffer, mode)
+[rank0]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/serialization.py", line 740, in __init__
+[rank0]:     super().__init__(open(name, mode))
+[rank0]: FileNotFoundError: [Errno 2] No such file or directory: 'checkpoints/SUNRGBD_DFormerv2_L_20251115-103957/epoch-202_miou_50.53.pth'
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/projects_for_test/DFormer/utils/eval.py", line 224, in <module>
+[rank1]:     weight = torch.load(args.continue_fpath, map_location=torch.device("cpu"))
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/serialization.py", line 1479, in load
+[rank1]:     with _open_file_like(f, "rb") as opened_file:
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/serialization.py", line 759, in _open_file_like
+[rank1]:     return _open_file(name_or_buffer, mode)
+[rank1]:   File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/serialization.py", line 740, in __init__
+[rank1]:     super().__init__(open(name, mode))
+[rank1]: FileNotFoundError: [Errno 2] No such file or directory: 'checkpoints/SUNRGBD_DFormerv2_L_20251115-103957/epoch-202_miou_50.53.pth'
+W1116 08:17:27.289000 1513689 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1513743 closing signal SIGTERM
+E1116 08:17:27.604000 1513689 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 1513742) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/eval.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-16_08:17:27
+  host      : lrz-hgx-h100-011
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1513742)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

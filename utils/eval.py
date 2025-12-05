@@ -2,21 +2,20 @@ import argparse
 import pprint
 import time
 from importlib import import_module
-
+import json
+from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from models.builder import EncoderDecoder as segmodel
 from tensorboardX import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
-from val_mm import evaluate, evaluate_msf
-
+from utils.val_mm import evaluate, evaluate_msf
 from utils.dataloader.dataloader import get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.engine.engine import Engine
 from utils.engine.logger import get_logger
 
-# from eval import evaluate_mid
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
@@ -24,7 +23,6 @@ torch.backends.cudnn.benchmark = True
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", help="train config file path")
 parser.add_argument("--gpus", help="used gpu number")
-# parser.add_argument('-d', '--devices', default='0,1', type=str)
 parser.add_argument("-v", "--verbose", default=False, action="store_true")
 parser.add_argument("--epochs", default=0)
 parser.add_argument("--show_image", "-s", default=False, action="store_true")
@@ -37,20 +35,130 @@ parser.add_argument("--compile_mode", default="default")
 parser.add_argument("--syncbn", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--mst", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction)
+parser.add_argument("--val_amp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--pad_SUNRGBD", default=False, action=argparse.BooleanOptionalAction)
-# parser.add_argument('--save_path', '-p', default=None)
 
-# os.environ['MASTER_PORT'] = '169710'
+# --- text guidance runtime switches ---
+parser.add_argument("--text-source", choices=["labels", "captions", "both", "imglabels"])
+parser.add_argument("--text-encoder", choices=["clip", "jinaclip"])
+parser.add_argument("--text-encoder-name", type=str)
+parser.add_argument("--text-feature-dim", type=int)
+parser.add_argument("--label-txt-path", type=str)
+parser.add_argument("--caption-json-path", type=str)
+parser.add_argument("--text-template-set", choices=["clip", "jinaclip", "none"])
+parser.add_argument("--max-templates-per-label", type=int)
+parser.add_argument("--max-caption-sentences", type=int)
+parser.add_argument("--caption-topk", type=int)
+parser.add_argument("--caption-topk-mode", choices=["class_sim", "firstk", "lenk"])
+parser.add_argument("--image-labels-json-path", type=str)
+
+# --- SAM per-stage switches ---
+parser.add_argument("--sam-enc-stages", type=str, default="1,2,3", help="Comma separated, e.g., 0,2")
+parser.add_argument("--sam-dec-stages", type=str, default="1,2,3", help="Comma separated, e.g., 1,3")
+parser.add_argument("--superpower", default=True, action=argparse.BooleanOptionalAction)
+
+# --- SAM temperature & attention styles ---
+parser.add_argument(
+    "--sam-decoder-use-cosine",
+    dest="sam_decoder_use_cosine",
+    default=None,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument(
+    "--sam-decoder-learnable-temp",
+    dest="sam_decoder_learnable_temp",
+    default=None,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument("--sam-decoder-logit-init", type=float, default=None)
+parser.add_argument(
+    "--sam-encoder-use-cosine",
+    dest="sam_encoder_use_cosine",
+    default=True,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument(
+    "--sam-encoder-learnable-temp",
+    dest="sam_encoder_learnable_temp",
+        default=True,
+    action=argparse.BooleanOptionalAction,
+)
+parser.add_argument("--sam-encoder-logit-init", type=float, default=None)
+
 torch.set_float32_matmul_precision("high")
 import torch._dynamo
-
 torch._dynamo.config.suppress_errors = True
-# torch._dynamo.config.automatic_dynamic_shapes = False
+
+
+def _parse_stages(s: str):
+    if s is None:
+        return [0,1,2,3]
+    s = str(s).strip()
+    if not s:
+        return []
+    out = []
+    for x in s.split(","):
+        x = x.strip()
+        if x == "":
+            continue
+        try:
+            out.append(int(x))
+        except:
+            pass
+    return out
+
 
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
     config = getattr(import_module(args.config), "C")
+
+    # === override text guidance config by CLI (if provided) ===
+    if args.text_source is not None:
+        config.text_source = args.text_source
+    if args.text_encoder is not None:
+        config.text_encoder = args.text_encoder
+    if args.text_encoder_name is not None:
+        config.text_encoder_name = args.text_encoder_name
+    if args.text_feature_dim is not None:
+        config.text_feature_dim = int(args.text_feature_dim)
+    if args.label_txt_path is not None:
+        config.label_txt_path = args.label_txt_path
+    if args.caption_json_path is not None:
+        config.caption_json_path = args.caption_json_path
+    if args.text_template_set is not None:
+        config.text_template_set = args.text_template_set
+    if args.max_templates_per_label is not None:
+        config.max_templates_per_label = int(args.max_templates_per_label)
+    if args.max_caption_sentences is not None:
+        config.max_caption_sentences = int(args.max_caption_sentences)
+    if args.caption_topk is not None:
+        config.caption_topk = int(args.caption_topk)
+    if args.caption_topk_mode is not None:
+        config.caption_topk_mode = args.caption_topk_mode
+    if args.image_labels_json_path is not None:
+        config.image_labels_json_path = args.image_labels_json_path
+
+    # === SAM per-stage ===
+    config.sam_enc_stages = _parse_stages(args.sam_enc_stages)
+    config.sam_dec_stages = _parse_stages(args.sam_dec_stages)
+    config.superpower = bool(getattr(args, "superpower", False))
+
+    # === SAM temperature & attention styles ===
+    if args.sam_decoder_use_cosine is not None:
+        config.sam_decoder_use_cosine = bool(args.sam_decoder_use_cosine)
+    if args.sam_decoder_learnable_temp is not None:
+        config.sam_decoder_learnable_temp = bool(args.sam_decoder_learnable_temp)
+    if args.sam_decoder_logit_init is not None:
+        config.sam_decoder_logit_init = float(args.sam_decoder_logit_init)
+    if args.sam_encoder_use_cosine is not None:
+        config.sam_encoder_use_cosine = bool(args.sam_encoder_use_cosine)
+    if args.sam_encoder_learnable_temp is not None:
+        config.sam_encoder_learnable_temp = bool(args.sam_encoder_learnable_temp)
+    if args.sam_encoder_logit_init is not None:
+        config.sam_encoder_logit_init = float(args.sam_encoder_logit_init)
+
     logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
+
     # check if pad_SUNRGBD is used correctly
     if args.pad_SUNRGBD and config.dataset_name != "SUNRGBD":
         args.pad_SUNRGBD = False
@@ -125,6 +233,7 @@ with Engine(custom_parser=parser) as engine:
     if engine.distributed:
         logger.info(".............distributed training.............")
         if torch.cuda.is_available():
+            device = torch.device("cuda")
             model.cuda()
             model = DistributedDataParallel(
                 model,
@@ -173,8 +282,10 @@ with Engine(custom_parser=parser) as engine:
                         ious, miou = metric.compute_iou()
                         acc, macc = metric.compute_pixel_acc()
                         f1, mf1 = metric.compute_f1()
+                        print("miou", miou)
                         logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
                         logger.info(f"ious:{ious}")
+
             elif not engine.distributed:
                 with torch.no_grad():
                     model.eval()
@@ -236,8 +347,10 @@ with Engine(custom_parser=parser) as engine:
                     ious, miou = metric.compute_iou()
                     acc, macc = metric.compute_pixel_acc()
                     f1, mf1 = metric.compute_f1()
+                    print("miou", miou)
                     logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
                     logger.info(f"ious:{ious}")
+
         elif not engine.distributed:
             with torch.no_grad():
                 model.eval()
@@ -267,4 +380,5 @@ with Engine(custom_parser=parser) as engine:
                 f1, mf1 = metric.compute_f1()
                 logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
                 logger.info(f"ious:{ious}")
+
     logger.info("end testing")

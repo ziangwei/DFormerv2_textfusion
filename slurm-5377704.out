@@ -1,0 +1,70 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+2025-11-09 17:12:50,666 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+usage: infer.py [-h] [--config CONFIG] [--gpus GPUS] [-v] [--epochs EPOCHS]
+                [--show_image] [--save_path SAVE_PATH]
+                [--checkpoint_dir CHECKPOINT_DIR]
+                [--continue_fpath CONTINUE_FPATH]
+                [--text-source {labels,captions,both,imglabels}]
+                [--text-encoder {clip,jinaclip}]
+                [--text-encoder-name TEXT_ENCODER_NAME]
+                [--text-feature-dim TEXT_FEATURE_DIM]
+                [--label-txt-path LABEL_TXT_PATH]
+                [--caption-json-path CAPTION_JSON_PATH]
+                [--text-template-set {clip,jinaclip,none}]
+                [--max-templates-per-label MAX_TEMPLATES_PER_LABEL]
+                [--max-caption-sentences MAX_CAPTION_SENTENCES]
+                [--caption-topk CAPTION_TOPK]
+                [--caption-topk-mode {class_sim,firstk,lenk}]
+                [--image-labels-json-path IMAGE_LABELS_JSON_PATH]
+                [--sam-enc-stages SAM_ENC_STAGES]
+                [--sam-dec-stages SAM_DEC_STAGES]
+                [--superpower | --no-superpower] [--save-attention]
+                [--save-predictions] [--save-gt] [--dual-model]
+                [--model2-path MODEL2_PATH] [--model2-config MODEL2_CONFIG]
+                [--model2-save-path MODEL2_SAVE_PATH] [--vis-stage {enc,dec}]
+                [--vis-stage-idx VIS_STAGE_IDX]
+                [--vis-block-idx VIS_BLOCK_IDX]
+                [--vis-aggregate {none,mean,max,weighted}]
+                [--num-images NUM_IMAGES] [--random-select]
+                [--image-indices IMAGE_INDICES] [--image-paths IMAGE_PATHS]
+                [--attention-alpha ATTENTION_ALPHA]
+                [--attention-threshold ATTENTION_THRESHOLD]
+                [--attention-smooth ATTENTION_SMOOTH]
+                [--max-token-vis MAX_TOKEN_VIS]
+                [--filter-tokens FILTER_TOKENS]
+                [--vis-competition {none,softmax,margin,ratio}]
+                [--vis-competition-tau VIS_COMPETITION_TAU]
+                [--vis-colormap {turbo,plasma,viridis,jet,magma,inferno}]
+                [--vis-gamma VIS_GAMMA] [--vis-grid] [-d DEVICES] [-c FILE]
+                [--local_rank LOCAL_RANK] [-p PORT]
+infer.py: error: unrecognized arguments: --strict=False
+E1109 17:12:51.471000 1101063 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 2) local_rank: 0 (pid: 1101264) of binary: /dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/python3.10
+Traceback (most recent call last):
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+utils/infer.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-09_17:12:51
+  host      : lrz-hgx-h100-021
+  rank      : 0 (local_rank: 0)
+  exitcode  : 2 (pid: 1101264)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

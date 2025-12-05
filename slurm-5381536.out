@@ -1,0 +1,42 @@
+Hugging Face cache has been set to: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache
+W1112 20:26:27.214000 2034740 site-packages/torch/distributed/run.py:766] 
+W1112 20:26:27.214000 2034740 site-packages/torch/distributed/run.py:766] *****************************************
+W1112 20:26:27.214000 2034740 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1112 20:26:27.214000 2034740 site-packages/torch/distributed/run.py:766] *****************************************
+2025-11-12 20:27:00,789 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+2025-11-12 20:27:00,789 - engine.py[line:38] - INFO: PyTorch Version 2.7.0+cu126
+True
+True
+0
+2025-11-12 20:27:00,951 - train.py[line:221] - WARNING: pad_SUNRGBD is only used for SUNRGBD dataset
+1
+pad_SUNRGBD is only used for SUNRGBD dataset
+2025-11-12 20:27:03,274 - train.py[line:259] - INFO: ✓ Non-deterministic training (faster) with seed: 29288
+2025-11-12 20:27:03,274 - train.py[line:260] - INFO:   To reproduce: modify config.seed=29288 and use --use_seed
+2025-11-12 20:27:03,274 - train.py[line:276] - INFO: [HF cache] Using cache dir: /tmp/hf_cache_lrz-hgx-h100-003
+2025-11-12 20:27:03,274 - train.py[line:362] - INFO: [warmup] rank0 start
+2025-11-12 20:27:06,552 - factory.py[line:326] - INFO: Parsing model identifier. Schema: None, Identifier: ViT-B-16
+2025-11-12 20:27:06,552 - factory.py[line:403] - INFO: Loaded built-in ViT-B-16 model config.
+/dss/dsshome1/04/di97fer/miniconda3/envs/dformer/lib/python3.10/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+2025-11-12 20:27:06,727 - factory.py[line:500] - INFO: Instantiating model architecture: CLIP
+2025-11-12 20:27:08,164 - factory.py[line:507] - INFO: Loading full pretrained weights from: /dss/dssfs05/pn39qo/pn39qo-dss-0001/di97fer/huggingface_cache/hub/models--timm--vit_base_patch16_clip_224.openai/snapshots/977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d/open_clip_model.safetensors
+2025-11-12 20:27:09,845 - factory.py[line:621] - INFO: Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-11-12 20:27:09,845 - factory.py[line:624] - INFO: Model ViT-B-16 creation process complete.
+2025-11-12 20:27:09,846 - factory.py[line:649] - INFO: Parsing tokenizer identifier. Schema: None, Identifier: ViT-B-16
+2025-11-12 20:27:09,846 - factory.py[line:694] - INFO: Attempting to load config from built-in: ViT-B-16
+2025-11-12 20:27:09,846 - factory.py[line:749] - INFO: Using default SimpleTokenizer.
+2025-11-12 20:27:10,292 - train.py[line:289] - INFO: [HF warmup] text encoder cache ready.
+2025-11-12 20:27:10,293 - train.py[line:364] - INFO: [warmup] rank0 done
+2025-11-12 20:27:10,293 - train.py[line:365] - INFO: [warmup] rank0 waiting barrier#1
+2025-11-12 20:27:10,293 - train.py[line:368] - INFO: [warmup] rank0 waiting barrier#2
+2025-11-12 20:27:10,295 - train.py[line:377] - INFO: [prebuild] rank0 start
+2025-11-12 20:27:10,611 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-12 20:27:10,611 - train.py[line:355] - INFO: [Text prebuild] text caches are ready for: imglabels.
+2025-11-12 20:27:10,613 - train.py[line:379] - INFO: [prebuild] rank0 done
+2025-11-12 20:27:10,613 - train.py[line:384] - INFO: [prebuild] rank0 waiting barrier
+2025-11-12 20:27:10,818 - RGBXDataset.py[line:337] - INFO: [Text guidance] built caches for: imglabels
+2025-11-12 20:27:10,818 - train.py[line:400] - INFO: Using 4x training batch for validation: 64
+--- Logging error ---
+
+
