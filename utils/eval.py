@@ -249,136 +249,57 @@ with Engine(custom_parser=parser) as engine:
         model = torch.compile(model, backend="inductor", mode=args.compile_mode)
 
     torch.cuda.empty_cache()
-    if args.amp:
-        with torch.autocast(device_type="cuda", dtype=torch.float16):
-            if engine.distributed:
-                with torch.no_grad():
-                    model.eval()
-                    device = torch.device("cuda")
-                    if args.mst:
-                        all_metrics = evaluate_msf(
-                            model,
-                            val_loader,
-                            config,
-                            device,
-                            [0.5, 0.75, 1.0, 1.25, 1.5],
-                            True,
-                            engine,
-                            sliding=args.sliding,
-                        )
-                    else:
-                        all_metrics = evaluate(
-                            model,
-                            val_loader,
-                            config,
-                            device,
-                            engine,
-                            sliding=args.sliding,
-                        )
-                    if engine.local_rank == 0:
-                        metric = all_metrics[0]
-                        for other_metric in all_metrics[1:]:
-                            metric.update_hist(other_metric.hist)
-                        ious, miou = metric.compute_iou()
-                        acc, macc = metric.compute_pixel_acc()
-                        f1, mf1 = metric.compute_f1()
-                        print("miou", miou)
-                        logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
-                        logger.info(f"ious:{ious}")
+    def _print_metrics(ious, miou, acc, macc, f1, mf1):
+        """Print all metrics to stdout so they appear in Slurm logs and the log file."""
+        print(f"[Val] mIoU: {miou:.2f} | mAcc: {macc:.2f} | mF1: {mf1:.2f}")
+        logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
+        per_class_lines = []
+        for i, (iou_val, acc_val) in enumerate(zip(ious, acc)):
+            per_class_lines.append(f"  [{i:02d}] IoU={iou_val:6.2f}  Acc={acc_val:6.2f}")
+        per_class_str = "\n".join(per_class_lines)
+        print(f"[Val] Per-class IoU & Acc:\n{per_class_str}")
+        logger.info(f"per-class ious:{ious}")
 
-            elif not engine.distributed:
-                with torch.no_grad():
-                    model.eval()
-                    device = torch.device("cuda")
-                    if args.mst:
-                        metric = evaluate_msf(
-                            model,
-                            val_loader,
-                            config,
-                            device,
-                            [0.5, 0.75, 1.0, 1.25, 1.5],
-                            True,
-                            engine,
-                            sliding=args.sliding,
-                        )
-                    else:
-                        metric = evaluate(
-                            model,
-                            val_loader,
-                            config,
-                            device,
-                            engine,
-                            sliding=args.sliding,
-                        )
-                    ious, miou = metric.compute_iou()
-                    acc, macc = metric.compute_pixel_acc()
-                    f1, mf1 = metric.compute_f1()
-                    logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
-                    logger.info(f"ious:{ious}")
-    else:
+    device = torch.device("cuda")
+    maybe_amp = torch.autocast(device_type="cuda", dtype=torch.float16) if args.amp else torch.autocast(device_type="cuda", enabled=False)
+
+    with maybe_amp, torch.no_grad():
+        model.eval()
         if engine.distributed:
-            with torch.no_grad():
-                model.eval()
-                device = torch.device("cuda")
-                if args.mst:
-                    all_metrics = evaluate_msf(
-                        model,
-                        val_loader,
-                        config,
-                        device,
-                        [0.5, 0.75, 1.0, 1.25, 1.5],
-                        True,
-                        engine,
-                        sliding=args.sliding,
-                    )
-                else:
-                    all_metrics = evaluate(
-                        model,
-                        val_loader,
-                        config,
-                        device,
-                        engine,
-                        sliding=args.sliding,
-                    )
-                if engine.local_rank == 0:
-                    metric = all_metrics[0]
-                    for other_metric in all_metrics[1:]:
-                        metric.update_hist(other_metric.hist)
-                    ious, miou = metric.compute_iou()
-                    acc, macc = metric.compute_pixel_acc()
-                    f1, mf1 = metric.compute_f1()
-                    print("miou", miou)
-                    logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
-                    logger.info(f"ious:{ious}")
-
-        elif not engine.distributed:
-            with torch.no_grad():
-                model.eval()
-                device = torch.device("cuda")
-                if args.mst:
-                    metric = evaluate_msf(
-                        model,
-                        val_loader,
-                        config,
-                        device,
-                        [0.5, 0.75, 1.0, 1.25, 1.5],
-                        True,
-                        engine,
-                        sliding=args.sliding,
-                    )
-                else:
-                    metric = evaluate(
-                        model,
-                        val_loader,
-                        config,
-                        device,
-                        engine,
-                        sliding=args.sliding,
-                    )
+            if args.mst:
+                all_metrics = evaluate_msf(
+                    model, val_loader, config, device,
+                    [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
+                    sliding=args.sliding,
+                )
+            else:
+                all_metrics = evaluate(
+                    model, val_loader, config, device, engine,
+                    sliding=args.sliding,
+                )
+            if engine.local_rank == 0:
+                metric = all_metrics[0]
+                for other_metric in all_metrics[1:]:
+                    metric.update_hist(other_metric.hist)
                 ious, miou = metric.compute_iou()
                 acc, macc = metric.compute_pixel_acc()
                 f1, mf1 = metric.compute_f1()
-                logger.info(f"miou:{miou}, macc:{macc}, mf1:{mf1}")
-                logger.info(f"ious:{ious}")
+                _print_metrics(ious, miou, acc, macc, f1, mf1)
+        else:
+            if args.mst:
+                metric = evaluate_msf(
+                    model, val_loader, config, device,
+                    [0.5, 0.75, 1.0, 1.25, 1.5], True, engine,
+                    sliding=args.sliding,
+                )
+            else:
+                metric = evaluate(
+                    model, val_loader, config, device, engine,
+                    sliding=args.sliding,
+                )
+            ious, miou = metric.compute_iou()
+            acc, macc = metric.compute_pixel_acc()
+            f1, mf1 = metric.compute_f1()
+            _print_metrics(ious, miou, acc, macc, f1, mf1)
 
     logger.info("end testing")
